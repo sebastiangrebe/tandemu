@@ -1,0 +1,13 @@
+{
+  "name": "@tandem/claude-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'no build step'",
+    "dev": "echo 'no dev step'"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

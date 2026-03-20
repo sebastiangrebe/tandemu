@@ -1,0 +1,23 @@
+{
+  "organization": {
+    "id": "",
+    "name": ""
+  },
+  "telemetry": {
+    "enabled": true,
+    "endpoint": "https://telemetry.tandem.dev:4317",
+    "ingestionKey": ""
+  },
+  "memory": {
+    "mode": "local",
+    "mcpServerPath": "../mcp-server"
+  },
+  "plugins": {
+    "skills": ["checkout", "review", "pr-create", "standup"],
+    "hooks": {
+      "preSession": "./hooks/pre-session.sh",
+      "postTask": "./hooks/post-task.sh",
+      "postCommit": "./hooks/post-commit.sh"
+    }
+  }
+}
