@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Users, Layers, Check, Plus, X, ArrowRight, ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
 
 function generateSlug(name: string): string {
   return name
@@ -158,11 +159,8 @@ export default function SetupPage() {
     <div className="min-h-screen flex flex-col items-center bg-background noise-bg py-12 px-4">
       {/* Logo */}
       <div className="mb-8 flex items-center gap-2.5 relative z-10">
-        <div className="relative w-9 h-9">
-          <div className="absolute inset-0 bg-primary rounded-lg rotate-45" />
-          <div className="absolute inset-[3px] bg-background rounded-[5px] rotate-45" />
-          <div className="absolute inset-[6px] bg-primary rounded-[3px] rotate-45" />
-        </div>
+        <Image src="/logo.svg" alt="Tandemu" width={36} height={36} className="dark:hidden" />
+        <Image src="/logo-dark.svg" alt="Tandemu" width={36} height={36} className="hidden dark:block" />
         <span className="text-xl font-bold text-foreground tracking-tight">Tandemu</span>
       </div>
 
