@@ -14,7 +14,7 @@ if [ -z "${COMMIT_MSG}" ]; then
   exit 1
 fi
 
-echo "=== Tandem Post-Commit Hook ==="
+echo "=== Tandemu Post-Commit Hook ==="
 echo "Commit: ${COMMIT_SHORT}"
 echo "Message: ${COMMIT_MSG}"
 echo ""
@@ -33,12 +33,12 @@ else
 fi
 
 # 2. Tag the commit with telemetry metadata via git notes
-SESSION_ID="${TANDEM_SESSION_ID:-unknown}"
+SESSION_ID="${TANDEMU_SESSION_ID:-unknown}"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-TELEMETRY_NOTE="tandem-session: ${SESSION_ID}
-tandem-timestamp: ${TIMESTAMP}
-tandem-org: ${TANDEM_ORG_ID:-unknown}"
+TELEMETRY_NOTE="tandemu-session: ${SESSION_ID}
+tandemu-timestamp: ${TIMESTAMP}
+tandemu-org: ${TANDEMU_ORG_ID:-unknown}"
 
 # Append telemetry metadata as a git note (non-fatal if it fails)
 if git notes append -m "${TELEMETRY_NOTE}" "${COMMIT_HASH}" 2>/dev/null; then

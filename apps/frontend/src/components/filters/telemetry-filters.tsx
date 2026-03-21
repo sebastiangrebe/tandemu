@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { getTeams } from '@/lib/api';
-import type { Team } from '@tandem/types';
+import type { Team } from '@tandemu/types';
 import {
   Select,
   SelectContent,

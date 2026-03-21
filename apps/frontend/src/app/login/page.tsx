@@ -35,7 +35,7 @@ export default function LoginPage() {
             <div className="absolute inset-[8px] bg-primary rounded-[6px] rotate-45" />
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
-            Sign in to Tandem
+            Sign in to Tandemu
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             AI Teammate Management Dashboard

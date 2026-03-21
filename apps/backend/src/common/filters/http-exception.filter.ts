@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import type { ApiError } from '@tandem/types';
+import type { ApiError } from '@tandemu/types';
 
 interface ExceptionResponse {
   message?: string | string[];

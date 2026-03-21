@@ -1,6 +1,6 @@
 ---
 name: morning
-description: Start your work session. Fetches your assigned tasks from the Tandem API (which proxies your team's ticket system — Jira, Linear, ClickUp, or GitHub Issues), shows a priority-sorted list, and lets you pick what to work on.
+description: Start your work session. Fetches your assigned tasks from the Tandemu API (which proxies your team's ticket system — Jira, Linear, ClickUp, or GitHub Issues), shows a priority-sorted list, and lets you pick what to work on.
 allowed-tools:
   - Bash
   - Read
@@ -26,22 +26,22 @@ If you remember what they worked on recently, mention it: "Last time you were wo
 
 Do this naturally, don't announce you're searching memories.
 
-### 1. Load Tandem config
+### 1. Load Tandemu config
 
-Read `~/.claude/tandem.json`:
+Read `~/.claude/tandemu.json`:
 
 ```bash
-cat ~/.claude/tandem.json
+cat ~/.claude/tandemu.json
 ```
 
 Extract `auth.token`, `api.url`, `organization.id`, and `team.id`.
 
-If the file doesn't exist, tell the developer: "Tandem is not configured. Run /tandem to set it up."
+If the file doesn't exist, tell the developer: "Tandemu is not configured. Run /tandemu to set it up."
 
 ### 2. Check for active task
 
 ```bash
-cat ~/.claude/tandem-active-task.json 2>/dev/null
+cat ~/.claude/tandemu-active-task.json 2>/dev/null
 ```
 
 If the file exists and contains valid JSON:
@@ -63,14 +63,14 @@ git rev-parse --show-toplevel 2>/dev/null
     - Label: "Pause and pick another", Description: "Run /pause first to switch tasks"
 
 - If they choose **Continue here**:
-  - If the current repo is not already in the `repos` array, add it by reading, modifying, and rewriting `~/.claude/tandem-active-task.json`.
+  - If the current repo is not already in the `repos` array, add it by reading, modifying, and rewriting `~/.claude/tandemu-active-task.json`.
   - Check if a branch for the task already exists, if not create one.
   - Skip to the readiness summary (Step 5).
 - If they choose **Pause and pick another**: tell the developer to run `/pause` first, then `/morning` again. Stop here.
 
 If the file does not exist, proceed to Step 3.
 
-### 3. Fetch tasks from Tandem
+### 3. Fetch tasks from Tandemu
 
 Fetch tasks assigned to the current developer:
 
@@ -92,7 +92,7 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id
 
 Tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
 
-If both calls return empty, tell the developer: "No tasks found. Your team may not have a ticket system connected yet — ask your admin to set one up at the Tandem dashboard (Integrations page)."
+If both calls return empty, tell the developer: "No tasks found. Your team may not have a ticket system connected yet — ask your admin to set one up at the Tandemu dashboard (Integrations page)."
 
 ### 4. Let the developer pick a task
 
@@ -124,7 +124,7 @@ git checkout -b feat/<task.id>-<short-kebab-description>
 ```bash
 REPO_PATH=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > ~/.claude/tandem-active-task.json << EOF
+cat > ~/.claude/tandemu-active-task.json << EOF
 {
   "taskId": "<task.id>",
   "title": "<task.title>",
@@ -172,9 +172,9 @@ Let's get started!
 
 ### Notes
 
-- Tasks come from the Tandem API, which proxies to the org's connected ticket system
+- Tasks come from the Tandemu API, which proxies to the org's connected ticket system
 - The developer may have multiple repos and sessions open — this skill only manages the current repo
 - Always let the developer choose — never auto-assign
 - If they select "Other", ask what they want to work on and create a branch for it
-- The active task file at `~/.claude/tandem-active-task.json` is shared across all Claude Code windows — only one task can be active at a time
-- **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write `~/.claude/tandem-active-task.json` — do NOT use the Edit or Write tools for this file
+- The active task file at `~/.claude/tandemu-active-task.json` is shared across all Claude Code windows — only one task can be active at a time
+- **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write `~/.claude/tandemu-active-task.json` — do NOT use the Edit or Write tools for this file

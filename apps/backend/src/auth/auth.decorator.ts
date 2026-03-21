@@ -1,6 +1,6 @@
 import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
 import type { Request } from 'express';
-import type { MembershipRole } from '@tandem/types';
+import type { MembershipRole } from '@tandemu/types';
 
 export interface RequestUser {
   userId: string;

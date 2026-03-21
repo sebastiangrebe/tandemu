@@ -125,8 +125,8 @@ export default function SetupPage() {
 
       // Get a new JWT with the org context and reload
       const { accessToken } = await switchOrg(orgId);
-      localStorage.setItem('tandem_token', accessToken);
-      localStorage.setItem('tandem_current_org', orgId);
+      localStorage.setItem('tandemu_token', accessToken);
+      localStorage.setItem('tandemu_current_org', orgId);
       window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Setup failed. Please try again.');
@@ -163,7 +163,7 @@ export default function SetupPage() {
           <div className="absolute inset-[3px] bg-background rounded-[5px] rotate-45" />
           <div className="absolute inset-[6px] bg-primary rounded-[3px] rotate-45" />
         </div>
-        <span className="text-xl font-bold text-foreground tracking-tight">Tandem</span>
+        <span className="text-xl font-bold text-foreground tracking-tight">Tandemu</span>
       </div>
 
       {/* Step indicator */}

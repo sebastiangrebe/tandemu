@@ -32,13 +32,13 @@ importers:
       '@nestjs/platform-express':
         specifier: ^10.4.0
         version: 10.4.22(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
-      '@tandem/database':
+      '@tandemu/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@tandem/telemetry':
+      '@tandemu/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
-      '@tandem/types':
+      '@tandemu/types':
         specifier: workspace:*
         version: link:../../packages/types
       bcryptjs:
@@ -108,7 +108,7 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.0.0
         version: 4.2.2
-      '@tandem/types':
+      '@tandemu/types':
         specifier: workspace:*
         version: link:../../packages/types
       class-variance-authority:
@@ -166,7 +166,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
-      '@tandem/types':
+      '@tandemu/types':
         specifier: workspace:*
         version: link:../../packages/types
       dotenv:
@@ -188,7 +188,7 @@ importers:
 
   packages/database:
     dependencies:
-      '@tandem/types':
+      '@tandemu/types':
         specifier: workspace:*
         version: link:../types
       drizzle-orm:
@@ -231,7 +231,7 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.30.0
         version: 1.40.0
-      '@tandem/types':
+      '@tandemu/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:

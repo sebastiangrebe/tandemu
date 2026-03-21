@@ -13,10 +13,10 @@ Pause the current task so the developer can switch to something else.
 
 ### 1. Load config and active task
 
-Read `~/.claude/tandem.json`:
+Read `~/.claude/tandemu.json`:
 
 ```bash
-cat ~/.claude/tandem.json
+cat ~/.claude/tandemu.json
 ```
 
 Extract `auth.token`, `api.url`, `organization.id`, `user.id`.
@@ -24,7 +24,7 @@ Extract `auth.token`, `api.url`, `organization.id`, `user.id`.
 Read the active task:
 
 ```bash
-cat ~/.claude/tandem-active-task.json 2>/dev/null
+cat ~/.claude/tandemu-active-task.json 2>/dev/null
 ```
 
 If the file does not exist, tell the developer: "No active task to pause. Use /morning to start one." Then stop.
@@ -77,7 +77,7 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
         ]
       },
       "scopeSpans": [{
-        "scope": {"name": "tandem"},
+        "scope tandemu"},
         "spans": [{
           "traceId": "'"$TRACE_ID"'",
           "spanId": "'"$SPAN_ID"'",
@@ -119,7 +119,7 @@ If you can't determine which status to use, skip this step silently.
 ### 5. Clear active task
 
 ```bash
-rm -f ~/.claude/tandem-active-task.json
+rm -f ~/.claude/tandemu-active-task.json
 ```
 
 ### 6. Confirm

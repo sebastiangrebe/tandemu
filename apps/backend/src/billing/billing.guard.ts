@@ -6,7 +6,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { PlanTier } from '@tandem/types';
+import type { PlanTier } from '@tandemu/types';
 
 export const REQUIRED_PLAN_KEY = 'required_plan';
 export const RequirePlan = (...tiers: PlanTier[]) =>

@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS integrations (
   UNIQUE (organization_id, provider)
 );
 
--- Team-to-project mapping: links a Tandem team to a specific project/board in the ticket system
+-- Team-to-project mapping: links a Tandemu team to a specific project/board in the ticket system
 CREATE TABLE IF NOT EXISTS integration_project_mappings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   integration_id UUID NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,

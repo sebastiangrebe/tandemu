@@ -1,4 +1,4 @@
-import type { IntegrationProvider } from '@tandem/types';
+import type { IntegrationProvider } from '@tandemu/types';
 import type { TaskProvider } from './task-provider.interface.js';
 import { GitHubProvider } from './github.provider.js';
 import { JiraProvider } from './jira.provider.js';

@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '@tandem/types';
+import type { Task, TaskStatus } from '@tandemu/types';
 
 export interface TaskProviderFetchParams {
   accessToken: string;

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Task, TaskStatus, IntegrationProvider } from '@tandem/types';
+import type { Task, TaskStatus, IntegrationProvider } from '@tandemu/types';
 import { IntegrationsService } from './integrations.service.js';
 import { getProvider } from './providers/index.js';
 import type { ExternalProject } from './providers/index.js';

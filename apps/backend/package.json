@@ -1,5 +1,5 @@
 {
-  "name": "@tandem/backend",
+  "name": "@tandemu/backend",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -22,9 +22,9 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "stripe": "^14.0.0",
-    "@tandem/database": "workspace:*",
-    "@tandem/types": "workspace:*",
-    "@tandem/telemetry": "workspace:*"
+    "@tandemu/database": "workspace:*",
+    "@tandemu/types": "workspace:*",
+    "@tandemu/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

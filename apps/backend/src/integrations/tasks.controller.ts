@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { Task, TaskStatus, IntegrationProvider } from '@tandem/types';
+import type { Task, TaskStatus, IntegrationProvider } from '@tandemu/types';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard, OrgRequiredGuard)

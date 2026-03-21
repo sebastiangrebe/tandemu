@@ -51,7 +51,7 @@ export default function RegisterPage() {
             Create your account
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Get started with Tandem
+            Get started with Tandemu
           </p>
         </div>
 

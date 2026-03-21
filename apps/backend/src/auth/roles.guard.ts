@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { MembershipRole } from '@tandem/types';
+import type { MembershipRole } from '@tandemu/types';
 import { ROLES_KEY } from './auth.decorator.js';
 import type { RequestUser } from './auth.decorator.js';
 

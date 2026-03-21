@@ -16,8 +16,8 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import { MembershipRole } from '@tandem/types';
-import type { Team, CreateTeamDto, UpdateTeamDto } from '@tandem/types';
+import { MembershipRole } from '@tandemu/types';
+import type { Team, CreateTeamDto, UpdateTeamDto } from '@tandemu/types';
 
 @Controller('organizations/:orgId/teams')
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -10,7 +10,7 @@ import type {
   IntegrationProjectMapping,
   CreateIntegrationDto,
   CreateProjectMappingDto,
-} from '@tandem/types';
+} from '@tandemu/types';
 
 interface IntegrationRow {
   id: string;

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { authorizeCli, getOrganizations } from '@/lib/api';
-import type { Organization } from '@tandem/types';
+import type { Organization } from '@tandemu/types';
 
 type PageStatus = 'prompt' | 'authorizing' | 'success' | 'denied' | 'error';
 
@@ -117,7 +117,7 @@ function CliAuthContent() {
           <div className="space-y-6">
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">
-                Tandem CLI wants to connect to your account.
+                Tandemu CLI wants to connect to your account.
               </p>
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-sm">

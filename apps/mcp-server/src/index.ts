@@ -8,7 +8,7 @@ import { createMemoryProvider } from "./memory/index.js";
 // ---------------------------------------------------------------------------
 
 const server = new McpServer({
-  name: "tandem-mcp",
+  name: "tandemu-mcp",
   version: "0.0.0",
 });
 
@@ -22,7 +22,7 @@ const DEFAULT_USER_ID = process.env.MEM0_USER_ID ?? "default";
 
 server.tool(
   "ping",
-  "Health check for the Tandem MCP server",
+  "Health check for the Tandemu MCP server",
   {},
   async () => ({
     content: [{ type: "text", text: "pong" }],
@@ -228,7 +228,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Tandem MCP server running on stdio");
+  console.error("Tandemu MCP server running on stdio");
 }
 
 main().catch((err) => {

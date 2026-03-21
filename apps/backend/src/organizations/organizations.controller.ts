@@ -16,14 +16,14 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import { MembershipRole } from '@tandem/types';
+import { MembershipRole } from '@tandemu/types';
 import type {
   Organization,
   CreateOrganizationDto,
   UpdateOrganizationDto,
   InviteMemberDto,
   Membership,
-} from '@tandem/types';
+} from '@tandemu/types';
 
 @Controller('organizations')
 @UseGuards(JwtAuthGuard, RolesGuard)

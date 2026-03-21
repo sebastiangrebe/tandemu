@@ -5,7 +5,7 @@
   },
   "telemetry": {
     "enabled": true,
-    "endpoint": "https://telemetry.tandem.dev:4317",
+    "endpoint": "https://telemetry.tandemu.dev:4317",
     "ingestionKey": ""
   },
   "memory": {

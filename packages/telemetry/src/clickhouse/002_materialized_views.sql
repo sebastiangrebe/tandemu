@@ -1,7 +1,7 @@
 -- These materialized views reference tables created by the OTel Collector's
 -- ClickHouse exporter. They must be run AFTER the collector has started and
 -- created its tables. Run manually or via the setup script:
---   docker exec tandem-clickhouse-1 clickhouse-client --database otel --multiquery < packages/telemetry/src/clickhouse/002_materialized_views.sql
+--   docker exec tandemu-clickhouse-1 clickhouse-client --database otel --multiquery < packages/telemetry/src/clickhouse/002_materialized_views.sql
 
 -- Materialized view: ai_vs_manual_daily
 -- Aggregates AI-generated vs manual code lines per tenant per day

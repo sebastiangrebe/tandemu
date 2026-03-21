@@ -15,10 +15,10 @@ API="http://localhost:3001"
 OTEL="http://localhost:4318"
 FRONTEND="http://localhost:3000"
 TIMESTAMP=$(date +%s)
-EMAIL="e2etest-${TIMESTAMP}@tandem.dev"
+EMAIL="e2etest-${TIMESTAMP}@tandemu.dev"
 
 echo "============================================"
-echo "  Tandem E2E Test — Full Pipeline"
+echo "  Tandemu E2E Test — Full Pipeline"
 echo "============================================"
 echo ""
 
@@ -181,7 +181,7 @@ curl -sf -X POST "$OTEL/v1/metrics" \
                 \"timeUnixNano\": \"$NOW_NS\",
                 \"attributes\": [
                   {\"key\": \"user_id\", \"value\": {\"stringValue\": \"$USER_ID\"}},
-                  {\"key\": \"repository\", \"value\": {\"stringValue\": \"tandem\"}}
+                  {\"key\": \"repository\", \"value\": {\"stringValue\": \"tandemu\"}}
                 ]
               }],
               \"aggregationTemporality\": 2,
@@ -199,7 +199,7 @@ curl -sf -X POST "$OTEL/v1/metrics" \
                 \"timeUnixNano\": \"$NOW_NS\",
                 \"attributes\": [
                   {\"key\": \"user_id\", \"value\": {\"stringValue\": \"$USER_ID\"}},
-                  {\"key\": \"repository\", \"value\": {\"stringValue\": \"tandem\"}}
+                  {\"key\": \"repository\", \"value\": {\"stringValue\": \"tandemu\"}}
                 ]
               }],
               \"aggregationTemporality\": 2,
@@ -266,15 +266,15 @@ sleep 6
 # ── Step 8: Verify data in ClickHouse ─────────────
 info "Verifying data in ClickHouse..."
 
-TRACE_COUNT=$(docker exec tandem-clickhouse-1 clickhouse-client --database otel \
+TRACE_COUNT=$(docker exec tandemu-clickhouse-1 clickhouse-client --database otel \
   --query "SELECT count() FROM otel_traces WHERE ResourceAttributes['organization_id'] = '$ORG_ID'" 2>&1)
 [ "$TRACE_COUNT" -ge 2 ] && pass "  ClickHouse traces: $TRACE_COUNT rows" || fail "  No traces in ClickHouse"
 
-METRIC_COUNT=$(docker exec tandem-clickhouse-1 clickhouse-client --database otel \
+METRIC_COUNT=$(docker exec tandemu-clickhouse-1 clickhouse-client --database otel \
   --query "SELECT count() FROM otel_metrics_sum WHERE ResourceAttributes['organization_id'] = '$ORG_ID'" 2>&1)
 [ "$METRIC_COUNT" -ge 2 ] && pass "  ClickHouse metrics: $METRIC_COUNT rows" || fail "  No metrics in ClickHouse"
 
-LOG_COUNT=$(docker exec tandem-clickhouse-1 clickhouse-client --database otel \
+LOG_COUNT=$(docker exec tandemu-clickhouse-1 clickhouse-client --database otel \
   --query "SELECT count() FROM otel_logs WHERE ResourceAttributes['organization_id'] = '$ORG_ID'" 2>&1)
 [ "$LOG_COUNT" -ge 2 ] && pass "  ClickHouse logs: $LOG_COUNT rows" || fail "  No logs in ClickHouse"
 

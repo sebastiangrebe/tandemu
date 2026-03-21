@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@tandem/types"],
+  transpilePackages: ["@tandemu/types"],
 };
 
 export default nextConfig;

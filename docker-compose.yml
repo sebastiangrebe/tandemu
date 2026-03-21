@@ -4,13 +4,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: tandem
-      POSTGRES_PASSWORD: tandem
-      POSTGRES_DB: tandem
+      POSTGRES_USER: tandemu
+      POSTGRES_PASSWORD: tandemu
+      POSTGRES_DB: tandemu
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tandem"]
+      test: ["CMD-SHELL", "pg_isready -U tandemu"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -63,7 +63,7 @@ services:
       - "3001:3001"
     environment:
       PORT: 3001
-      DATABASE_URL: postgresql://tandem:tandem@postgres:5432/tandem
+      DATABASE_URL: postgresql://tandemu:tandemu@postgres:5432/tandemu
       REDIS_URL: redis://redis:6379
       CLICKHOUSE_URL: http://clickhouse:8123
       CORS_ORIGIN: http://localhost:3000

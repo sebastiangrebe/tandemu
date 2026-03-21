@@ -21,10 +21,10 @@ COPY packages/telemetry/ packages/telemetry/
 COPY apps/backend/ apps/backend/
 
 # Build packages first, then backend
-RUN pnpm --filter @tandem/types build && \
-    pnpm --filter @tandem/database build && \
-    pnpm --filter @tandem/telemetry build && \
-    pnpm --filter @tandem/backend build
+RUN pnpm --filter @tandemu/types build && \
+    pnpm --filter @tandemu/database build && \
+    pnpm --filter @tandemu/telemetry build && \
+    pnpm --filter @tandemu/backend build
 
 EXPOSE 3001
 CMD ["node", "apps/backend/dist/main.js"]

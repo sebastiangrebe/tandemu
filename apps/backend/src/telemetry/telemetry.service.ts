@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandem/types';
+import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandemu/types';
 
 export interface TimesheetEntry {
   readonly userId: string;
@@ -82,7 +82,7 @@ export class TelemetryService implements OnModuleDestroy {
           max(TimeUnix) AS periodEnd
         FROM otel_metrics_sum
         WHERE ResourceAttributes['organization_id'] = {organizationId: String}
-          AND MetricName = 'tandem.lines_of_code'
+          AND MetricName = 'tandemu.lines_of_code'
           ${dateFilter}
         GROUP BY organization_id
       `;
@@ -184,7 +184,7 @@ export class TelemetryService implements OnModuleDestroy {
     const defaultEnd = periodEnd ?? new Date().toISOString();
 
     try {
-      // Query task_session spans — completed tasks are "deployments" in Tandem's model
+      // Query task_session spans — completed tasks are "deployments" in Tandemu's model
       // Use duration_seconds attribute (set by /finish skill) instead of ClickHouse Duration
       // to avoid nanosecond timestamp precision issues
       const resultSet = await this.client.query({

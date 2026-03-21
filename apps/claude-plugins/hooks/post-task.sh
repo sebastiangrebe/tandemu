@@ -4,10 +4,10 @@
 
 set -euo pipefail
 
-MAIN_BRANCH="${TANDEM_MAIN_BRANCH:-main}"
+MAIN_BRANCH="${TANDEMU_MAIN_BRANCH:-main}"
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
-echo "=== Tandem Post-Task Summary ==="
+echo "=== Tandemu Post-Task Summary ==="
 echo "Branch: ${CURRENT_BRANCH}"
 echo "Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo ""

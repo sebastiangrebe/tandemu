@@ -3,7 +3,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import type { Task, TaskStatus, TaskPriority } from '@tandem/types';
+import type { Task, TaskStatus, TaskPriority } from '@tandemu/types';
 import type {
   TaskProvider,
   TaskProviderFetchParams,

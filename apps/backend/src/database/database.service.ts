@@ -7,7 +7,7 @@ export class DatabaseService implements OnModuleDestroy {
   private readonly pool: pg.Pool;
 
   constructor(private readonly configService: ConfigService) {
-    const databaseUrl = this.configService.get<string>('database.url', 'postgresql://localhost:5432/tandem');
+    const databaseUrl = this.configService.get<string>('database.url', 'postgresql://localhost:5432/tandemu');
     this.pool = new pg.Pool({ connectionString: databaseUrl });
   }
 

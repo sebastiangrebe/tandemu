@@ -20,8 +20,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tandem - AI Teammate Dashboard",
-  description: "Management dashboard for Tandem AI Teammate platform",
+  title: "Tandemu - AI Teammate Dashboard",
+  description: "Management dashboard for Tandemu AI Teammate platform",
 };
 
 export default function RootLayout({

@@ -81,15 +81,15 @@ If no PR exists and there are commits ahead of main, use AskUserQuestion:
 Read the active task metadata:
 
 ```bash
-cat ~/.claude/tandem-active-task.json 2>/dev/null
+cat ~/.claude/tandemu-active-task.json 2>/dev/null
 ```
 
 Extract `taskId`, `title`, `startedAt`, `repos`. If the file does not exist, use the current repo and estimate start from the first commit on the branch.
 
-Read the Tandem config:
+Read the Tandemu config:
 
 ```bash
-cat ~/.claude/tandem.json
+cat ~/.claude/tandemu.json
 ```
 
 Extract `organization.id` and `user.id`.
@@ -165,7 +165,7 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
         ]
       },
       "scopeSpans": [{
-        "scope": {"name": "tandem"},
+        "scope tandemu"},
         "spans": [{
           "traceId": "'"$TRACE_ID"'",
           "spanId": "'"$SPAN_ID"'",
@@ -203,10 +203,10 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/metrics" \
         ]
       },
       "scopeMetrics": [{
-        "scope": {"name": "tandem"},
+        "scope tandemu"},
         "metrics": [
           {
-            "name": "tandem.task.completed",
+            "name": "tandemu.task.completed",
             "sum": {
               "dataPoints": [{"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": 1}],
               "aggregationTemporality": 2,
@@ -214,7 +214,7 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/metrics" \
             }
           },
           {
-            "name": "tandem.lines_of_code",
+            "name": "tandemu.lines_of_code",
             "sum": {
               "dataPoints": [
                 {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <ai_lines>, "attributes": [{"key": "type", "value": {"stringValue": "ai"}}]},
@@ -252,7 +252,7 @@ If you can't determine which status to use, skip this step silently.
 #### 4d. Clear active task
 
 ```bash
-rm -f ~/.claude/tandem-active-task.json
+rm -f ~/.claude/tandemu-active-task.json
 ```
 
 Tell the developer:
@@ -312,7 +312,7 @@ git checkout main
 
 - Never force-close or auto-merge anything — always ask
 - If the developer says they're coming back to this task, don't mark it done and don't clear the active task
-- The task list should reflect reality — pull from GitHub issues and Tandem API
+- The task list should reflect reality — pull from GitHub issues and Tandemu API
 - This skill can be invoked multiple times a day as the developer finishes tasks
-- Telemetry is sent via standard OTLP/HTTP JSON to the configured OTEL collector — this is how the Tandem dashboard gets its data
+- Telemetry is sent via standard OTLP/HTTP JSON to the configured OTEL collector — this is how the Tandemu dashboard gets its data
 - AI vs Manual attribution uses the `Co-Authored-By: Claude` tag in commit messages — Claude Code adds this automatically

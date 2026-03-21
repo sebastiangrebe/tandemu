@@ -3,7 +3,7 @@ import type {
   AIvsManualRatio,
   FrictionEvent,
   DORAMetrics,
-} from "@tandem/types";
+} from "@tandemu/types";
 
 export interface ClickHouseConfig {
   url?: string;

@@ -7,13 +7,13 @@ import type {
   Team,
   TeamMember,
   Invite,
-} from "@tandem/types";
+} from "@tandemu/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("tandem_token");
+  return localStorage.getItem("tandemu_token");
 }
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -36,7 +36,7 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
     // Don't redirect on auth endpoints — let the caller handle the error
     const isAuthEndpoint = path.startsWith("/api/auth/login") || path.startsWith("/api/auth/register");
     if (!isAuthEndpoint && typeof window !== "undefined") {
-      localStorage.removeItem("tandem_token");
+      localStorage.removeItem("tandemu_token");
       window.location.href = "/login";
     }
     const body = await res.json().catch(() => ({}));

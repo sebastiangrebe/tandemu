@@ -9,7 +9,7 @@ import type {
   CreateOrganizationDto,
   UpdateOrganizationDto,
   Membership,
-} from '@tandem/types';
+} from '@tandemu/types';
 
 @Injectable()
 export class OrganizationsService {

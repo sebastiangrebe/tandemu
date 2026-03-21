@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────
-#  Tandem Installer (Developer)
-#  Usage: curl -fsSL https://tandem.dev/install.sh | bash
+#  Tandemu Installer (Developer)
+#  Usage: curl -fsSL https://tandemu.dev/install.sh | bash
 #
 #  Installs Claude Code skills, configures telemetry,
-#  and sets up memory for your Tandem instance.
+#  and sets up memory for your Tandemu instance.
 # ─────────────────────────────────────────────────────────
 
 RED='\033[0;31m'
@@ -19,11 +19,11 @@ NC='\033[0m'
 
 CLAUDE_DIR="$HOME/.claude"
 SKILLS_DIR="$CLAUDE_DIR/skills"
-TANDEM_DATA_DIR="$HOME/.tandem"
+TANDEMU_DATA_DIR="$HOME/.tandemu"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 
 # Where to download skills + MCP server from
-TANDEM_RELEASE_URL="${TANDEM_RELEASE_URL:-https://github.com/anthropics/tandem/releases/latest/download}"
+TANDEMU_RELEASE_URL="${TANDEMU_RELEASE_URL:-https://github.com/anthropics/tandemu/releases/latest/download}"
 
 # ─────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ header() {
   echo ""
   echo -e "${BOLD}  ┌─────────────────────────────────┐${NC}"
   echo -e "${BOLD}  │                                   │${NC}"
-  echo -e "${BOLD}  │      ${BLUE}Tandem${NC}${BOLD} — AI Teammate        │${NC}"
+  echo -e "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate        │${NC}"
   echo -e "${BOLD}  │                                   │${NC}"
   echo -e "${BOLD}  └─────────────────────────────────┘${NC}"
   echo ""
@@ -66,15 +66,15 @@ check_prerequisites() {
 }
 
 # ─────────────────────────────────────────────────────────
-# Choose Tandem instance
+# Choose Tandemu instance
 # ─────────────────────────────────────────────────────────
 
 choose_instance() {
   echo ""
-  echo -e "  ${BOLD}Which Tandem instance do you want to connect to?${NC}"
+  echo -e "  ${BOLD}Which Tandemu instance do you want to connect to?${NC}"
   echo ""
-  echo -e "    ${BOLD}1.${NC} Tandem Cloud ${DIM}(Recommended)${NC}"
-  dim "      Hosted at https://app.tandem.dev"
+  echo -e "    ${BOLD}1.${NC} Tandemu Cloud ${DIM}(Recommended)${NC}"
+  dim "      Hosted at https://app.tandemu.dev"
   echo ""
   echo -e "    ${BOLD}2.${NC} Self-hosted instance"
   dim "      You'll provide the URL"
@@ -83,23 +83,23 @@ choose_instance() {
   read -rp "  Choose (1 or 2): " choice
   case "$choice" in
     1)
-      API_URL="https://app.tandem.dev"
+      API_URL="https://app.tandemu.dev"
       ;;
     2)
       echo ""
-      read -rp "  Enter your Tandem URL (e.g., https://tandem.company.com): " API_URL
+      read -rp "  Enter your Tandemu URL (e.g., https://tandemu.company.com): " API_URL
       # Strip trailing slash
       API_URL="${API_URL%/}"
       ;;
     *)
-      API_URL="https://app.tandem.dev"
+      API_URL="https://app.tandemu.dev"
       ;;
   esac
 
   # Verify the instance is reachable
   step "Checking ${API_URL}..."
   if curl -sf "${API_URL}/api/health" &>/dev/null; then
-    ok "Tandem instance is reachable"
+    ok "Tandemu instance is reachable"
   else
     fail "Could not reach ${API_URL}. Check the URL and try again."
   fi
@@ -113,7 +113,7 @@ do_oauth() {
   step "Starting authentication..."
 
   RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json" 2>/dev/null) || {
-    fail "Could not reach Tandem API at ${API_URL}."
+    fail "Could not reach Tandemu API at ${API_URL}."
   }
 
   CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])" 2>/dev/null)
@@ -197,11 +197,11 @@ do_oauth() {
 
 write_configs() {
   mkdir -p "$CLAUDE_DIR"
-  mkdir -p "$TANDEM_DATA_DIR"
+  mkdir -p "$TANDEMU_DATA_DIR"
 
-  # 1. tandem.json
-  step "Writing Tandem config..."
-  cat > "$CLAUDE_DIR/tandem.json" << EOF
+  # 1. tandemu.json
+  step "Writing Tandemu config..."
+  cat > "$CLAUDE_DIR/tandemu.json" << EOF
 {
   "auth": { "token": "${TOKEN}" },
   "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
@@ -210,7 +210,7 @@ write_configs() {
   "api": { "url": "${API_URL}" }
 }
 EOF
-  ok "Config: ~/.claude/tandem.json"
+  ok "Config: ~/.claude/tandemu.json"
 
   # 2. settings.json — OTEL env vars + permissions
   step "Configuring telemetry and permissions..."
@@ -240,16 +240,16 @@ settings["env"] = env
 perms = settings.get("permissions", {})
 allow = perms.get("allow", [])
 api_host = "${OTEL_HOST}"
-tandem_perms = [
-    "Edit(~/.claude/tandem*)",
-    "Write(~/.claude/tandem*)",
-    "Bash(cat > ~/.claude/tandem*)",
-    "Bash(rm ~/.claude/tandem*)",
-    "Bash(rm -f ~/.claude/tandem*)",
+tandemu_perms = [
+    "Edit(~/.claude/tandemu*)",
+    "Write(~/.claude/tandemu*)",
+    "Bash(cat > ~/.claude/tandemu*)",
+    "Bash(rm ~/.claude/tandemu*)",
+    "Bash(rm -f ~/.claude/tandemu*)",
     f"Bash(curl*{api_host}:3001*)",
     f"Bash(curl*{api_host}:4318*)",
 ]
-for p in tandem_perms:
+for p in tandemu_perms:
     if p not in allow:
         allow.append(p)
 perms["allow"] = allow
@@ -273,9 +273,9 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
-servers["tandem-memory"] = {
+servers["tandemu-memory"] = {
     "type": "url",
-    "url": "${MEM0_URL}/mcp/tandem/sse/${USER_ID}"
+    "url": "${MEM0_URL}/mcp/tandemu/sse/${USER_ID}"
 }
 config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
@@ -290,9 +290,9 @@ PYEOF
 
 install_assets() {
   mkdir -p "$SKILLS_DIR"
-  mkdir -p "$TANDEM_DATA_DIR"
+  mkdir -p "$TANDEMU_DATA_DIR"
 
-  step "Downloading Tandem skills and MCP server..."
+  step "Downloading Tandemu skills and MCP server..."
 
   local skills_src=""
   local mcp_src=""
@@ -304,14 +304,14 @@ install_assets() {
   else
     # Download from release
     # TODO: implement release artifact download
-    fail "Release download not yet implemented. Run install.sh from the Tandem repo directory."
+    fail "Release download not yet implemented. Run install.sh from the Tandemu repo directory."
   fi
 
-  # Install skills (skip /tandem — its logic is in this script)
+  # Install skills (skip /tandemu — its logic is in this script)
   for skill_dir in "$skills_src"/*/; do
     local skill_name
     skill_name=$(basename "$skill_dir")
-    [ "$skill_name" = "tandem" ] && continue
+    [ "$skill_name" = "tandemu" ] && continue
     rm -rf "$SKILLS_DIR/$skill_name"
     cp -r "$skill_dir" "$SKILLS_DIR/$skill_name"
   done
@@ -326,7 +326,7 @@ install_assets() {
   count=$(ls -1d "$SKILLS_DIR"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
   ok "$count skills installed"
 
-  ok "Memory server: OpenMemory MCP (connects to Tandem instance)"
+  ok "Memory server: OpenMemory MCP (connects to Tandemu instance)"
 }
 
 # ─────────────────────────────────────────────────────────
@@ -337,7 +337,7 @@ print_done() {
   echo ""
   echo -e "${BOLD}  ┌─────────────────────────────────────────────┐${NC}"
   echo -e "${BOLD}  │                                               │${NC}"
-  echo -e "${BOLD}  │   ${GREEN}Tandem installed successfully!${NC}${BOLD}              │${NC}"
+  echo -e "${BOLD}  │   ${GREEN}Tandemu installed successfully!${NC}${BOLD}              │${NC}"
   echo -e "${BOLD}  │                                               │${NC}"
   echo -e "${BOLD}  └─────────────────────────────────────────────┘${NC}"
   echo ""

@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
-import type { Invite, MembershipRole } from '@tandem/types';
+import type { Invite, MembershipRole } from '@tandemu/types';
 
 @Injectable()
 export class InvitesService {

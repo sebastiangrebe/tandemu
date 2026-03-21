@@ -17,12 +17,12 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import { MembershipRole } from '@tandem/types';
+import { MembershipRole } from '@tandemu/types';
 import type {
   CreateIntegrationDto,
   CreateProjectMappingDto,
   IntegrationProvider,
-} from '@tandem/types';
+} from '@tandemu/types';
 
 @Controller('integrations')
 @UseGuards(JwtAuthGuard, OrgRequiredGuard, RolesGuard)

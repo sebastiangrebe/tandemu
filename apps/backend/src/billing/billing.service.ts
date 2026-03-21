@@ -7,7 +7,7 @@ import type {
   BillingPortalResponse,
   PlanTier,
   SubscriptionStatus,
-} from '@tandem/types';
+} from '@tandemu/types';
 import type Stripe from 'stripe';
 
 @Injectable()

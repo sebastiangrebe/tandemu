@@ -37,7 +37,7 @@ import {
   getTeams,
 } from '@/lib/api';
 import type { Integration, IntegrationProjectMapping } from '@/lib/api';
-import type { Team } from '@tandem/types';
+import type { Team } from '@tandemu/types';
 
 function ProviderIcon({ providerId, size = 20 }: { providerId: string; size?: number }) {
   switch (providerId) {
@@ -436,7 +436,7 @@ export default function IntegrationsPage() {
                               <TableHeader>
                                 <TableRow>
                                   <TableHead>External Project</TableHead>
-                                  <TableHead>Tandem Team</TableHead>
+                                  <TableHead>Tandemu Team</TableHead>
                                   <TableHead className="w-[80px]">Actions</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -682,7 +682,7 @@ export default function IntegrationsPage() {
           <DialogHeader>
             <DialogTitle>Add Project Mapping</DialogTitle>
             <DialogDescription>
-              Map an external project to a Tandem team to sync issues.
+              Map an external project to a Tandemu team to sync issues.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -716,7 +716,7 @@ export default function IntegrationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Tandem Team</label>
+                  <label className="text-sm font-medium text-foreground">Tandemu Team</label>
                   {teams.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No teams found. Create a team in Settings first.

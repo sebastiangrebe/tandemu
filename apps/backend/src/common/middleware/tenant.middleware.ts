@@ -12,7 +12,7 @@ export class TenantMiddleware implements NestMiddleware {
     const organizationId = req.user?.organizationId;
 
     if (organizationId) {
-      // TODO: Execute on the active DB connection from @tandem/database:
+      // TODO: Execute on the active DB connection from @tandemu/database:
       //   await db.execute(sql`SET LOCAL app.current_tenant = ${organizationId}`);
       // This enables PostgreSQL row-level security policies to scope
       // all subsequent queries in this transaction to the tenant.

@@ -1,5 +1,5 @@
 {
-  "name": "@tandem/database",
+  "name": "@tandemu/database",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -26,7 +26,7 @@
     "drizzle-orm": "^0.38.0",
     "pg": "^8.13.0",
     "postgres": "^3.4.0",
-    "@tandem/types": "workspace:*"
+    "@tandemu/types": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",

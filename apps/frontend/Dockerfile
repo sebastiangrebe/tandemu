@@ -18,8 +18,8 @@ COPY apps/frontend/ apps/frontend/
 
 # Build
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter @tandem/types build && \
-    pnpm --filter @tandem/frontend build
+RUN pnpm --filter @tandemu/types build && \
+    pnpm --filter @tandemu/frontend build
 
 EXPOSE 3000
-CMD ["pnpm", "--filter", "@tandem/frontend", "start"]
+CMD ["pnpm", "--filter", "@tandemu/frontend", "start"]

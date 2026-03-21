@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const TEST_USER = {
   name: 'Test User',
-  email: 'testuser@tandem.dev',
+  email: 'testuser@tandemu.dev',
   password: 'tandem123',
 };
 
@@ -18,7 +18,7 @@ const TEAM_NAME = 'Engineering';
 
 const LINEAR_API_KEY = 'lin_api_v1VK8DwvfFRHpBXEOmtoM5kKJdbCIJsfaA1sYfOE';
 
-const SKILL_TEST_REPO = '/tmp/tandem-skill-test';
+const SKILL_TEST_REPO = '/tmp/tandemu-skill-test';
 const HOME = process.env.HOME || process.env.USERPROFILE || '';
 
 /** Stored after login */
@@ -81,7 +81,7 @@ function runClaude(prompt: string, cwd: string): string {
   );
 }
 
-test.describe.serial('Tandem E2E: Full Setup Flow', () => {
+test.describe.serial('Tandemu E2E: Full Setup Flow', () => {
   // ========== SETUP PHASE ==========
 
   test('register a new user', async ({ page }) => {
@@ -216,7 +216,7 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
     await loginAndCapture(page);
 
     // Run install.sh with the token (non-interactive mode)
-    const installScript = path.join('/Users/sebastiangrebe/Documents/Git/tandem', 'install.sh');
+    const installScript = path.join('/Users/sebastiangrebe/Documents/Git/tandemu', 'install.sh');
     const output = execSync(
       `bash "${installScript}" --url http://localhost:3001 --token "${authToken}" --skip-prereqs`,
       { encoding: 'utf-8', timeout: 30_000, env: { ...process.env, HOME } },
@@ -225,13 +225,13 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
     // Verify install.sh succeeded
     expect(output).toContain('installed successfully');
 
-    // Verify tandem.json was written with correct data
-    const tandemConfig = JSON.parse(
-      fs.readFileSync(path.join(HOME, '.claude', 'tandem.json'), 'utf-8'),
+    // Verify tandemu.json was written with correct data
+    const tandemuConfig = JSON.parse(
+      fs.readFileSync(path.join(HOME, '.claude', 'tandemu.json'), 'utf-8'),
     );
-    expect(tandemConfig.auth.token).toBe(authToken);
-    expect(tandemConfig.api.url).toBe('http://localhost:3001');
-    expect(tandemConfig.user.email).toBe(TEST_USER.email);
+    expect(tandemuConfig.auth.token).toBe(authToken);
+    expect(tandemuConfig.api.url).toBe('http://localhost:3001');
+    expect(tandemuConfig.user.email).toBe(TEST_USER.email);
 
     // Verify settings.json has OTEL env vars
     const settings = JSON.parse(
@@ -243,19 +243,19 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
 
     // Verify permissions are set
     expect(settings.permissions?.allow).toBeTruthy();
-    expect(settings.permissions.allow.some((p: string) => p.includes('tandem'))).toBe(true);
+    expect(settings.permissions.allow.some((p: string) => p.includes('tandemu'))).toBe(true);
     expect(settings.permissions.allow.some((p: string) => p.includes('curl'))).toBe(true);
 
     // Verify MCP config was written
     const mcpConfig = JSON.parse(
       fs.readFileSync(path.join(HOME, '.claude.json'), 'utf-8'),
     );
-    expect(mcpConfig.mcpServers?.['tandem-memory']).toBeTruthy();
+    expect(mcpConfig.mcpServers?.['tandemu-memory']).toBeTruthy();
 
     // For E2E skill tests: temporarily disable memory features to prevent
     // session bootstrap from blocking claude -p in non-interactive mode
     const mcpClean = { ...mcpConfig };
-    delete mcpClean.mcpServers['tandem-memory'];
+    delete mcpClean.mcpServers['tandemu-memory'];
     fs.writeFileSync(path.join(HOME, '.claude.json'), JSON.stringify(mcpClean, null, 2), 'utf-8');
 
     // Temporarily rename CLAUDE.md so session bootstrap doesn't interfere with skill tests
@@ -266,7 +266,7 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
     }
 
     // Ensure CLAUDE.md is installed (install.sh may have path issues in test env)
-    const claudeMdSrc = path.join('/Users/sebastiangrebe/Documents/Git/tandem', 'apps', 'claude-plugins', 'CLAUDE.md');
+    const claudeMdSrc = path.join('/Users/sebastiangrebe/Documents/Git/tandemu', 'apps', 'claude-plugins', 'CLAUDE.md');
     const claudeMdDst = path.join(HOME, '.claude', 'CLAUDE.md');
     if (!fs.existsSync(claudeMdDst) && fs.existsSync(claudeMdSrc)) {
       fs.copyFileSync(claudeMdSrc, claudeMdDst);
@@ -280,12 +280,12 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'standup', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'blockers', 'SKILL.md'))).toBe(true);
 
-    // /tandem skill should NOT exist (its logic is in install.sh)
-    expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'tandem', 'SKILL.md'))).toBe(false);
+    // /tandemu skill should NOT exist (its logic is in install.sh)
+    expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'tandemu', 'SKILL.md'))).toBe(false);
 
     // Store orgId for later tests
-    orgId = tandemConfig.organization.id;
-    userId = tandemConfig.user.id;
+    orgId = tandemuConfig.organization.id;
+    userId = tandemuConfig.user.id;
   });
 
   // ========== SKILLS PHASE ==========
@@ -307,7 +307,7 @@ test.describe.serial('Tandem E2E: Full Setup Flow', () => {
     expect(output).toMatch(/SGS-\d+|Implement|tasks/);
 
     // Check that the active task file was written
-    const activeTaskPath = path.join(HOME, '.claude', 'tandem-active-task.json');
+    const activeTaskPath = path.join(HOME, '.claude', 'tandemu-active-task.json');
     if (fs.existsSync(activeTaskPath)) {
       const activeTask = JSON.parse(fs.readFileSync(activeTaskPath, 'utf-8'));
       expect(activeTask.taskId).toBeTruthy();
@@ -339,7 +339,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
 
   test('run /finish skill — measures work and sends telemetry', async () => {
     // Ensure active task file exists for /finish to measure
-    const activeTaskPath = path.join(HOME, '.claude', 'tandem-active-task.json');
+    const activeTaskPath = path.join(HOME, '.claude', 'tandemu-active-task.json');
     if (!fs.existsSync(activeTaskPath)) {
       // Write one manually since /morning might not have completed in non-interactive mode
       const now = new Date();
@@ -438,7 +438,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
   test('OpenMemory MCP SSE endpoint is accessible', async () => {
     // The MCP endpoint pattern is /mcp/{client_name}/sse/{user_id}
     // Just verify it doesn't 404
-    const res = await fetch('http://localhost:8765/mcp/tandem/sse/test-user', {
+    const res = await fetch('http://localhost:8765/mcp/tandemu/sse/test-user', {
       headers: { Accept: 'text/event-stream' },
     });
     // SSE endpoint should return 200 (streaming) or at least not 404
@@ -457,7 +457,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
 
     // Verify memory section exists
     expect(content).toContain('Memory');
-    expect(content).toContain('tandem-memory');
+    expect(content).toContain('tandemu-memory');
 
     // Verify passive learning instructions
     expect(content).toContain('never ask for it directly');
@@ -480,13 +480,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
   test('MCP config points to OpenMemory', async () => {
     const mcpConfigPath = path.join(HOME, '.claude.json');
 
-    // Merge tandem-memory into existing config (as install.sh would)
+    // Merge tandemu-memory into existing config (as install.sh would)
     const existing = fs.existsSync(mcpConfigPath)
       ? JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'))
       : {};
 
     const servers = existing.mcpServers ?? {};
-    servers['tandem-memory'] = {
+    servers['tandemu-memory'] = {
       type: 'url',
       url: 'http://localhost:8765/mcp',
     };
@@ -496,8 +496,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
     // Verify
     const config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
     expect(config.mcpServers).toBeTruthy();
-    expect(config.mcpServers['tandem-memory']).toBeTruthy();
-    const mcpUrl = config.mcpServers['tandem-memory'].url;
+    expect(config.mcpServers['tandemu-memory']).toBeTruthy();
+    const mcpUrl = config.mcpServers['tandemu-memory'].url;
     expect(mcpUrl).toContain('8765');
     expect(mcpUrl).toContain('mcp');
   });

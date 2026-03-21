@@ -24,7 +24,7 @@ import {
   removeTeamMember,
   getMembers,
 } from '@/lib/api';
-import type { Team, TeamMember, Membership, Organization } from '@tandem/types';
+import type { Team, TeamMember, Membership, Organization } from '@tandemu/types';
 
 interface TeamWithMembers extends Team {
   members?: TeamMember[];

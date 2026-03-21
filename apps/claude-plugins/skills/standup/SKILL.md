@@ -1,6 +1,6 @@
 ---
 name: standup
-description: Generate a team standup report. Pulls task progress from the connected ticket system via Tandem API, combines with telemetry data (session time, AI ratio, friction), and produces a team-level summary.
+description: Generate a team standup report. Pulls task progress from the connected ticket system via Tandemu API, combines with telemetry data (session time, AI ratio, friction), and produces a team-level summary.
 argument-hint: [--team <team-name>] [--format <slack|markdown|plain>]
 allowed-tools:
   - Bash
@@ -12,24 +12,24 @@ Generate a team standup report. Options: $ARGUMENTS
 
 ## Steps
 
-### 1. Load Tandem config
+### 1. Load Tandemu config
 
-Read `~/.claude/tandem.json`:
+Read `~/.claude/tandemu.json`:
 
 ```bash
-cat ~/.claude/tandem.json
+cat ~/.claude/tandemu.json
 ```
 
 Extract `auth.token`, `api.url`, `organization.id`, and `team.id`. If `--team` is specified, override the default team.
 
-If the file doesn't exist, tell the developer: "Tandem is not configured. Run /tandem to set it up."
+If the file doesn't exist, tell the developer: "Tandemu is not configured. Run /tandemu to set it up."
 
-### 2. Fetch data from Tandem API
+### 2. Fetch data from Tandemu API
 
 Make these calls in parallel:
 
 ```bash
-# Team members (these are the Tandem users on the team)
+# Team members (these are the Tandemu users on the team)
 curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/organizations/<org_id>/teams/<team_id>/members"
 
 # All tasks from connected ticket system
@@ -52,10 +52,10 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/friction-he
 **IMPORTANT attribution rules:**
 
 - Each task has an `assigneeEmail` field from the ticket system.
-- Each Tandem team member has an `email` field.
+- Each Tandemu team member has an `email` field.
 - Match tasks to team members by comparing `task.assigneeEmail` to `member.email`.
 - Only show a task under a person if their email matches the task's `assigneeEmail`.
-- Tasks where `assigneeEmail` doesn't match any team member go in an "Other contributors" section (they may be assigned to people not in Tandem yet).
+- Tasks where `assigneeEmail` doesn't match any team member go in an "Other contributors" section (they may be assigned to people not in Tandemu yet).
 - Unassigned tasks (no `assigneeEmail`) go in the "Unassigned" section.
 
 **Task categorization (by recency, NOT by sprint):**
@@ -92,7 +92,7 @@ Only include team members who have tasks assigned to them OR telemetry activity.
 
 ### Other Contributors
 
-Tasks assigned to people not on this Tandem team:
+Tasks assigned to people not on this Tandemu team:
 
 - [<task.id>] <title> — assigned to <assigneeName> (<assigneeEmail>)
 
@@ -114,8 +114,8 @@ Default: markdown. If `--format slack`, use Slack bold markers. If `--format pla
 
 ### Notes
 
-- Task data comes from the Tandem API (proxied from the connected ticket system) — always live, never cached
-- Telemetry data (session time, AI ratio, friction) comes from ClickHouse via the Tandem API
+- Task data comes from the Tandemu API (proxied from the connected ticket system) — always live, never cached
+- Telemetry data (session time, AI ratio, friction) comes from ClickHouse via the Tandemu API
 - If no ticket system is connected, show telemetry-only data and note that tasks are unavailable
 - If no telemetry data exists, show task-only data
 - Respect privacy — show work output, not surveillance metrics

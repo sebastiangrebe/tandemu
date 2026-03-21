@@ -1,5 +1,5 @@
 {
-  "name": "@tandem/mcp-server",
+  "name": "@tandemu/mcp-server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@tandem/types": "workspace:*",
+    "@tandemu/types": "workspace:*",
     "dotenv": "^16.4.0",
     "mem0ai": "^2.4.1",
     "zod": "^3.23.0"

@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
-import type { Team, CreateTeamDto, UpdateTeamDto } from '@tandem/types';
+import type { Team, CreateTeamDto, UpdateTeamDto } from '@tandemu/types';
 
 @Injectable()
 export class TeamsService {

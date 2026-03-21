@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { apiLogin, apiRegister, getMe, getOrganizations, switchOrg as apiSwitchOrg } from './api';
-import type { Organization } from '@tandem/types';
+import type { Organization } from '@tandemu/types';
 
 interface AuthUser {
   id: string;
@@ -39,8 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const clearAuth = useCallback(() => {
-    localStorage.removeItem('tandem_token');
-    localStorage.removeItem('tandem_current_org');
+    localStorage.removeItem('tandemu_token');
+    localStorage.removeItem('tandemu_current_org');
     setToken(null);
     setUser(null);
     setOrganizations([]);
@@ -58,14 +58,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     // Try to restore last selected org from localStorage
-    const savedOrgId = localStorage.getItem('tandem_current_org');
+    const savedOrgId = localStorage.getItem('tandemu_current_org');
     const saved = savedOrgId ? orgs.find((o) => o.id === savedOrgId) : null;
     setCurrentOrg(saved ?? orgs[0]);
   }, []);
 
   // On mount, check for existing token
   useEffect(() => {
-    const storedToken = localStorage.getItem('tandem_token');
+    const storedToken = localStorage.getItem('tandemu_token');
     if (!storedToken) {
       setIsLoading(false);
       if (!PUBLIC_PATHS.includes(pathname)) {
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await apiLogin(email, password);
-    localStorage.setItem('tandem_token', response.accessToken);
+    localStorage.setItem('tandemu_token', response.accessToken);
     setToken(response.accessToken);
     setUser(response.user);
 
@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (email: string, name: string, password: string) => {
     const response = await apiRegister(email, name, password);
-    localStorage.setItem('tandem_token', response.accessToken);
+    localStorage.setItem('tandemu_token', response.accessToken);
     setToken(response.accessToken);
     setUser(response.user);
     router.push('/setup');
@@ -125,8 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const switchOrg = async (organizationId: string) => {
     const result = await apiSwitchOrg(organizationId);
-    localStorage.setItem('tandem_token', result.accessToken);
-    localStorage.setItem('tandem_current_org', organizationId);
+    localStorage.setItem('tandemu_token', result.accessToken);
+    localStorage.setItem('tandemu_current_org', organizationId);
     setToken(result.accessToken);
 
     const org = organizations.find((o) => o.id === organizationId);

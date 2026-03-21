@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Brain, GitPullRequest, Users, Rocket, Clock, AlertCircle, RotateCcw } from "lucide-react";
 import { getAIRatio, getDORAMetrics, getTimesheets } from '@/lib/api';
 import type { TimesheetEntry } from '@/lib/api';
-import type { AIvsManualRatio, DORAMetrics } from '@tandem/types';
+import type { AIvsManualRatio, DORAMetrics } from '@tandemu/types';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { AIRatioChart } from '@/components/charts/ai-ratio-chart';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
@@ -190,7 +190,7 @@ export default function DashboardPage() {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <p className="text-lg font-medium text-muted-foreground">No data yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Start using Claude Code with Tandem to see metrics here.</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Start using Claude Code with Tandemu to see metrics here.</p>
           </CardContent>
         </Card>
       ) : (

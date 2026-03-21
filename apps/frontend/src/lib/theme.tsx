@@ -21,7 +21,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('tandem_theme') as Theme | null;
+    const stored = localStorage.getItem('tandemu_theme') as Theme | null;
     const preferred = stored ?? 'light';
     setThemeState(preferred);
     setMounted(true);
@@ -32,7 +32,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
-    localStorage.setItem('tandem_theme', theme);
+    localStorage.setItem('tandemu_theme', theme);
   }, [theme, mounted]);
 
   const toggleTheme = useCallback(() => {

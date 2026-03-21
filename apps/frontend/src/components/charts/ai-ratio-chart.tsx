@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import type { AIvsManualRatio } from '@tandem/types';
+import type { AIvsManualRatio } from '@tandemu/types';
 
 const AI_COLORS = ['#4ade80', '#27272a'];
 

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, XCircle, FolderTree, Flame } from "lucide-react";
 import { getFrictionHeatmap } from '@/lib/api';
-import type { FrictionEvent } from '@tandem/types';
+import type { FrictionEvent } from '@tandemu/types';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { FrictionSkeleton } from '@/components/ui/skeleton-helpers';
 

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandem/types';
+import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
 
 @Controller('telemetry')

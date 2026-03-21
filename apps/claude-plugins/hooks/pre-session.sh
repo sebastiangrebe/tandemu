@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pre-session.sh — Runs at session start
-# Loads CLAUDE.md context, checks for .tandem-config, and sets up telemetry.
+# Loads CLAUDE.md context, checks for .tandemu-config, and sets up telemetry.
 
 set -euo pipefail
 
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(dirname "${SCRIPT_DIR}")"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 
-echo "=== Tandem Pre-Session Setup ==="
+echo "=== Tandemu Pre-Session Setup ==="
 
 # 1. Load CLAUDE.md into context
 CLAUDE_MD="${PLUGIN_DIR}/CLAUDE.md"
@@ -18,11 +18,11 @@ else
   echo "[WARN] CLAUDE.md not found at ${CLAUDE_MD}"
 fi
 
-# 2. Check for .tandem-config in the repo root
+# 2. Check for .tandemu-config in the repo root
 if [ -n "${REPO_ROOT}" ]; then
-  TANDEM_CONFIG="${REPO_ROOT}/.tandem-config"
+  TANDEM_CONFIG="${REPO_ROOT}/.tandemu-config"
   if [ -f "${TANDEM_CONFIG}" ]; then
-    echo "[OK] .tandem-config found at ${TANDEM_CONFIG}"
+    echo "[OK] .tandemu-config found at ${TANDEM_CONFIG}"
 
     # Source any environment overrides from config
     if command -v jq >/dev/null 2>&1; then
@@ -36,7 +36,7 @@ if [ -n "${REPO_ROOT}" ]; then
       ORG_ID=""
     fi
   else
-    echo "[INFO] No .tandem-config found in repo root"
+    echo "[INFO] No .tandemu-config found in repo root"
     TELEMETRY_ENABLED="true"
     TELEMETRY_ENDPOINT=""
     ORG_ID=""
@@ -49,19 +49,19 @@ else
 fi
 
 # 3. Set up environment variables for telemetry
-export TANDEM_TELEMETRY_ENABLED="${TELEMETRY_ENABLED}"
-export TANDEM_TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-https://telemetry.tandem.dev:4317}"
-export TANDEM_ORG_ID="${ORG_ID}"
-export TANDEM_SESSION_ID="${TANDEM_SESSION_ID:-$(uuidgen 2>/dev/null || date +%s)}"
-export TANDEM_SESSION_START="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+export TANDEMU_TELEMETRY_ENABLED="${TELEMETRY_ENABLED}"
+export TANDEMU_TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-https://telemetry.tandemu.dev:4317}"
+export TANDEMU_ORG_ID="${ORG_ID}"
+export TANDEMU_SESSION_ID="${TANDEMU_SESSION_ID:-$(uuidgen 2>/dev/null || date +%s)}"
+export TANDEMU_SESSION_START="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 echo ""
 echo "Session environment:"
-echo "  TANDEM_TELEMETRY_ENABLED=${TANDEM_TELEMETRY_ENABLED}"
-echo "  TANDEM_TELEMETRY_ENDPOINT=${TANDEM_TELEMETRY_ENDPOINT}"
-echo "  TANDEM_ORG_ID=${TANDEM_ORG_ID}"
-echo "  TANDEM_SESSION_ID=${TANDEM_SESSION_ID}"
-echo "  TANDEM_SESSION_START=${TANDEM_SESSION_START}"
+echo "  TANDEMU_TELEMETRY_ENABLED=${TANDEMU_TELEMETRY_ENABLED}"
+echo "  TANDEMU_TELEMETRY_ENDPOINT=${TANDEMU_TELEMETRY_ENDPOINT}"
+echo "  TANDEMU_ORG_ID=${TANDEMU_ORG_ID}"
+echo "  TANDEMU_SESSION_ID=${TANDEMU_SESSION_ID}"
+echo "  TANDEMU_SESSION_START=${TANDEMU_SESSION_START}"
 
 echo ""
 echo "=== Pre-Session Setup Complete ==="

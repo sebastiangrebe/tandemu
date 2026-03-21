@@ -27,7 +27,7 @@ test('visual review - authenticated pages', async ({ page }) => {
   // Login first
   await page.goto('/login');
   await page.waitForLoadState('networkidle');
-  await page.fill('input[type="email"]', 'testuser@tandem.dev');
+  await page.fill('input[type="email"]', 'testuser@tandemu.dev');
   await page.fill('input[type="password"]', 'tandem123');
   await page.click('button[type="submit"]');
 

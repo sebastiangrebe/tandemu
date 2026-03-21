@@ -1,5 +1,5 @@
 {
-  "name": "@tandem/claude-plugins",
+  "name": "@tandemu/claude-plugins",
   "version": "0.0.0",
   "private": true,
   "type": "module",

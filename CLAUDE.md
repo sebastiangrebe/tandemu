@@ -1,15 +1,15 @@
-# CLAUDE.md — Tandem Project
+# CLAUDE.md — Tandemu Project
 
-## What Tandem Is
+## What Tandemu Is
 
-Tandem is an AI Teammate platform. Two goals:
+Tandemu is an AI Teammate platform. Two goals:
 1. Make AI coding personal — persistent memory, personality, learns your coding style
 2. Track AI-native development — telemetry from `/morning` → work → `/finish` lifecycle, surfaced on a dashboard
 
 ## Architecture
 
 ```
-tandem/
+tandemu/
   apps/
     backend/        — NestJS API (Postgres + ClickHouse)
     frontend/       — Next.js dashboard (shadcn/ui + Recharts)
@@ -24,20 +24,20 @@ tandem/
 
 ## Key Decisions
 
-### No `/tandem` skill
-The `/tandem` skill was removed. All setup (OAuth, config, skills, MCP, CLAUDE.md) is handled by `install.sh`. Re-running install.sh re-authenticates.
+### No `/tandemu` skill
+The `/tandemu` skill was removed. All setup (OAuth, config, skills, MCP, CLAUDE.md) is handled by `install.sh`. Re-running install.sh re-authenticates.
 
 ### install.sh is for developers only
 It installs Claude Code skills and config. No Docker, no git, no server setup. The company deploys the platform separately via `docker-compose.yml`.
 
 ### Single active task enforcement
-`~/.claude/tandem-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
+`~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
 
 ### Task status sync is dynamic
 No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id/status` with the exact provider status name.
 
 ### Telemetry via OTLP from `/finish`
-The `/finish` skill sends a `task_session` span and `tandem.lines_of_code` metrics to the OTEL collector via curl. This is real OTLP — standard protocol, custom metric names. No fake data.
+The `/finish` skill sends a `task_session` span and `tandemu.lines_of_code` metrics to the OTEL collector via curl. This is real OTLP — standard protocol, custom metric names. No fake data.
 
 AI vs manual attribution: commits with `Co-Authored-By: Claude` = AI lines, rest = manual.
 
@@ -68,7 +68,7 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 
 ### Memory via OpenMemory MCP
 - OpenMemory runs as a Docker container (`mem0/openmemory-mcp:latest`) on port 8765
-- Claude Code connects via SSE: `http://host:8765/mcp/tandem/sse/{userId}`
+- Claude Code connects via SSE: `http://host:8765/mcp/tandemu/sse/{userId}`
 - Memory scoped per user via the userId in the URL path
 - install.sh writes the MCP config to `~/.claude.json`
 - Requires `OPENAI_API_KEY` env var for embeddings
@@ -91,10 +91,10 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 ### ClickUp mapping at folder level
 ClickUp `fetchProjects` returns folders (not individual lists) as mappable entities. `fetchTasks` auto-detects whether the mapped ID is a folder or list — fetches all lists in a folder if it's a folder.
 
-### Settings permissions for Tandem
+### Settings permissions for Tandemu
 install.sh writes permissions to `~/.claude/settings.json` so skills can:
-- Edit/Write `~/.claude/tandem*` files without prompting
-- Run curl to the Tandem API and OTEL collector without prompting
+- Edit/Write `~/.claude/tandemu*` files without prompting
+- Run curl to the Tandemu API and OTEL collector without prompting
 
 ### Setup wizard team creation bug
 The setup wizard's team creation silently fails because the JWT at that point has `MEMBER` role with no org context, but the teams endpoint requires `OWNER`/`ADMIN`. Workaround: create teams via the Teams page after login.
@@ -105,11 +105,11 @@ The setup wizard's team creation silently fails because the JWT at that point ha
 cd apps/e2e
 
 # Reset DB first:
-docker exec -i tandem-postgres-1 psql -U tandem -d tandem \
+docker exec -i tandemu-postgres-1 psql -U tandemu -d tandemu \
   -c "TRUNCATE users, memberships, organizations, teams, team_members, invites, integrations, integration_project_mappings CASCADE;"
 
 # Clean state:
-rm -f ~/.claude/tandem-active-task.json ~/.claude/tandem.json
+rm -f ~/.claude/tandemu-active-task.json ~/.claude/tandemu.json
 
 # Run:
 npx playwright test full-flow

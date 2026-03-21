@@ -7,7 +7,7 @@ import {
 import type { Request } from 'express';
 import type { RequestUser } from './auth.decorator.js';
 import { AuthService } from './auth.service.js';
-import type { MembershipRole } from '@tandem/types';
+import type { MembershipRole } from '@tandemu/types';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {

@@ -8,16 +8,16 @@
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
   --font-mono: var(--font-mono), "JetBrains Mono", monospace;
 
-  --color-tandem-50: #f0fdf4;
-  --color-tandem-100: #dcfce7;
-  --color-tandem-200: #bbf7d0;
-  --color-tandem-300: #86efac;
-  --color-tandem-400: #4ade80;
-  --color-tandem-500: #22c55e;
-  --color-tandem-600: #16a34a;
-  --color-tandem-700: #15803d;
-  --color-tandem-800: #166534;
-  --color-tandem-900: #14532d;
+  --color-tandemu-50: #f0fdf4;
+  --color-tandemu-100: #dcfce7;
+  --color-tandemu-200: #bbf7d0;
+  --color-tandemu-300: #86efac;
+  --color-tandemu-400: #4ade80;
+  --color-tandemu-500: #22c55e;
+  --color-tandemu-600: #16a34a;
+  --color-tandemu-700: #15803d;
+  --color-tandemu-800: #166534;
+  --color-tandemu-900: #14532d;
 
   /* Semantic colors — resolved via CSS custom properties below */
   --color-background: var(--bg);

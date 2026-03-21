@@ -14,7 +14,7 @@ import {
   createInvite,
   cancelInvite,
 } from '@/lib/api';
-import type { Organization, Membership, Invite } from '@tandem/types';
+import type { Organization, Membership, Invite } from '@tandemu/types';
 
 function getPlanColor(tier: string) {
   switch (tier) {

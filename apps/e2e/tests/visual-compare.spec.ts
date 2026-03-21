@@ -23,7 +23,7 @@ test('capture dashboard pages with data', async ({ browser }) => {
 
   // Login
   await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle' });
-  await page.fill('input[type="email"]', 'testuser@tandem.dev');
+  await page.fill('input[type="email"]', 'testuser@tandemu.dev');
   await page.fill('input[type="password"]', 'tandem123');
   await page.click('button[type="submit"]');
   await page.waitForURL('**/', { timeout: 15000 }).catch(() => {});

@@ -78,7 +78,7 @@ export async function sendSessionSpans(opts: {
         },
         scopeSpans: [
           {
-            scope: { name: 'tandem-e2e-test' },
+            scope: { name: 'tandemu-e2e-test' },
             spans,
           },
         ],
@@ -121,7 +121,7 @@ export async function sendCodeMetrics(opts: {
         },
         scopeMetrics: [
           {
-            scope: { name: 'tandem-e2e-test' },
+            scope: { name: 'tandemu-e2e-test' },
             metrics: [
               {
                 name: 'code.lines.ai_generated',
@@ -212,7 +212,7 @@ export async function sendFrictionLogs(opts: {
         },
         scopeLogs: [
           {
-            scope: { name: 'tandem-e2e-test' },
+            scope: { name: 'tandemu-e2e-test' },
             logRecords,
           },
         ],

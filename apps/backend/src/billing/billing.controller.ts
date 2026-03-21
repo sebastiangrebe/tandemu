@@ -15,7 +15,7 @@ import type {
   CheckoutSessionResponse,
   BillingPortalRequest,
   BillingPortalResponse,
-} from '@tandem/types';
+} from '@tandemu/types';
 
 @Controller('billing')
 export class BillingController {
