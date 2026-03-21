@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -36,6 +37,7 @@ export default function RootLayout({
           <AuthProvider>
             <TooltipProvider>
               <DashboardLayout>{children}</DashboardLayout>
+              <Toaster richColors position="top-right" />
             </TooltipProvider>
           </AuthProvider>
         </ThemeProvider>

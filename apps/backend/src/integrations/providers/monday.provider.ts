@@ -57,11 +57,11 @@ async function mondayQuery<T>(token: string, query: string, variables?: Record<s
     throw new BadGatewayException(`Monday.com API error (${response.status}): ${text}`);
   }
 
-  const json = await response.json();
+  const json = await response.json() as { data?: unknown; errors?: Array<{ message: string }> };
 
   if (json.errors?.length) {
     throw new BadGatewayException(
-      `Monday.com GraphQL error: ${json.errors.map((e: { message: string }) => e.message).join(', ')}`,
+      `Monday.com GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`,
     );
   }
 

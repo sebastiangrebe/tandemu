@@ -1,11 +1,15 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { runMigrations } from '@tandemu/database';
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor.js';
 
 async function bootstrap() {
+  const databaseUrl = process.env['DATABASE_URL'] ?? 'postgresql://localhost:5432/tandemu';
+  await runMigrations(databaseUrl);
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });

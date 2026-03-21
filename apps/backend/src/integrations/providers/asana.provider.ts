@@ -61,7 +61,7 @@ async function asanaFetch<T>(path: string, token: string, method = 'GET', body?:
     throw new BadGatewayException(`Asana API error (${response.status}): ${text}`);
   }
 
-  const json = await response.json();
+  const json = await response.json() as Record<string, unknown>;
   return json.data as T;
 }
 
