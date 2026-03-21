@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogBody,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus } from 'lucide-react';
@@ -173,11 +172,11 @@ export default function TeamsPage() {
   };
 
   const availableMembers = orgMembers.filter(
-    (m) => !teamMembers.some((tm) => tm.userId === m.userId)
+    (m: any) => !teamMembers.some((tm) => tm.userId === (m.id ?? m.userId))
   );
 
   const inputClass =
-    'flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background';
+    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
 
   if (loading) {
     return (
@@ -246,15 +245,17 @@ export default function TeamsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {teamMembers.map((member) => (
+                  {teamMembers.map((member: any) => (
                     <TableRow key={member.id}>
-                      <TableCell className="font-mono text-sm">{member.userId}</TableCell>
+                      <TableCell className="font-medium">{member.name || member.userId}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{member.email || '—'}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(member.createdAt).toLocaleDateString('en-US', {
                           month: 'short',
@@ -281,13 +282,13 @@ export default function TeamsPage() {
         </Card>
 
         {/* Add Member Dialog */}
-        <Dialog open={showAddMemberDialog} onClose={() => setShowAddMemberDialog(false)}>
+        <Dialog open={showAddMemberDialog} onOpenChange={(open) => { if (!open) setShowAddMemberDialog(false); }}>
           <DialogContent>
-            <DialogHeader onClose={() => setShowAddMemberDialog(false)}>
+            <DialogHeader>
               <DialogTitle>Add Member to Team</DialogTitle>
               <DialogDescription>Select an organization member to add to this team.</DialogDescription>
             </DialogHeader>
-            <DialogBody>
+            <div className="p-6 pt-0">
               {availableMembers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   All organization members are already in this team.
@@ -299,14 +300,14 @@ export default function TeamsPage() {
                   className={inputClass}
                 >
                   <option value="">Select a member...</option>
-                  {availableMembers.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.userId} ({m.role})
+                  {availableMembers.map((m: any) => (
+                    <option key={m.id ?? m.userId} value={m.id ?? m.userId}>
+                      {m.name || m.email || m.id} ({m.role})
                     </option>
                   ))}
                 </select>
               )}
-            </DialogBody>
+            </div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setShowAddMemberDialog(false)}>
                 Cancel
@@ -404,13 +405,13 @@ export default function TeamsPage() {
       )}
 
       {/* Create Team Dialog */}
-      <Dialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) setShowCreateDialog(false); }}>
         <DialogContent>
-          <DialogHeader onClose={() => setShowCreateDialog(false)}>
+          <DialogHeader>
             <DialogTitle>Create Team</DialogTitle>
             <DialogDescription>Add a new team to your organization.</DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-3">
+          <div className="space-y-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Name</label>
               <input
@@ -437,7 +438,7 @@ export default function TeamsPage() {
                 className={inputClass}
               />
             </div>
-          </DialogBody>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>
               Cancel

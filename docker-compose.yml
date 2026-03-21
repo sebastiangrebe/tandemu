@@ -89,7 +89,19 @@ services:
       - backend
     restart: unless-stopped
 
+  openmemory:
+    image: mem0/openmemory-mcp:latest
+    ports:
+      - "8765:8765"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MEM0_TELEMETRY: "false"
+    volumes:
+      - openmemory_data:/app/data
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   clickhouse_data:
   redis_data:
+  openmemory_data:

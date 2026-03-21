@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, XCircle, FolderTree, Flame } from "lucide-react";
 import { getFrictionHeatmap } from '@/lib/api';
 import type { FrictionEvent } from '@tandem/types';
+import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
+import { FrictionSkeleton } from '@/components/ui/skeleton-helpers';
 
 interface FrictionItem {
   path: string;
@@ -79,24 +81,29 @@ export default function FrictionMapPage() {
   const [frictionData, setFrictionData] = useState<FrictionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { startDate, endDate } = useFilterParams();
 
   useEffect(() => {
-    getFrictionHeatmap()
-      .then((events) => setFrictionData(aggregateFriction(events)))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load friction data'))
-      .finally(() => setLoading(false));
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    getFrictionHeatmap({ startDate, endDate })
+      .then((events) => { if (!cancelled) setFrictionData(aggregateFriction(events)); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load friction data'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [startDate, endDate]);
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Friction Map</h1>
-          <p className="text-muted-foreground">Identify areas in your codebase where developers face the most friction.</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Friction Map</h1>
+            <p className="text-muted-foreground">Identify areas in your codebase where developers face the most friction.</p>
+          </div>
+          <TelemetryFilters />
         </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <FrictionSkeleton />
       </div>
     );
   }
@@ -122,9 +129,12 @@ export default function FrictionMapPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Friction Map</h1>
-        <p className="text-muted-foreground">Identify areas in your codebase where developers face the most friction.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Friction Map</h1>
+          <p className="text-muted-foreground">Identify areas in your codebase where developers face the most friction.</p>
+        </div>
+        <TelemetryFilters />
       </div>
 
       {!hasData ? (

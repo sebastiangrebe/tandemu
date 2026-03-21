@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Task, IntegrationProvider } from '@tandem/types';
+import type { Task, TaskStatus, IntegrationProvider } from '@tandem/types';
 import { IntegrationsService } from './integrations.service.js';
 import { getProvider } from './providers/index.js';
 import type { ExternalProject } from './providers/index.js';
@@ -63,6 +63,29 @@ export class TasksService {
     }
 
     return allTasks;
+  }
+
+  async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {
+    const integration = await this.integrationsService.findOne(orgId, provider);
+    const taskProvider = getProvider(provider);
+
+    return taskProvider.getTaskStatuses({
+      accessToken: integration.access_token,
+      taskId,
+      config: integration.config,
+    });
+  }
+
+  async updateTaskStatus(orgId: string, taskId: string, statusName: string, provider: IntegrationProvider): Promise<void> {
+    const integration = await this.integrationsService.findOne(orgId, provider);
+    const taskProvider = getProvider(provider);
+
+    await taskProvider.updateTaskStatus({
+      accessToken: integration.access_token,
+      taskId,
+      statusName,
+      config: integration.config,
+    });
   }
 
   async getProjects(orgId: string, providerName: IntegrationProvider): Promise<ExternalProject[]> {

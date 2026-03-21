@@ -1,29 +1,55 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { TelemetryService, TimesheetEntry } from './telemetry.service.js';
+import { TelemetryService, TimesheetEntry, ToolUsageStat, SessionQualityEntry } from './telemetry.service.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
 import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandem/types';
+import { DatabaseService } from '../database/database.service.js';
 
 @Controller('telemetry')
 @UseGuards(JwtAuthGuard, OrgRequiredGuard)
 export class TelemetryController {
-  constructor(private readonly telemetryService: TelemetryService) {}
+  constructor(
+    private readonly telemetryService: TelemetryService,
+    private readonly db: DatabaseService,
+  ) {}
 
   @Get('ai-ratio')
   async getAIRatio(
     @CurrentUser() user: RequestUser,
     @Query('sprintId') sprintId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ): Promise<AIvsManualRatio[]> {
-    return this.telemetryService.getAIvsManualRatio(user.organizationId, sprintId);
+    return this.telemetryService.getAIvsManualRatio(user.organizationId, sprintId, startDate, endDate);
   }
 
   @Get('friction-heatmap')
   async getFrictionHeatmap(
     @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ): Promise<FrictionEvent[]> {
-    return this.telemetryService.getFrictionHeatmap(user.organizationId);
+    const [custom, native] = await Promise.all([
+      this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate),
+      this.telemetryService.getNativeFriction(user.organizationId),
+    ]);
+    return [...custom, ...native];
+  }
+
+  @Get('tool-usage')
+  async getToolUsage(
+    @CurrentUser() user: RequestUser,
+  ): Promise<ToolUsageStat[]> {
+    return this.telemetryService.getToolUsageStats(user.organizationId);
+  }
+
+  @Get('session-quality')
+  async getSessionQuality(
+    @CurrentUser() user: RequestUser,
+  ): Promise<SessionQualityEntry[]> {
+    return this.telemetryService.getSessionQuality(user.organizationId);
   }
 
   @Get('dora-metrics')
@@ -46,11 +72,27 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
     @Query('userId') userId?: string,
   ): Promise<TimesheetEntry[]> {
-    return this.telemetryService.getTimesheets({
+    const entries = await this.telemetryService.getTimesheets({
       organizationId: user.organizationId,
       startDate: startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       endDate: endDate || new Date().toISOString(),
       userId,
     });
+
+    // Resolve user IDs to names from Postgres
+    const userIds = [...new Set(entries.map((e) => e.userId))];
+    if (userIds.length > 0) {
+      const result = await this.db.query<{ id: string; name: string }>(
+        `SELECT id, name FROM users WHERE id = ANY($1)`,
+        [userIds],
+      );
+      const nameMap = new Map(result.rows.map((r) => [r.id, r.name]));
+      return entries.map((e) => ({
+        ...e,
+        userName: nameMap.get(e.userId) ?? e.userId.slice(0, 8),
+      }));
+    }
+
+    return entries;
   }
 }

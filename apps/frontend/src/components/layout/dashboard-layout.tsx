@@ -3,8 +3,9 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { usePathname, useRouter } from 'next/navigation';
-import { Sidebar } from './sidebar';
+import { AppSidebar } from './sidebar';
 import { Header } from './header';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 
 const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth'];
 
@@ -40,21 +41,19 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (!hasOrganization) {
+  if (!isAuthenticated || !hasOrganization) {
     return null;
   }
 
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-      <div className="pl-64">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
         <Header />
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          {children}
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

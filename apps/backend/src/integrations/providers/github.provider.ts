@@ -8,7 +8,9 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderUpdateStatusParams,
   ExternalProject,
+  ProviderStatus,
 } from './task-provider.interface.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -110,6 +112,35 @@ export class GitHubProvider implements TaskProvider {
         externalProjectId,
         updatedAt: issue.updated_at,
       }));
+  }
+
+  async getTaskStatuses(_params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
+    // GitHub Issues only have two states
+    return [
+      { id: 'open', name: 'open' },
+      { id: 'closed', name: 'closed' },
+    ];
+  }
+
+  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
+    const { accessToken, taskId, statusName, config } = params;
+    const repo = config.repo as string | undefined;
+    if (!repo) return;
+
+    const response = await fetch(`${GITHUB_API}/repos/${repo}/issues/${taskId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ state: statusName.toLowerCase() }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new BadGatewayException(`GitHub issue update failed (${response.status}): ${body}`);
+    }
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

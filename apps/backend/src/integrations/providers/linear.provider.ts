@@ -8,7 +8,9 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderUpdateStatusParams,
   ExternalProject,
+  ProviderStatus,
 } from './task-provider.interface.js';
 
 const LINEAR_API = 'https://api.linear.app/graphql';
@@ -150,6 +152,67 @@ export class LinearProvider implements TaskProvider {
       externalProjectId,
       updatedAt: issue.updatedAt,
     }));
+  }
+
+  private async findIssueByIdentifier(accessToken: string, identifier: string) {
+    // Parse "SGS-18" into team key "SGS" and number 18
+    const match = identifier.match(/^([A-Z]+)-(\d+)$/);
+    if (!match) return null;
+
+    const [, teamKey, numberStr] = match;
+    const number = parseInt(numberStr, 10);
+
+    const data = await linearFetch<{
+      issues: {
+        nodes: Array<{
+          id: string;
+          team: { states: { nodes: Array<{ id: string; name: string; type: string }> } };
+        }>;
+      };
+    }>(accessToken, `
+      query {
+        issues(filter: { number: { eq: ${number} }, team: { key: { eq: "${teamKey}" } } }, first: 1) {
+          nodes {
+            id
+            team {
+              states { nodes { id name type } }
+            }
+          }
+        }
+      }
+    `);
+
+    return data.issues.nodes[0] ?? null;
+  }
+
+  async getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
+    const { accessToken, taskId } = params;
+
+    const issue = await this.findIssueByIdentifier(accessToken, taskId);
+    if (!issue) return [];
+
+    return issue.team.states.nodes.map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+    }));
+  }
+
+  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
+    const { accessToken, taskId, statusName } = params;
+
+    const issue = await this.findIssueByIdentifier(accessToken, taskId);
+    if (!issue) return;
+
+    const target = issue.team.states.nodes.find(
+      (s) => s.name.toLowerCase() === statusName.toLowerCase(),
+    );
+    if (!target) return;
+
+    await linearFetch<{ issueUpdate: { success: boolean } }>(
+      accessToken,
+      `mutation { issueUpdate(id: "${issue.id}", input: { stateId: "${target.id}" }) { success } }`,
+    );
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

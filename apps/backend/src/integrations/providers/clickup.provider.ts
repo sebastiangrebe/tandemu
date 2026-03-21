@@ -8,7 +8,9 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderUpdateStatusParams,
   ExternalProject,
+  ProviderStatus,
 } from './task-provider.interface.js';
 
 const CLICKUP_API = 'https://api.clickup.com/api/v2';
@@ -88,40 +90,99 @@ interface ClickUpFolderlessListsResponse {
   lists: Array<{ id: string; name: string }>;
 }
 
+function mapTask(task: ClickUpTask, externalProjectId: string): Task {
+  return {
+    id: task.id,
+    title: task.name,
+    description: task.description ?? undefined,
+    status: mapStatus(task.status.status),
+    priority: mapPriority(task.priority ? parseInt(task.priority.id, 10) : null),
+    assigneeName: task.assignees[0]?.username,
+    assigneeEmail: task.assignees[0]?.email,
+    labels: task.tags.map((t) => t.name),
+    sprint: task.list.name,
+    url: task.url,
+    provider: 'clickup',
+    externalProjectId,
+    updatedAt: new Date(parseInt(task.date_updated, 10)).toISOString(),
+  };
+}
+
 export class ClickUpProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
     const { accessToken, externalProjectId, assigneeEmail } = params;
-    // externalProjectId is the ClickUp list ID
-    let url = `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=true&subtasks=true`;
 
-    if (assigneeEmail) {
-      // ClickUp filters by assignee via user IDs; we fetch all then filter client-side
+    // externalProjectId can be a folder ID (preferred) or a list ID.
+    // Try as folder first — fetch all lists in the folder and aggregate tasks.
+    // If that fails (404), fall back to treating it as a list ID.
+    let allTasks: ClickUpTask[] = [];
+
+    try {
+      const folderData = await clickupFetch<ClickUpFolder>(
+        `${CLICKUP_API}/folder/${externalProjectId}`,
+        accessToken,
+      );
+      // It's a folder — fetch tasks from every list in it
+      for (const list of folderData.lists) {
+        const listData = await clickupFetch<ClickUpTasksResponse>(
+          `${CLICKUP_API}/list/${list.id}/task?include_closed=true&subtasks=true`,
+          accessToken,
+        );
+        allTasks.push(...listData.tasks);
+      }
+    } catch (err) {
+      // Not a folder — try as a list ID
+      const listData = await clickupFetch<ClickUpTasksResponse>(
+        `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=true&subtasks=true`,
+        accessToken,
+      );
+      allTasks = listData.tasks;
     }
 
-    const data = await clickupFetch<ClickUpTasksResponse>(url, accessToken);
-
-    let tasks = data.tasks;
     if (assigneeEmail) {
-      tasks = tasks.filter((t) =>
+      allTasks = allTasks.filter((t) =>
         t.assignees.some((a) => a.email === assigneeEmail),
       );
     }
 
-    return tasks.map((task): Task => ({
-      id: task.id,
-      title: task.name,
-      description: task.description ?? undefined,
-      status: mapStatus(task.status.status),
-      priority: mapPriority(task.priority ? parseInt(task.priority.id, 10) : null),
-      assigneeName: task.assignees[0]?.username,
-      assigneeEmail: task.assignees[0]?.email,
-      labels: task.tags.map((t) => t.name),
-      sprint: undefined,
-      url: task.url,
-      provider: 'clickup',
-      externalProjectId,
-      updatedAt: new Date(parseInt(task.date_updated, 10)).toISOString(),
+    return allTasks.map((task) => mapTask(task, externalProjectId));
+  }
+
+  async getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
+    const { accessToken, taskId } = params;
+
+    const task = await clickupFetch<{ id: string; list: { id: string } }>(
+      `${CLICKUP_API}/task/${taskId}`,
+      accessToken,
+    );
+
+    const list = await clickupFetch<{
+      statuses: Array<{ status: string; type: string; orderindex: number }>;
+    }>(`${CLICKUP_API}/list/${task.list.id}`, accessToken);
+
+    return list.statuses.map((s) => ({
+      id: s.status,
+      name: s.status,
+      type: s.type,
     }));
+  }
+
+  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
+    const { accessToken, taskId, statusName } = params;
+
+    const response = await fetch(`${CLICKUP_API}/task/${taskId}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: statusName }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new BadGatewayException(`ClickUp status update failed (${response.status}): ${body}`);
+    }
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {
@@ -130,7 +191,6 @@ export class ClickUpProvider implements TaskProvider {
       throw new BadGatewayException('ClickUp integration requires externalWorkspaceId (team ID)');
     }
 
-    // Get spaces first, then lists from each space
     const spacesData = await clickupFetch<{ spaces: Array<{ id: string; name: string }> }>(
       `${CLICKUP_API}/team/${externalWorkspaceId}/space?archived=false`,
       accessToken,
@@ -139,22 +199,21 @@ export class ClickUpProvider implements TaskProvider {
     const projects: ExternalProject[] = [];
 
     for (const space of spacesData.spaces) {
-      // Get folders and their lists
+      // Return folders as the primary mappable entities (a folder = a team's board)
       const foldersData = await clickupFetch<ClickUpFoldersResponse>(
         `${CLICKUP_API}/space/${space.id}/folder?archived=false`,
         accessToken,
       );
 
       for (const folder of foldersData.folders) {
-        for (const list of folder.lists) {
-          projects.push({
-            id: list.id,
-            name: `${space.name} / ${folder.name} / ${list.name}`,
-          });
-        }
+        projects.push({
+          id: folder.id,
+          name: `${space.name} / ${folder.name}`,
+          key: `${folder.lists.length} lists`,
+        });
       }
 
-      // Get folderless lists
+      // Also include folderless lists for simple setups (single-list boards)
       const listsData = await clickupFetch<ClickUpFolderlessListsResponse>(
         `${CLICKUP_API}/space/${space.id}/list?archived=false`,
         accessToken,
@@ -164,6 +223,7 @@ export class ClickUpProvider implements TaskProvider {
         projects.push({
           id: list.id,
           name: `${space.name} / ${list.name}`,
+          key: 'list',
         });
       }
     }

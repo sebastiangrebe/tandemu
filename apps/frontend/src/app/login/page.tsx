@@ -26,11 +26,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-md space-y-8 px-6">
+    <div className="min-h-screen flex items-center justify-center bg-background noise-bg">
+      <div className="w-full max-w-md space-y-8 px-6 relative z-10">
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">
-            T
+          <div className="mx-auto relative w-12 h-12">
+            <div className="absolute inset-0 bg-primary rounded-xl rotate-45" />
+            <div className="absolute inset-[4px] bg-background rounded-[9px] rotate-45" />
+            <div className="absolute inset-[8px] bg-primary rounded-[6px] rotate-45" />
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
             Sign in to Tandem
@@ -58,7 +60,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="you@example.com"
-              className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+              className="flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all"
             />
           </div>
 
@@ -73,14 +75,14 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your password"
-              className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+              className="flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isSubmitting ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

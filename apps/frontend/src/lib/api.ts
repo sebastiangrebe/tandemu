@@ -120,16 +120,34 @@ export async function getMembers(orgId: string): Promise<Membership[]> {
 
 // ---- Telemetry ----
 
-export async function getAIRatio(): Promise<AIvsManualRatio[]> {
-  return fetchApi<AIvsManualRatio[]>("/api/telemetry/ai-ratio");
+export interface TelemetryFilter {
+  startDate?: string;
+  endDate?: string;
 }
 
-export async function getFrictionHeatmap(): Promise<FrictionEvent[]> {
-  return fetchApi<FrictionEvent[]>("/api/telemetry/friction-heatmap");
+function buildParams(filter?: TelemetryFilter): string {
+  if (!filter) return '';
+  const p = new URLSearchParams();
+  if (filter.startDate) p.set('startDate', filter.startDate);
+  if (filter.endDate) p.set('endDate', filter.endDate);
+  const s = p.toString();
+  return s ? `?${s}` : '';
 }
 
-export async function getDORAMetrics(): Promise<DORAMetrics> {
-  return fetchApi<DORAMetrics>("/api/telemetry/dora-metrics");
+export async function getAIRatio(filter?: TelemetryFilter): Promise<AIvsManualRatio[]> {
+  return fetchApi<AIvsManualRatio[]>(`/api/telemetry/ai-ratio${buildParams(filter)}`);
+}
+
+export async function getFrictionHeatmap(filter?: TelemetryFilter): Promise<FrictionEvent[]> {
+  return fetchApi<FrictionEvent[]>(`/api/telemetry/friction-heatmap${buildParams(filter)}`);
+}
+
+export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {
+  const p = new URLSearchParams();
+  if (filter?.startDate) p.set('periodStart', filter.startDate);
+  if (filter?.endDate) p.set('periodEnd', filter.endDate);
+  const s = p.toString();
+  return fetchApi<DORAMetrics>(`/api/telemetry/dora-metrics${s ? `?${s}` : ''}`);
 }
 
 export interface TimesheetEntry {
@@ -140,8 +158,8 @@ export interface TimesheetEntry {
   sessions: number;
 }
 
-export async function getTimesheets(): Promise<TimesheetEntry[]> {
-  return fetchApi<TimesheetEntry[]>("/api/telemetry/timesheets");
+export async function getTimesheets(filter?: TelemetryFilter): Promise<TimesheetEntry[]> {
+  return fetchApi<TimesheetEntry[]>(`/api/telemetry/timesheets${buildParams(filter)}`);
 }
 
 // ---- Organizations (mutations) ----

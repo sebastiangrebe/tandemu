@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -11,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogBody,
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -25,6 +23,8 @@ import {
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react';
+import { SiGithub, SiJira, SiLinear, SiClickup, SiAsana } from '@icons-pack/react-simple-icons';
+import Image from 'next/image';
 import {
   getIntegrations,
   createIntegration,
@@ -39,13 +39,24 @@ import {
 import type { Integration, IntegrationProjectMapping } from '@/lib/api';
 import type { Team } from '@tandem/types';
 
+function ProviderIcon({ providerId, size = 20 }: { providerId: string; size?: number }) {
+  switch (providerId) {
+    case 'github': return <SiGithub size={size} />;
+    case 'jira': return <SiJira size={size} color="#2684FF" />;
+    case 'linear': return <SiLinear size={size} color="#5E6AD2" />;
+    case 'clickup': return <SiClickup size={size} color="#7B68EE" />;
+    case 'asana': return <SiAsana size={size} color="#F06A6A" />;
+    case 'monday': return <Image src="/monday.svg" alt="Monday.com" width={size} height={size} />;
+    default: return <Plug size={size} />;
+  }
+}
+
 // Provider metadata
 const PROVIDERS = [
   {
     id: 'github',
     name: 'GitHub Issues',
     description: 'Track issues and pull requests from GitHub repositories.',
-    badgeClass: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
     workspaceLabel: 'Organization',
     workspacePlaceholder: 'my-org (leave blank for personal repos)',
     workspaceRequired: false,
@@ -56,7 +67,6 @@ const PROVIDERS = [
     id: 'jira',
     name: 'Jira',
     description: 'Sync issues and sprints from Atlassian Jira.',
-    badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     workspaceLabel: 'Site URL',
     workspacePlaceholder: 'mycompany.atlassian.net',
     workspaceRequired: true,
@@ -67,7 +77,6 @@ const PROVIDERS = [
     id: 'linear',
     name: 'Linear',
     description: 'Import issues, cycles, and projects from Linear.',
-    badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
     workspaceLabel: 'Workspace',
     workspacePlaceholder: 'Derived from token (leave blank)',
     workspaceRequired: false,
@@ -78,12 +87,31 @@ const PROVIDERS = [
     id: 'clickup',
     name: 'ClickUp',
     description: 'Connect tasks, lists, and spaces from ClickUp.',
-    badgeClass: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
     workspaceLabel: 'Team ID',
     workspacePlaceholder: 'Your ClickUp team ID',
     workspaceRequired: true,
     helpText: 'Create a personal API token at app.clickup.com/settings/apps',
     helpUrl: 'https://app.clickup.com/settings/apps',
+  },
+  {
+    id: 'asana',
+    name: 'Asana',
+    description: 'Sync tasks and projects from Asana workspaces.',
+    workspaceLabel: 'Workspace GID',
+    workspacePlaceholder: 'Your Asana workspace GID',
+    workspaceRequired: true,
+    helpText: 'Create a personal access token at app.asana.com/0/developer-console',
+    helpUrl: 'https://app.asana.com/0/developer-console',
+  },
+  {
+    id: 'monday',
+    name: 'Monday.com',
+    description: 'Connect boards and items from Monday.com.',
+    workspaceLabel: 'Workspace',
+    workspacePlaceholder: 'Not required (leave blank)',
+    workspaceRequired: false,
+    helpText: 'Create an API token in your Monday.com admin panel under Developers',
+    helpUrl: 'https://monday.com/developers/apps',
   },
 ] as const;
 
@@ -126,7 +154,7 @@ export default function IntegrationsPage() {
   const [savingMapping, setSavingMapping] = useState(false);
 
   const inputClass =
-    'flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background';
+    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -333,9 +361,8 @@ export default function IntegrationsPage() {
                 <div key={integration.id} className="rounded-lg border border-border">
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <Badge variant="outline" className={meta?.badgeClass ?? ''}>
-                        {meta?.name ?? integration.provider}
-                      </Badge>
+                      <ProviderIcon providerId={integration.provider} />
+                      <span className="text-sm font-medium">{meta?.name ?? integration.provider}</span>
                       {integration.externalWorkspaceName && (
                         <span className="text-sm text-muted-foreground">
                           {integration.externalWorkspaceName}
@@ -473,12 +500,11 @@ export default function IntegrationsPage() {
                   className="rounded-lg border border-border p-4 flex flex-col justify-between"
                 >
                   <div className="mb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className={provider.badgeClass}>
-                        {provider.name}
-                      </Badge>
+                    <div className="flex items-center gap-3 mb-2">
+                      <ProviderIcon providerId={provider.id} size={24} />
+                      <span className="text-sm font-medium">{provider.name}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2">{provider.description}</p>
+                    <p className="text-sm text-muted-foreground">{provider.description}</p>
                   </div>
                   <Button
                     size="sm"
@@ -510,9 +536,9 @@ export default function IntegrationsPage() {
       )}
 
       {/* Connect Dialog */}
-      <Dialog open={!!connectProvider} onClose={() => setConnectProvider(null)}>
+      <Dialog open={!!connectProvider} onOpenChange={(open) => { if (!open) setConnectProvider(null); }}>
         <DialogContent>
-          <DialogHeader onClose={() => setConnectProvider(null)}>
+          <DialogHeader>
             <DialogTitle>
               Connect {connectProvider ? getProviderMeta(connectProvider)?.name : ''}
             </DialogTitle>
@@ -520,7 +546,7 @@ export default function IntegrationsPage() {
               Provide your API credentials to connect this integration.
             </DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-4">
+          <div className="space-y-4">
             {connectProvider && (() => {
               const meta = getProviderMeta(connectProvider);
               if (!meta) return null;
@@ -587,7 +613,7 @@ export default function IntegrationsPage() {
                 </>
               );
             })()}
-          </DialogBody>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setConnectProvider(null)}>
               Cancel
@@ -614,9 +640,9 @@ export default function IntegrationsPage() {
       </Dialog>
 
       {/* Disconnect Confirmation Dialog */}
-      <Dialog open={!!disconnectProvider} onClose={() => setDisconnectProvider(null)}>
+      <Dialog open={!!disconnectProvider} onOpenChange={(open) => { if (!open) setDisconnectProvider(null); }}>
         <DialogContent>
-          <DialogHeader onClose={() => setDisconnectProvider(null)}>
+          <DialogHeader>
             <DialogTitle>Disconnect Integration</DialogTitle>
             <DialogDescription>
               Are you sure you want to disconnect{' '}
@@ -624,12 +650,12 @@ export default function IntegrationsPage() {
               mappings for this integration will also be removed.
             </DialogDescription>
           </DialogHeader>
-          <DialogBody>
+          <div className="p-6 pt-0">
             <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               <p>This action cannot be undone.</p>
             </div>
-          </DialogBody>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDisconnectProvider(null)}>
               Cancel
@@ -651,15 +677,15 @@ export default function IntegrationsPage() {
       </Dialog>
 
       {/* Add Mapping Dialog */}
-      <Dialog open={!!addMappingProvider} onClose={() => setAddMappingProvider(null)}>
+      <Dialog open={!!addMappingProvider} onOpenChange={(open) => { if (!open) setAddMappingProvider(null); }}>
         <DialogContent>
-          <DialogHeader onClose={() => setAddMappingProvider(null)}>
+          <DialogHeader>
             <DialogTitle>Add Project Mapping</DialogTitle>
             <DialogDescription>
               Map an external project to a Tandem team to sync issues.
             </DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-4">
+          <div className="space-y-4">
             {loadingProjects ? (
               <div className="flex items-center justify-center py-6">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -712,7 +738,7 @@ export default function IntegrationsPage() {
                 </div>
               </>
             )}
-          </DialogBody>
+          </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setAddMappingProvider(null)}>
               Cancel

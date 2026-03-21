@@ -152,16 +152,18 @@ export default function SetupPage() {
   }
 
   const inputClass =
-    'flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background';
+    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-background py-12 px-4">
+    <div className="min-h-screen flex flex-col items-center bg-background noise-bg py-12 px-4">
       {/* Logo */}
-      <div className="mb-8 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-lg">
-          T
+      <div className="mb-8 flex items-center gap-2.5 relative z-10">
+        <div className="relative w-9 h-9">
+          <div className="absolute inset-0 bg-primary rounded-lg rotate-45" />
+          <div className="absolute inset-[3px] bg-background rounded-[5px] rotate-45" />
+          <div className="absolute inset-[6px] bg-primary rounded-[3px] rotate-45" />
         </div>
-        <span className="text-xl font-semibold text-foreground">Tandem</span>
+        <span className="text-xl font-bold text-foreground tracking-tight">Tandem</span>
       </div>
 
       {/* Step indicator */}
@@ -270,7 +272,7 @@ export default function SetupPage() {
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="flex h-10 rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex h-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                 >
                   <option value="MEMBER">Member</option>
                   <option value="ADMIN">Admin</option>

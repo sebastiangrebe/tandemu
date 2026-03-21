@@ -8,7 +8,9 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderUpdateStatusParams,
   ExternalProject,
+  ProviderStatus,
 } from './task-provider.interface.js';
 
 function mapStatus(statusName: string): TaskStatus {
@@ -121,6 +123,60 @@ export class JiraProvider implements TaskProvider {
       externalProjectId,
       updatedAt: issue.fields.updated,
     }));
+  }
+
+  async getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
+    const { accessToken, taskId, config } = params;
+    const siteId = config.siteId as string | undefined;
+    if (!siteId) return [];
+
+    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+
+    const res = await fetch(`${baseUrl}/issue/${taskId}/transitions`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${config.email}:${accessToken}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) return [];
+
+    const data = await res.json() as {
+      transitions: Array<{ id: string; name: string; to: { name: string } }>;
+    };
+
+    return data.transitions.map((t) => ({
+      id: t.id,
+      name: t.to.name,
+      type: t.name,  // transition name (e.g., "Start Progress", "Done")
+    }));
+  }
+
+  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
+    const { accessToken, taskId, statusName, config } = params;
+    const siteId = config.siteId as string | undefined;
+    if (!siteId) return;
+
+    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+
+    // Get transitions and find the one whose target matches the requested status name
+    const statuses = await this.getTaskStatuses({ accessToken, taskId, config });
+    const transition = statuses.find((s) => s.name.toLowerCase() === statusName.toLowerCase());
+    if (!transition) return;
+
+    const res = await fetch(`${baseUrl}/issue/${taskId}/transitions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${config.email}:${accessToken}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ transition: { id: transition.id } }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new BadGatewayException(`Jira transition failed (${res.status}): ${body}`);
+    }
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

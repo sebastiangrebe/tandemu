@@ -29,11 +29,11 @@ If the file doesn't exist, tell the developer: "Tandem is not configured. Run /t
 Make these calls in parallel:
 
 ```bash
-# Team members
+# Team members (these are the Tandem users on the team)
 curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/organizations/<org_id>/teams/<team_id>/members"
 
-# Tasks from connected ticket system (in_progress and done recently)
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>&sprint=current"
+# All tasks from connected ticket system
+curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>"
 
 # Telemetry: session timesheets (last 24h)
 YESTERDAY=$(date -u -v-1d +%Y-%m-%dT00:00:00Z 2>/dev/null || date -u -d "yesterday" +%Y-%m-%dT00:00:00Z)
@@ -49,28 +49,63 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/friction-he
 
 ### 3. Compile the team standup
 
-Cross-reference tasks with telemetry to build the report:
+**IMPORTANT attribution rules:**
+
+- Each task has an `assigneeEmail` field from the ticket system.
+- Each Tandem team member has an `email` field.
+- Match tasks to team members by comparing `task.assigneeEmail` to `member.email`.
+- Only show a task under a person if their email matches the task's `assigneeEmail`.
+- Tasks where `assigneeEmail` doesn't match any team member go in an "Other contributors" section (they may be assigned to people not in Tandem yet).
+- Unassigned tasks (no `assigneeEmail`) go in the "Unassigned" section.
+
+**Task categorization (by recency, NOT by sprint):**
+
+- **Recently completed**: tasks with `status: done` AND `updatedAt` within the last 7 days.
+- **In progress**: tasks with `status: in_progress`.
+- **In review**: tasks with `status: in_review`.
+- **Todo**: tasks with `status: todo`. Show at most 10, and mention how many more exist.
+- Do NOT use the word "sprint" in the report. Use "this week" or "recently" instead.
+- Ignore tasks with `status: done` that were completed more than 7 days ago — they are not relevant to a standup.
+
+**Report structure:**
 
 ```markdown
 ## Team Standup — <date>
 **Team**: <team name> | **Members**: <count>
 
-### Team Summary
-- **Active sessions**: <N> members coded yesterday (<total hours>h)
-- **AI-assisted**: <ratio>x (<ai_lines> AI lines / <manual_lines> manual)
-- **Tasks in progress**: <count> | **Done this sprint**: <count>
-- **Friction hotspots**: <top file paths with high prompt loops>
+### Summary
+- **In progress**: <count> | **In review**: <count> | **Done this week**: <count>
+- **Active sessions**: <N> members coded in the last 24h (<total hours>h)
+- **AI-assisted**: <ai_lines> AI lines / <manual_lines> manual lines
+- **Friction hotspots**: <top file paths with high prompt loops, or "None detected">
 
 ### Per-Person Updates
 
-**<Name>** (<hours>h active)
-- Working on: <in_progress tasks from ticket system>
-- Completed: <done tasks from ticket system>
-- Friction: <any files with prompt loops for this user>
+Only include team members who have tasks assigned to them OR telemetry activity.
 
-### Team Blockers
-- <tasks stuck in review or blocked status>
+**<Name>** (<email>) — <hours>h active
+- Working on:
+  - [<task.id>] <title> (<priority>)
+- Recently completed:
+  - [<task.id>] <title>
+- Friction: <files with prompt loops for this user, or omit if none>
+
+### Other Contributors
+
+Tasks assigned to people not on this Tandem team:
+
+- [<task.id>] <title> — assigned to <assigneeName> (<assigneeEmail>)
+
+### Backlog
+
+<count> tasks in backlog. Top items:
+- [<task.id>] <title> (<priority>)
+- ... (show up to 10, then "and <N> more")
+
+### Blockers
+- <tasks in_review for more than 2 days>
 - <high-friction files affecting multiple developers>
+- If no blockers detected, say "No blockers detected."
 ```
 
 ### 4. Format output
@@ -84,3 +119,5 @@ Default: markdown. If `--format slack`, use Slack bold markers. If `--format pla
 - If no ticket system is connected, show telemetry-only data and note that tasks are unavailable
 - If no telemetry data exists, show task-only data
 - Respect privacy — show work output, not surveillance metrics
+- NEVER attribute a task to someone unless their email matches the task's assigneeEmail
+- Do not mention sprints, cycles, or iteration boundaries — use time-based recency instead

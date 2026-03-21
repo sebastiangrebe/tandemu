@@ -2,8 +2,11 @@
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────
-#  Tandem Installer
+#  Tandem Installer (Developer)
 #  Usage: curl -fsSL https://tandem.dev/install.sh | bash
+#
+#  Installs Claude Code skills, configures telemetry,
+#  and sets up memory for your Tandem instance.
 # ─────────────────────────────────────────────────────────
 
 RED='\033[0;31m'
@@ -14,10 +17,13 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-TANDEM_DIR="${TANDEM_DIR:-$HOME/.tandem}"
-TANDEM_REPO="https://github.com/anthropics/tandem.git"
 CLAUDE_DIR="$HOME/.claude"
 SKILLS_DIR="$CLAUDE_DIR/skills"
+TANDEM_DATA_DIR="$HOME/.tandem"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+
+# Where to download skills + MCP server from
+TANDEM_RELEASE_URL="${TANDEM_RELEASE_URL:-https://github.com/anthropics/tandem/releases/latest/download}"
 
 # ─────────────────────────────────────────────────────────
 
@@ -44,170 +50,290 @@ dim()  { echo -e "  ${DIM}$1${NC}"; }
 check_prerequisites() {
   step "Checking prerequisites..."
 
-  local missing=()
-
-  if ! command -v git &>/dev/null; then
-    missing+=("git")
-  fi
-
-  if ! command -v docker &>/dev/null; then
-    missing+=("docker")
-  fi
-
-  if ! command -v docker compose &>/dev/null && ! docker compose version &>/dev/null 2>&1; then
-    missing+=("docker compose")
-  fi
-
   if ! command -v claude &>/dev/null; then
-    missing+=("claude (Claude Code CLI)")
+    fail "Claude Code CLI not found. Install it first: https://code.claude.com"
   fi
 
-  if [ ${#missing[@]} -gt 0 ]; then
-    echo ""
-    fail "Missing required tools: ${missing[*]}"
+  if ! command -v python3 &>/dev/null; then
+    fail "python3 not found. It's required for configuration."
   fi
 
-  # Check Docker is running
-  if ! docker info &>/dev/null; then
-    fail "Docker is not running. Please start Docker and try again."
+  if ! command -v curl &>/dev/null; then
+    fail "curl not found."
   fi
 
   ok "All prerequisites found"
 }
 
 # ─────────────────────────────────────────────────────────
-# Clone or update repo
+# Choose Tandem instance
 # ─────────────────────────────────────────────────────────
 
-setup_repo() {
-  if [ -d "$TANDEM_DIR" ]; then
-    step "Updating existing Tandem installation..."
-    cd "$TANDEM_DIR"
-    git pull --quiet origin main 2>/dev/null || warn "Could not pull latest — using existing version"
-    ok "Tandem updated at $TANDEM_DIR"
-  else
-    step "Cloning Tandem..."
-    git clone --quiet "$TANDEM_REPO" "$TANDEM_DIR" 2>/dev/null || {
-      # If the repo doesn't exist yet (pre-release), create from local if available
-      if [ -d "$(dirname "$0")/apps" ]; then
-        step "Copying from local source..."
-        cp -r "$(dirname "$0")" "$TANDEM_DIR"
-      else
-        fail "Could not clone Tandem repository. Check your network connection."
-      fi
-    }
-    ok "Tandem cloned to $TANDEM_DIR"
-  fi
+choose_instance() {
+  echo ""
+  echo -e "  ${BOLD}Which Tandem instance do you want to connect to?${NC}"
+  echo ""
+  echo -e "    ${BOLD}1.${NC} Tandem Cloud ${DIM}(Recommended)${NC}"
+  dim "      Hosted at https://app.tandem.dev"
+  echo ""
+  echo -e "    ${BOLD}2.${NC} Self-hosted instance"
+  dim "      You'll provide the URL"
+  echo ""
 
-  cd "$TANDEM_DIR"
+  read -rp "  Choose (1 or 2): " choice
+  case "$choice" in
+    1)
+      API_URL="https://app.tandem.dev"
+      ;;
+    2)
+      echo ""
+      read -rp "  Enter your Tandem URL (e.g., https://tandem.company.com): " API_URL
+      # Strip trailing slash
+      API_URL="${API_URL%/}"
+      ;;
+    *)
+      API_URL="https://app.tandem.dev"
+      ;;
+  esac
+
+  # Verify the instance is reachable
+  step "Checking ${API_URL}..."
+  if curl -sf "${API_URL}/api/health" &>/dev/null; then
+    ok "Tandem instance is reachable"
+  else
+    fail "Could not reach ${API_URL}. Check the URL and try again."
+  fi
 }
 
 # ─────────────────────────────────────────────────────────
-# Start services
+# OAuth: Browser-based authentication
 # ─────────────────────────────────────────────────────────
 
-start_services() {
-  step "Starting Tandem services with Docker Compose..."
-  dim "This may take a few minutes on first run (downloading images + building)..."
-  echo ""
+do_oauth() {
+  step "Starting authentication..."
 
-  if docker compose up --build -d 2>&1 | while IFS= read -r line; do
-    # Show progress dots instead of full build output
-    case "$line" in
-      *"Started"*|*"Running"*|*"Created"*|*"Healthy"*)
-        echo -ne "${DIM}  .${NC}"
-        ;;
-    esac
-  done; then
-    echo ""
-    ok "All services started"
-  else
-    echo ""
-    fail "Failed to start services. Run 'cd $TANDEM_DIR && docker compose up --build' to see errors."
+  RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json" 2>/dev/null) || {
+    fail "Could not reach Tandem API at ${API_URL}."
+  }
+
+  CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])" 2>/dev/null)
+  AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['url'])" 2>/dev/null)
+
+  if [ -z "$CODE" ] || [ -z "$AUTH_URL" ]; then
+    fail "Could not parse auth response."
   fi
 
-  # Wait for health
-  step "Waiting for services to be ready..."
-  local retries=30
+  echo ""
+  echo -e "  ${BOLD}Opening your browser to authorize...${NC}"
+  echo ""
+  dim "  If the browser doesn't open, visit:"
+  dim "  ${AUTH_URL}"
+  echo ""
+
+  # Open browser
+  if command -v open &>/dev/null; then
+    open "$AUTH_URL" 2>/dev/null || true
+  elif command -v xdg-open &>/dev/null; then
+    xdg-open "$AUTH_URL" 2>/dev/null || true
+  fi
+
+  # Poll for authorization
+  step "Waiting for you to authorize in the browser..."
+  local retries=150
+  local TOKEN=""
   while [ $retries -gt 0 ]; do
-    if curl -sf http://localhost:3001/api/health &>/dev/null; then
+    POLL_RESPONSE=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null) || true
+    STATUS=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null || echo "pending")
+
+    if [ "$STATUS" = "authorized" ]; then
+      TOKEN=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['accessToken'])" 2>/dev/null)
       break
+    elif [ "$STATUS" = "expired" ]; then
+      fail "Authorization expired. Please run the installer again."
     fi
+
     sleep 2
     retries=$((retries - 1))
   done
 
-  if [ $retries -eq 0 ]; then
-    fail "Services did not become healthy. Check: docker compose -f $TANDEM_DIR/docker-compose.yml ps"
+  if [ -z "$TOKEN" ]; then
+    fail "Authorization timed out."
   fi
 
-  ok "Backend ready at http://localhost:3001"
-  ok "Dashboard ready at http://localhost:3000"
-}
+  ok "Authorized!"
 
-# ─────────────────────────────────────────────────────────
-# Apply database migrations
-# ─────────────────────────────────────────────────────────
+  # Get user info
+  ME_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null)
+  USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null)
+  USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null)
+  USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null)
 
-apply_migrations() {
-  step "Applying database migrations..."
+  # Get organizations (first one if exists)
+  ORGS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null)
+  ORG_COUNT=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
 
-  for migration in "$TANDEM_DIR"/packages/database/src/migrations/*.sql; do
-    if [ -f "$migration" ]; then
-      docker exec -i tandem-postgres-1 psql -U tandem -d tandem < "$migration" 2>/dev/null || true
+  ORG_ID=""
+  ORG_NAME=""
+  TEAM_ID=""
+  TEAM_NAME=""
+
+  if [ "$ORG_COUNT" -gt 0 ]; then
+    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+
+    TEAMS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null)
+    TEAM_COUNT=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
+
+    if [ "$TEAM_COUNT" -gt 0 ]; then
+      TEAM_ID=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+      TEAM_NAME=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
     fi
-  done
-
-  ok "Database migrations applied"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────
-# Install skills globally
+# Write configuration files
 # ─────────────────────────────────────────────────────────
 
-install_skills() {
-  step "Installing Tandem skills for Claude Code..."
+write_configs() {
+  mkdir -p "$CLAUDE_DIR"
+  mkdir -p "$TANDEM_DATA_DIR"
 
+  # 1. tandem.json
+  step "Writing Tandem config..."
+  cat > "$CLAUDE_DIR/tandem.json" << EOF
+{
+  "auth": { "token": "${TOKEN}" },
+  "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
+  "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
+  "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
+  "api": { "url": "${API_URL}" }
+}
+EOF
+  ok "Config: ~/.claude/tandem.json"
+
+  # 2. settings.json — OTEL env vars + permissions
+  step "Configuring telemetry and permissions..."
+  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+  OTEL_HOST=$(echo "$API_URL" | sed 's|https\?://||' | sed 's|:.*||')
+  OTEL_ENDPOINT="http://${OTEL_HOST}:4318"
+
+  python3 << PYEOF
+import json, os
+settings_file = os.path.expanduser("~/.claude/settings.json")
+try:
+    with open(settings_file) as f:
+        settings = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    settings = {}
+env = settings.get("env", {})
+env.update({
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "${OTEL_ENDPOINT}",
+    "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+    "OTEL_RESOURCE_ATTRIBUTES": "organization_id=${ORG_ID}"
+})
+settings["env"] = env
+perms = settings.get("permissions", {})
+allow = perms.get("allow", [])
+api_host = "${OTEL_HOST}"
+tandem_perms = [
+    "Edit(~/.claude/tandem*)",
+    "Write(~/.claude/tandem*)",
+    "Bash(cat > ~/.claude/tandem*)",
+    "Bash(rm ~/.claude/tandem*)",
+    "Bash(rm -f ~/.claude/tandem*)",
+    f"Bash(curl*{api_host}:3001*)",
+    f"Bash(curl*{api_host}:4318*)",
+]
+for p in tandem_perms:
+    if p not in allow:
+        allow.append(p)
+perms["allow"] = allow
+settings["permissions"] = perms
+with open(settings_file, "w") as f:
+    json.dump(settings, f, indent=2)
+PYEOF
+  ok "Telemetry: enabled (→ ${OTEL_ENDPOINT})"
+
+  # 3. ~/.claude.json — OpenMemory MCP server
+  step "Configuring memory server..."
+  MCP_FILE="$HOME/.claude.json"
+  MEM0_URL="http://${OTEL_HOST}:8765"
+
+  python3 << PYEOF
+import json, os
+mcp_file = os.path.expanduser("~/.claude.json")
+try:
+    with open(mcp_file) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    config = {}
+servers = config.get("mcpServers", {})
+servers["tandem-memory"] = {
+    "type": "url",
+    "url": "${MEM0_URL}/mcp/tandem/sse/${USER_ID}"
+}
+config["mcpServers"] = servers
+with open(mcp_file, "w") as f:
+    json.dump(config, f, indent=2)
+PYEOF
+  ok "Memory: enabled (→ ${MEM0_URL})"
+}
+
+# ─────────────────────────────────────────────────────────
+# Install skills + MCP server
+# ─────────────────────────────────────────────────────────
+
+install_assets() {
   mkdir -p "$SKILLS_DIR"
+  mkdir -p "$TANDEM_DATA_DIR"
 
-  local skills_src="$TANDEM_DIR/apps/claude-plugins/skills"
+  step "Downloading Tandem skills and MCP server..."
 
-  if [ ! -d "$skills_src" ]; then
-    warn "Skills directory not found at $skills_src — skipping"
-    return
+  local skills_src=""
+  local mcp_src=""
+
+  if [ -d "${SCRIPT_DIR}/apps/claude-plugins/skills" ]; then
+    # Running from the repo directly
+    skills_src="${SCRIPT_DIR}/apps/claude-plugins/skills"
+    mcp_src="${SCRIPT_DIR}/apps/mcp-server"
+  else
+    # Download from release
+    # TODO: implement release artifact download
+    fail "Release download not yet implemented. Run install.sh from the Tandem repo directory."
   fi
 
+  # Install skills (skip /tandem — its logic is in this script)
   for skill_dir in "$skills_src"/*/; do
     local skill_name
     skill_name=$(basename "$skill_dir")
-    local target="$SKILLS_DIR/$skill_name"
-
-    # Remove old version if exists
-    rm -rf "$target"
-
-    # Copy skill
-    cp -r "$skill_dir" "$target"
+    [ "$skill_name" = "tandem" ] && continue
+    rm -rf "$SKILLS_DIR/$skill_name"
+    cp -r "$skill_dir" "$SKILLS_DIR/$skill_name"
   done
+
+  # Copy CLAUDE.md to user's global claude dir
+  if [ -f "${SCRIPT_DIR}/apps/claude-plugins/CLAUDE.md" ]; then
+    cp "${SCRIPT_DIR}/apps/claude-plugins/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+    ok "CLAUDE.md installed (personality + memory)"
+  fi
 
   local count
   count=$(ls -1d "$SKILLS_DIR"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-  ok "$count skills installed to $SKILLS_DIR"
+  ok "$count skills installed"
 
-  dim "Skills available in all Claude Code sessions:"
-  for skill_dir in "$SKILLS_DIR"/*/; do
-    local name
-    name=$(basename "$skill_dir")
-    local desc
-    desc=$(sed -n 's/^description: //p' "$skill_dir/SKILL.md" 2>/dev/null | head -c 60)
-    dim "  /$name — $desc"
-  done
+  ok "Memory server: OpenMemory MCP (connects to Tandem instance)"
 }
 
 # ─────────────────────────────────────────────────────────
-# Print instructions
+# Done
 # ─────────────────────────────────────────────────────────
 
-print_instructions() {
+print_done() {
   echo ""
   echo -e "${BOLD}  ┌─────────────────────────────────────────────┐${NC}"
   echo -e "${BOLD}  │                                               │${NC}"
@@ -215,41 +341,51 @@ print_instructions() {
   echo -e "${BOLD}  │                                               │${NC}"
   echo -e "${BOLD}  └─────────────────────────────────────────────┘${NC}"
   echo ""
-  echo -e "  ${BOLD}Services running:${NC}"
-  echo -e "    Dashboard   ${BLUE}http://localhost:3000${NC}"
-  echo -e "    API         ${BLUE}http://localhost:3001${NC}"
-  echo -e "    Telemetry   ${BLUE}http://localhost:4317${NC} (gRPC) / ${BLUE}:4318${NC} (HTTP)"
+  echo -e "  ${BOLD}Connected as:${NC}"
+  echo -e "    Account       ${BLUE}${USER_NAME}${NC} (${USER_EMAIL})"
+  if [ -n "$ORG_NAME" ]; then
+    echo -e "    Organization  ${BLUE}${ORG_NAME}${NC}"
+  else
+    echo -e "    Organization  ${YELLOW}Not set up yet${NC} — visit the dashboard"
+  fi
+  if [ -n "$TEAM_NAME" ]; then
+    echo -e "    Team          ${BLUE}${TEAM_NAME}${NC}"
+  fi
+  echo -e "    API           ${BLUE}${API_URL}${NC}"
+  echo -e "    Telemetry     ${GREEN}enabled${NC}"
+  echo -e "    Memory        ${GREEN}enabled${NC}"
   echo ""
-  echo -e "  ${BOLD}Next steps:${NC}"
+  echo -e "  ${BOLD}Get started:${NC}"
   echo ""
-  echo -e "    ${BOLD}1.${NC} Register at ${BLUE}http://localhost:3000/register${NC}"
-  echo -e "       Create your account and set up your organization."
+  echo -e "    ${GREEN}\$ cd your-project${NC}"
+  echo -e "    ${GREEN}\$ claude${NC}"
+  echo -e "    ${GREEN}> /morning${NC}"
   echo ""
-  echo -e "    ${BOLD}2.${NC} Connect Tandem to Claude Code:"
+  echo -e "  ${BOLD}Available skills:${NC}"
+  echo -e "    ${GREEN}/morning${NC}   — Pick a task and start working"
+  echo -e "    ${GREEN}/finish${NC}    — Complete task, measure work, send telemetry"
+  echo -e "    ${GREEN}/pause${NC}     — Pause current task, switch to another"
+  echo -e "    ${GREEN}/standup${NC}   — Generate a team standup report"
+  echo -e "    ${GREEN}/blockers${NC}  — See what's slowing the team down"
   echo ""
-  echo -e "       ${DIM}Open any project and run:${NC}"
-  echo -e "       ${GREEN}\$ cd your-project${NC}"
-  echo -e "       ${GREEN}\$ claude${NC}"
-  echo -e "       ${GREEN}> /tandem${NC}"
-  echo ""
-  echo -e "       ${DIM}This will open your browser to authorize the CLI${NC}"
-  echo -e "       ${DIM}and save your config to ~/.claude/tandem.json${NC}"
-  echo ""
-  echo -e "    ${BOLD}3.${NC} Start using Tandem skills:"
-  echo ""
-  echo -e "       ${GREEN}/morning${NC}   — Pick a task from your sprint"
-  echo -e "       ${GREEN}/finish${NC}    — Wrap up and move to the next task"
-  echo -e "       ${GREEN}/standup${NC}   — Generate a team standup report"
-  echo -e "       ${GREEN}/blockers${NC}  — See what's slowing the team down"
-  echo ""
-  echo -e "  ${BOLD}Manage:${NC}"
-  echo -e "    Stop:     ${DIM}cd $TANDEM_DIR && docker compose down${NC}"
-  echo -e "    Start:    ${DIM}cd $TANDEM_DIR && docker compose up -d${NC}"
-  echo -e "    Logs:     ${DIM}cd $TANDEM_DIR && docker compose logs -f${NC}"
-  echo -e "    Update:   ${DIM}curl -fsSL https://tandem.dev/install.sh | bash${NC}"
-  echo -e "    Uninstall:${DIM} rm -rf $TANDEM_DIR $SKILLS_DIR/{tandem,morning,finish,standup,blockers}${NC}"
+  echo -e "  ${BOLD}Re-authenticate:${NC}"
+  dim "    Run this script again"
   echo ""
 }
+
+# ─────────────────────────────────────────────────────────
+# Parse arguments
+# ─────────────────────────────────────────────────────────
+
+NONINTERACTIVE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --url) API_URL="$2"; shift 2 ;;
+    --token) TOKEN="$2"; NONINTERACTIVE="true"; shift 2 ;;
+    --skip-prereqs) SKIP_PREREQS="true"; shift ;;
+    *) shift ;;
+  esac
+done
 
 # ─────────────────────────────────────────────────────────
 # Main
@@ -257,12 +393,51 @@ print_instructions() {
 
 main() {
   header
-  check_prerequisites
-  setup_repo
-  start_services
-  apply_migrations
-  install_skills
-  print_instructions
+
+  if [ "${SKIP_PREREQS:-}" != "true" ]; then
+    check_prerequisites
+  fi
+
+  if [ -z "${API_URL:-}" ]; then
+    choose_instance
+  else
+    step "Using API: ${API_URL}"
+    ok "Instance configured"
+  fi
+
+  if [ "${NONINTERACTIVE:-}" = "true" ] && [ -n "${TOKEN:-}" ]; then
+    # Non-interactive: token provided, fetch user info directly
+    step "Using provided token..."
+    ME_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null) || {
+      fail "Token is invalid or API is unreachable."
+    }
+    USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null)
+    USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null)
+    USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null)
+
+    ORGS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null)
+    ORG_COUNT=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
+    ORG_ID=""; ORG_NAME=""; TEAM_ID=""; TEAM_NAME=""
+
+    if [ "$ORG_COUNT" -gt 0 ]; then
+      ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+      ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+      TEAMS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null)
+      TEAM_COUNT=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
+      if [ "$TEAM_COUNT" -gt 0 ]; then
+        TEAM_ID=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+        TEAM_NAME=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+      fi
+    fi
+    ok "Authorized as ${USER_NAME} (${USER_EMAIL})"
+  else
+    do_oauth
+  fi
+
+  write_configs
+  install_assets
+  print_done
+
 }
 
 main "$@"

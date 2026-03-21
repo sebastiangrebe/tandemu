@@ -86,8 +86,10 @@ function CliAuthContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-md space-y-6 px-6 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">
-            T
+          <div className="mx-auto relative w-12 h-12">
+            <div className="absolute inset-0 bg-primary rounded-xl rotate-45" />
+            <div className="absolute inset-[4px] bg-background rounded-[9px] rotate-45" />
+            <div className="absolute inset-[8px] bg-primary rounded-[6px] rotate-45" />
           </div>
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
             Missing authorization code. Please try again from the CLI.
@@ -101,8 +103,10 @@ function CliAuthContent() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-6 px-6">
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xl">
-            T
+          <div className="mx-auto relative w-12 h-12">
+            <div className="absolute inset-0 bg-primary rounded-xl rotate-45" />
+            <div className="absolute inset-[4px] bg-background rounded-[9px] rotate-45" />
+            <div className="absolute inset-[8px] bg-primary rounded-[6px] rotate-45" />
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
             Authorize CLI
