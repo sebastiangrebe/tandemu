@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus } from 'lucide-react';
+import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock } from 'lucide-react';
 import {
   getOrganizations,
   getTeams,
@@ -23,24 +23,28 @@ import {
   addTeamMember,
   removeTeamMember,
   getMembers,
+  getInvites,
 } from '@/lib/api';
-import type { Team, TeamMember, Membership, Organization } from '@tandemu/types';
+import type { Team, TeamMember, Membership, Organization, Invite } from '@tandemu/types';
 
 interface TeamWithMembers extends Team {
   members?: TeamMember[];
   memberCount?: number;
+  pendingInvites?: number;
 }
 
 export default function TeamsPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [teams, setTeams] = useState<TeamWithMembers[]>([]);
   const [orgMembers, setOrgMembers] = useState<Membership[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Selected team detail view
   const [selectedTeam, setSelectedTeam] = useState<TeamWithMembers | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamInvites, setTeamInvites] = useState<Invite[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Create team dialog
@@ -56,19 +60,25 @@ export default function TeamsPage() {
 
   const loadTeams = useCallback(async (orgId: string) => {
     try {
-      const [teamList, memberList] = await Promise.all([
+      const [teamList, memberList, inviteList] = await Promise.all([
         getTeams(orgId),
         getMembers(orgId),
+        getInvites(orgId),
       ]);
 
-      // Load member counts for each team
+      const pending = inviteList.filter((inv) => inv.status === 'pending');
+      setPendingInvites(pending);
+
+      // Load member counts for each team and count pending invites per team
       const teamsWithCounts = await Promise.all(
         teamList.map(async (team) => {
           try {
             const members = await getTeamMembers(orgId, team.id);
-            return { ...team, members, memberCount: members.length };
+            const teamPendingCount = pending.filter((inv) => inv.teamId === team.id).length;
+            return { ...team, members, memberCount: members.length, pendingInvites: teamPendingCount };
           } catch {
-            return { ...team, members: [], memberCount: 0 };
+            const teamPendingCount = pending.filter((inv) => inv.teamId === team.id).length;
+            return { ...team, members: [], memberCount: 0, pendingInvites: teamPendingCount };
           }
         })
       );
@@ -133,8 +143,10 @@ export default function TeamsPage() {
     try {
       const members = await getTeamMembers(org.id, team.id);
       setTeamMembers(members);
+      setTeamInvites(pendingInvites.filter((inv) => inv.teamId === team.id));
     } catch {
       setTeamMembers([]);
+      setTeamInvites([]);
     } finally {
       setLoadingMembers(false);
     }
@@ -236,7 +248,7 @@ export default function TeamsPage() {
               <div className="flex items-center justify-center py-8">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
-            ) : teamMembers.length === 0 ? (
+            ) : teamMembers.length === 0 && teamInvites.length === 0 ? (
               <div className="flex flex-col items-center py-8">
                 <Users className="h-8 w-8 text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">No members yet.</p>
@@ -247,6 +259,7 @@ export default function TeamsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -256,6 +269,11 @@ export default function TeamsPage() {
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">{member.name || member.userId}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{member.email || '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                          Active
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(member.createdAt).toLocaleDateString('en-US', {
                           month: 'short',
@@ -272,6 +290,30 @@ export default function TeamsPage() {
                         >
                           <UserMinus className="h-4 w-4" />
                         </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {teamInvites.map((invite) => (
+                    <TableRow key={invite.id} className="opacity-70">
+                      <TableCell className="font-medium">
+                        <span className="text-muted-foreground">{invite.email.split('@')[0]}</span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{invite.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Pending
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(invite.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">Invited</span>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -392,11 +434,21 @@ export default function TeamsPage() {
                 )}
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  <span>
-                    {team.memberCount ?? 0} member{(team.memberCount ?? 0) !== 1 ? 's' : ''}
-                  </span>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-4 w-4" />
+                    <span>
+                      {team.memberCount ?? 0} member{(team.memberCount ?? 0) !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {(team.pendingInvites ?? 0) > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="h-4 w-4 text-amber-500" />
+                      <span className="text-amber-500">
+                        {team.pendingInvites} pending
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

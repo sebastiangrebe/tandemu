@@ -20,6 +20,7 @@ function formatDuration(minutes: number): string {
 }
 
 function formatHours(hours: number): string {
+  if (hours === 0) return '—';
   if (hours < 0.1) return '<6m';
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   return `${hours.toFixed(1)}h`;

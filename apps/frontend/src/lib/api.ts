@@ -227,7 +227,7 @@ export async function getInvites(orgId: string): Promise<Invite[]> {
   return fetchApi<Invite[]>(`/api/organizations/${orgId}/invites`);
 }
 
-export async function createInvite(orgId: string, data: { email: string; role: string }): Promise<Invite> {
+export async function createInvite(orgId: string, data: { email: string; role: string; teamId?: string }): Promise<Invite> {
   return fetchApi<Invite>(`/api/organizations/${orgId}/invites`, {
     method: "POST",
     body: JSON.stringify(data),
