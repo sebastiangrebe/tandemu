@@ -89,6 +89,7 @@ export interface Invite {
   readonly role: MembershipRole;
   readonly invitedBy: string;
   readonly status: 'pending' | 'accepted' | 'expired';
+  readonly teamId?: string;
   readonly createdAt: string;
   readonly expiresAt: string;
 }
@@ -96,4 +97,5 @@ export interface Invite {
 export interface CreateInviteDto {
   readonly email: string;
   readonly role: MembershipRole;
+  readonly teamId?: string;
 }

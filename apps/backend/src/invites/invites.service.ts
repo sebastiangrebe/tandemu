@@ -11,7 +11,7 @@ import type { Invite, MembershipRole } from '@tandemu/types';
 export class InvitesService {
   constructor(private readonly db: DatabaseService) {}
 
-  async create(orgId: string, email: string, role: MembershipRole, invitedBy: string): Promise<Invite> {
+  async create(orgId: string, email: string, role: MembershipRole, invitedBy: string, teamId?: string): Promise<Invite> {
     // Check if user already exists and is already a member
     const userResult = await this.db.query<{ id: string }>(
       'SELECT id FROM users WHERE email = $1',
@@ -36,14 +36,15 @@ export class InvitesService {
       organization_id: string;
       role: string;
       invited_by: string;
+      team_id: string | null;
       status: string;
       created_at: Date;
       expires_at: Date;
     }>(
-      `INSERT INTO invites (email, organization_id, role, invited_by)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO invites (email, organization_id, role, invited_by, team_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [email, orgId, role.toLowerCase(), invitedBy],
+      [email, orgId, role.toLowerCase(), invitedBy, teamId ?? null],
     );
 
     return this.mapInvite(result.rows[0]!);
@@ -56,6 +57,7 @@ export class InvitesService {
       organization_id: string;
       role: string;
       invited_by: string;
+      team_id: string | null;
       status: string;
       created_at: Date;
       expires_at: Date;
@@ -75,6 +77,7 @@ export class InvitesService {
       organization_id: string;
       role: string;
       invited_by: string;
+      team_id: string | null;
       status: string;
       created_at: Date;
       expires_at: Date;
@@ -103,7 +106,7 @@ export class InvitesService {
       throw new ForbiddenException('This invite is not for your email address');
     }
 
-    // Use a transaction to accept the invite and create the membership
+    // Use a transaction to accept the invite, create membership, and assign team
     const result = await this.db.withTransaction(async (client) => {
       // Update invite status
       const updatedInvite = await client.query<{
@@ -112,6 +115,7 @@ export class InvitesService {
         organization_id: string;
         role: string;
         invited_by: string;
+        team_id: string | null;
         status: string;
         created_at: Date;
         expires_at: Date;
@@ -125,6 +129,14 @@ export class InvitesService {
         `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, $3)`,
         [userId, invite.organization_id, invite.role],
       );
+
+      // Auto-assign to team if specified
+      if (invite.team_id) {
+        await client.query(
+          `INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [invite.team_id, userId],
+        );
+      }
 
       return updatedInvite.rows[0]!;
     });
@@ -147,6 +159,7 @@ export class InvitesService {
       organization_id: string;
       role: string;
       invited_by: string;
+      team_id: string | null;
       status: string;
       created_at: Date;
       expires_at: Date;
@@ -164,6 +177,7 @@ export class InvitesService {
     organization_id: string;
     role: string;
     invited_by: string;
+    team_id: string | null;
     status: string;
     created_at: Date;
     expires_at: Date;
@@ -175,6 +189,7 @@ export class InvitesService {
       role: row.role.toUpperCase() as MembershipRole,
       invitedBy: row.invited_by,
       status: row.status as Invite['status'],
+      teamId: row.team_id ?? undefined,
       createdAt: row.created_at.toISOString(),
       expiresAt: row.expires_at.toISOString(),
     };

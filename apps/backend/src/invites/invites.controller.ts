@@ -32,7 +32,7 @@ export class InvitesController {
     @CurrentUser() user: RequestUser,
     @Body() dto: CreateInviteDto,
   ): Promise<Invite> {
-    return this.invitesService.create(orgId, dto.email, dto.role, user.userId);
+    return this.invitesService.create(orgId, dto.email, dto.role, user.userId, dto.teamId);
   }
 
   // Owner/Admin can view pending invites

@@ -28,16 +28,19 @@ let authToken = '';
 
 async function login(page: import('@playwright/test').Page) {
   await page.goto('/login');
-  await page.fill('#email', TEST_USER.email);
-  await page.fill('#password', TEST_USER.password);
+  // Click "Continue with email" to reveal the form
+  await page.click('button:has-text("Continue with email")');
+  await page.fill('input[placeholder="Email"]', TEST_USER.email);
+  await page.fill('input[placeholder="Password"]', TEST_USER.password);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/(setup)?$/, { timeout: 15000 });
 }
 
 async function loginAndCapture(page: import('@playwright/test').Page) {
   await page.goto('/login');
-  await page.fill('#email', TEST_USER.email);
-  await page.fill('#password', TEST_USER.password);
+  await page.click('button:has-text("Continue with email")');
+  await page.fill('input[placeholder="Email"]', TEST_USER.email);
+  await page.fill('input[placeholder="Password"]', TEST_USER.password);
 
   const responsePromise = page.waitForResponse(
     (resp) => resp.url().includes('/api/auth/login') && resp.status() === 200,
@@ -86,21 +89,23 @@ test.describe.serial('Tandemu E2E: Full Setup Flow', () => {
 
   test('register a new user', async ({ page }) => {
     await page.goto('/register');
-    await expect(page.locator('h1')).toContainText('Create your account');
+    await expect(page.locator('h1')).toContainText('Sign Up');
 
-    await page.fill('#name', TEST_USER.name);
-    await page.fill('#email', TEST_USER.email);
-    await page.fill('#password', TEST_USER.password);
-    await page.fill('#confirmPassword', TEST_USER.password);
+    await page.fill('input[placeholder="Full name"]', TEST_USER.name);
+    await page.fill('input[placeholder="Email"]', TEST_USER.email);
+    await page.fill('input[placeholder="Password (min. 6 characters)"]', TEST_USER.password);
+    await page.fill('input[placeholder="Confirm password"]', TEST_USER.password);
     await page.click('button[type="submit"]');
 
     await page.waitForURL('**/setup', { timeout: 15000 });
-    await expect(page.locator('h2')).toContainText('Set up your organization');
+    await expect(page.locator('h1')).toContainText('Set up your workspace');
   });
 
-  test('complete org setup', async ({ page }) => {
+  test('complete setup: org, teams, invites', async ({ page }) => {
     await login(page);
 
+    // Step 1: Organization
+    await expect(page.locator('h1')).toContainText('Set up your workspace');
     await page.fill('input[placeholder="Acme Inc."]', ORG.name);
     const slugInput = page.locator('input[placeholder="acme-inc"]');
     await expect(slugInput).toHaveValue('test-organization');
@@ -108,37 +113,50 @@ test.describe.serial('Tandemu E2E: Full Setup Flow', () => {
     await slugInput.fill(ORG.slug);
     await page.click('button:has-text("Continue")');
 
-    await expect(page.locator('h2')).toContainText('Invite team members');
-    await page.click('button:has-text("Skip")');
+    // Step 2: Create Teams (now before invites)
+    await expect(page.locator('h1')).toContainText('Create your teams');
+    await page.fill('input[placeholder="Team name"]', TEAM_NAME);
+    await page.fill('input[placeholder="Description (optional)"]', 'Engineering team');
+    await page.click('button:has-text("Add Team")');
+    // Verify team appears in the right preview
+    await expect(page.getByText(TEAM_NAME)).toBeVisible();
+    await page.click('button:has-text("Continue")');
 
-    await expect(page.locator('h2')).toContainText('Create teams');
+    // Step 3: Invite Members
+    await expect(page.locator('h1')).toContainText('Invite your team');
+
+    // Add an invite with team assignment
+    await page.fill('input[placeholder="colleague@example.com"]', 'dev@tandemu.dev');
+    // The team select should be visible since we created teams
     await page.click('button:has-text("Complete Setup")');
 
     await page.waitForURL('**/', { timeout: 15000 });
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
+  test('verify team was created during setup', async ({ page }) => {
+    await login(page);
+    await page.getByRole('link', { name: 'Teams' }).click();
+    await page.waitForURL('**/teams', { timeout: 10000 });
+
+    await expect(page.getByText(TEAM_NAME)).toBeVisible({ timeout: 10000 });
+  });
+
   test('sign in with registered user', async ({ page }) => {
     await page.goto('/login');
-    await page.fill('#email', TEST_USER.email);
-    await page.fill('#password', TEST_USER.password);
+    await page.click('button:has-text("Continue with email")');
+    await page.fill('input[placeholder="Email"]', TEST_USER.email);
+    await page.fill('input[placeholder="Password"]', TEST_USER.password);
     await page.click('button[type="submit"]');
 
     await page.waitForURL('**/', { timeout: 15000 });
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
-  test('create Engineering team and add user as member', async ({ page }) => {
+  test('add user as team member', async ({ page }) => {
     await login(page);
     await page.getByRole('link', { name: 'Teams' }).click();
     await page.waitForURL('**/teams', { timeout: 10000 });
-
-    // Create team
-    await page.click('button:has-text("Create Team")');
-    await page.fill('input[placeholder="Engineering"]', TEAM_NAME);
-    await page.fill('input[placeholder="Optional description"]', 'Engineering team');
-    await page.click('button:has-text("Create"):not(:has-text("Create Team"))');
-    await expect(page.getByRole('heading', { name: TEAM_NAME })).toBeVisible({ timeout: 10000 });
 
     // Click on the team card to open detail view
     await page.locator('.cursor-pointer').filter({ hasText: TEAM_NAME }).click();

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import {
   createOrganization,
@@ -10,9 +9,22 @@ import {
   switchOrg,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Building2, Users, Layers, Check, Plus, X, ArrowRight, ArrowLeft } from 'lucide-react';
-import Image from 'next/image';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import {
+  LayoutDashboard,
+  Clock,
+  Flame,
+  Users,
+  Plug,
+  Settings,
+  Layers,
+  Plus,
+  X,
+  Mail,
+  ChevronsUpDown,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 function generateSlug(name: string): string {
   return name
@@ -34,39 +46,212 @@ interface TeamEntry {
 }
 
 const STEPS = [
-  { label: 'Organization', icon: Building2 },
-  { label: 'Invite Members', icon: Users },
-  { label: 'Create Teams', icon: Layers },
+  { description: 'Set up your workspace' },
+  { description: 'Invite your team' },
+  { description: 'Organize into teams' },
 ];
 
+const sidebarNav = [
+  { label: 'Dashboard', icon: LayoutDashboard },
+  { label: 'Activity', icon: Clock },
+  { label: 'Friction Map', icon: Flame },
+  { label: 'Teams', icon: Users },
+  { label: 'Integrations', icon: Plug },
+  { label: 'Settings', icon: Settings },
+];
+
+// --- Preview: mimics the real sidebar + dashboard skeleton ---
+
+function DashboardPreview({ orgName, userName }: { orgName: string; userName: string }) {
+  const orgInitial = orgName ? orgName.charAt(0).toUpperCase() : 'T';
+  const userInitials = userName
+    ? userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
+
+  return (
+    <div className="flex h-[540px] gap-0 rounded-xl border border-border bg-muted shadow-lg overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-52 bg-background rounded-lg m-2 mr-0 flex flex-col p-2 text-sm">
+        {/* Org switcher */}
+        <div className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted/80 mb-1">
+          <div className="h-7 w-7 rounded-md bg-foreground text-background flex items-center justify-center text-xs font-bold shrink-0">
+            {orgInitial}
+          </div>
+          <div className="flex-1 min-w-0 leading-tight">
+            <p className="text-xs font-semibold truncate">{orgName || 'Your Org'}</p>
+            <p className="text-[10px] text-muted-foreground">Free</p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        </div>
+
+        {/* Nav label */}
+        <p className="px-2 pt-3 pb-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Platform</p>
+
+        {/* Nav items */}
+        <div className="flex flex-col gap-0.5">
+          {sidebarNav.map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.label}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
+                  i === 0
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {item.label}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* User footer */}
+        <div className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted/80 mt-1">
+          <div className="h-7 w-7 rounded-md bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground shrink-0">
+            {userInitials}
+          </div>
+          <div className="flex-1 min-w-0 leading-tight">
+            <p className="text-xs font-semibold truncate">{userName || 'User'}</p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 p-4 flex flex-col gap-3">
+        {/* Top bar skeleton */}
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-5 rounded bg-muted/80" />
+          <div className="h-5 flex-1 rounded bg-muted/80" />
+        </div>
+        {/* Dashboard content */}
+        <div className="flex-1 rounded-xl bg-background p-4 flex flex-col gap-3">
+          {/* KPI cards */}
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 rounded-lg bg-muted/50" />
+            ))}
+          </div>
+          {/* Charts */}
+          <div className="grid grid-cols-2 gap-2 flex-1">
+            <div className="rounded-lg bg-muted/50" />
+            <div className="rounded-lg bg-muted/50" />
+          </div>
+          {/* Table rows */}
+          <div className="flex flex-col gap-1.5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-2">
+                <div className="h-5 flex-[2] rounded bg-muted/40" />
+                <div className="h-5 flex-1 rounded bg-muted/40" />
+                <div className="h-5 flex-1 rounded bg-muted/40" />
+                <div className="h-5 w-12 rounded bg-muted/40" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvitesPreview({ invites, user }: { invites: InviteEntry[]; user: { name: string; email: string } | null }) {
+  const members = [
+    { name: user?.name ?? 'You', email: user?.email ?? '', role: 'OWNER' },
+    ...invites.map((inv) => ({ name: inv.email.split('@')[0], email: inv.email, role: inv.role })),
+  ];
+
+  return (
+    <div className="h-[540px] rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col">
+      <div className="px-5 py-4 border-b border-border">
+        <p className="text-sm font-semibold">Members</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {members.map((m, i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0">
+              {m.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{m.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+            </div>
+            <span className="text-[10px] text-muted-foreground rounded-full bg-muted px-2 py-0.5 shrink-0">
+              {m.role}
+            </span>
+          </div>
+        ))}
+        {invites.length === 0 && (
+          <div className="flex flex-col items-center py-14 text-muted-foreground">
+            <Mail className="h-8 w-8 mb-2 opacity-30" />
+            <p className="text-xs">Invite members to see them here</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamsPreview({ teams }: { teams: TeamEntry[] }) {
+  return (
+    <div className="h-[540px] rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col">
+      <div className="px-5 py-4 border-b border-border">
+        <p className="text-sm font-semibold">Teams</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{teams.length} team{teams.length !== 1 ? 's' : ''}</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {teams.map((t, i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Layers className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{t.name}</p>
+              {t.description && (
+                <p className="text-xs text-muted-foreground truncate">{t.description}</p>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground shrink-0">0 members</span>
+          </div>
+        ))}
+        {teams.length === 0 && (
+          <div className="flex flex-col items-center py-14 text-muted-foreground">
+            <Layers className="h-8 w-8 mb-2 opacity-30" />
+            <p className="text-xs">Create teams to see them here</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Main ---
+
 export default function SetupPage() {
-  const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
 
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
 
-  // Step 1: Organization
   const [orgName, setOrgName] = useState('');
   const [orgSlug, setOrgSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
 
-  // Step 2: Invites
   const [invites, setInvites] = useState<InviteEntry[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('MEMBER');
 
-  // Step 3: Teams
   const [teams, setTeams] = useState<TeamEntry[]>([]);
   const [teamName, setTeamName] = useState('');
   const [teamDescription, setTeamDescription] = useState('');
 
   const handleOrgNameChange = (value: string) => {
     setOrgName(value);
-    if (!slugEdited) {
-      setOrgSlug(generateSlug(value));
-    }
+    if (!slugEdited) setOrgSlug(generateSlug(value));
   };
 
   const handleSlugChange = (value: string) => {
@@ -82,9 +267,7 @@ export default function SetupPage() {
     setInviteRole('MEMBER');
   };
 
-  const removeInvite = (index: number) => {
-    setInvites(invites.filter((_, i) => i !== index));
-  };
+  const removeInvite = (index: number) => setInvites(invites.filter((_, i) => i !== index));
 
   const addTeam = () => {
     if (!teamName.trim()) return;
@@ -94,43 +277,26 @@ export default function SetupPage() {
     setTeamDescription('');
   };
 
-  const removeTeam = (index: number) => {
-    setTeams(teams.filter((_, i) => i !== index));
-  };
+  const removeTeam = (index: number) => setTeams(teams.filter((_, i) => i !== index));
 
   const canProceed = useCallback(() => {
     if (step === 0) return orgName.trim().length > 0 && orgSlug.trim().length > 0;
-    return true; // Steps 1 and 2 are optional
+    return true;
   }, [step, orgName, orgSlug]);
 
   const handleComplete = async () => {
-    setError('');
     setIsSubmitting(true);
-
     try {
-      // Create a new organization
       const org = await createOrganization({ name: orgName.trim(), slug: orgSlug.trim() });
       const orgId = org.id;
-
-      // Send invites
-      const invitePromises = invites.map((inv) =>
-        createInvite(orgId, { email: inv.email, role: inv.role })
-      );
-      await Promise.allSettled(invitePromises);
-
-      // Create teams
-      const teamPromises = teams.map((t) =>
-        createTeam(orgId, { name: t.name, description: t.description || undefined })
-      );
-      await Promise.allSettled(teamPromises);
-
-      // Get a new JWT with the org context and reload
+      await Promise.allSettled(invites.map((inv) => createInvite(orgId, { email: inv.email, role: inv.role })));
+      await Promise.allSettled(teams.map((t) => createTeam(orgId, { name: t.name, description: t.description || undefined })));
       const { accessToken } = await switchOrg(orgId);
       localStorage.setItem('tandemu_token', accessToken);
       localStorage.setItem('tandemu_current_org', orgId);
       window.location.href = '/';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Setup failed. Please try again.');
+      toast.error(err instanceof Error ? err.message : 'Setup failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -138,7 +304,7 @@ export default function SetupPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-muted">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
@@ -146,251 +312,151 @@ export default function SetupPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-muted">
         <p className="text-muted-foreground">Please log in to continue.</p>
       </div>
     );
   }
 
-  const inputClass =
-    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
-
   return (
-    <div className="min-h-screen flex flex-col items-center bg-background noise-bg py-12 px-4">
-      {/* Logo */}
-      <div className="mb-8 flex items-center gap-2.5 relative z-10">
-        <Image src="/logo.svg" alt="Tandemu" width={36} height={36} className="dark:hidden" />
-        <Image src="/logo-dark.svg" alt="Tandemu" width={36} height={36} className="hidden dark:block" />
-        <span className="text-xl font-bold text-foreground tracking-tight">Tandemu</span>
-      </div>
+    <div className="min-h-screen bg-muted">
+      <div className="flex h-screen">
+        {/* Left: Form */}
+        <div className="w-full lg:w-[45%] flex flex-col overflow-y-auto items-center">
+          <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-20 py-16 max-w-md w-full">
+            <p className="text-sm text-muted-foreground mb-1">{step + 1}/{STEPS.length}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground mb-8">
+              {STEPS[step].description}
+            </h1>
 
-      {/* Step indicator */}
-      <div className="mb-8 flex items-center gap-2">
-        {STEPS.map((s, i) => {
-          const Icon = s.icon;
-          const isActive = i === step;
-          const isCompleted = i < step;
-          return (
-            <div key={s.label} className="flex items-center gap-2">
-              {i > 0 && (
-                <div
-                  className={`h-px w-8 ${
-                    isCompleted ? 'bg-primary' : 'bg-border'
-                  }`}
-                />
-              )}
-              <div
-                className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : isCompleted
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {isCompleted ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Icon className="h-3.5 w-3.5" />
-                )}
-                {s.label}
+            {/* Step 1: Organization */}
+            {step === 0 && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Organization Name</label>
+                  <Input
+                    value={orgName}
+                    onChange={(e) => handleOrgNameChange(e.target.value)}
+                    placeholder="Acme Inc."
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Slug</label>
+                  <Input
+                    value={orgSlug}
+                    onChange={(e) => handleSlugChange(e.target.value)}
+                    placeholder="acme-inc"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used in URLs. Lowercase letters, numbers, and hyphens only.
+                  </p>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            )}
 
-      {/* Content */}
-      <Card className="w-full max-w-lg">
-        <CardContent className="p-6">
-          {error && (
-            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-              {error}
-            </div>
-          )}
-
-          {/* Step 1: Organization */}
-          {step === 0 && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Set up your organization</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Give your workspace a name. You can change this later.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Organization Name</label>
-                <input
-                  type="text"
-                  value={orgName}
-                  onChange={(e) => handleOrgNameChange(e.target.value)}
-                  placeholder="Acme Inc."
-                  className={inputClass}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Slug</label>
-                <input
-                  type="text"
-                  value={orgSlug}
-                  onChange={(e) => handleSlugChange(e.target.value)}
-                  placeholder="acme-inc"
-                  className={inputClass}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Used in URLs. Lowercase letters, numbers, and hyphens only.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Invite Members */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Invite team members</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+            {/* Step 2: Invite Members */}
+            {step === 1 && (
+              <div className="space-y-6">
+                <p className="text-sm text-muted-foreground">
                   Add people to your organization. You can also do this later.
                 </p>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="colleague@example.com"
-                  className={`${inputClass} flex-1`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addInvite();
-                    }
-                  }}
-                />
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="flex h-10 rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-                >
-                  <option value="MEMBER">Member</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-                <Button size="sm" onClick={addInvite} className="h-10 px-3">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {invites.length > 0 && (
-                <div className="space-y-2">
-                  {invites.map((inv, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-foreground">{inv.email}</span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          {inv.role}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => removeInvite(i)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="colleague@example.com"
+                    className="flex-1"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addInvite(); } }}
+                    autoFocus
+                  />
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                  >
+                    <option value="MEMBER">Member</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                  <Button size="sm" onClick={addInvite} className="h-9 px-3">
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-            </div>
-          )}
+                {invites.length > 0 && (
+                  <div className="space-y-2">
+                    {invites.map((inv, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{inv.email}</span>
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{inv.role}</span>
+                        </div>
+                        <button onClick={() => removeInvite(i)} className="text-muted-foreground hover:text-foreground">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Step 3: Create Teams */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Create teams</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+            {/* Step 3: Create Teams */}
+            {step === 2 && (
+              <div className="space-y-6">
+                <p className="text-sm text-muted-foreground">
                   Organize your members into teams. This step is optional.
                 </p>
-              </div>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="Team name"
-                  className={inputClass}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addTeam();
-                    }
-                  }}
-                />
-                <input
-                  type="text"
-                  value={teamDescription}
-                  onChange={(e) => setTeamDescription(e.target.value)}
-                  placeholder="Description (optional)"
-                  className={inputClass}
-                />
-                <Button size="sm" onClick={addTeam} variant="outline" className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Team
-                </Button>
-              </div>
-              {teams.length > 0 && (
                 <div className="space-y-2">
-                  {teams.map((t, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{t.name}</p>
-                        {t.description && (
-                          <p className="text-xs text-muted-foreground">{t.description}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => removeTeam(i)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
+                  <Input
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="Team name"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTeam(); } }}
+                    autoFocus
+                  />
+                  <Input
+                    value={teamDescription}
+                    onChange={(e) => setTeamDescription(e.target.value)}
+                    placeholder="Description (optional)"
+                  />
+                  <Button size="sm" onClick={addTeam} variant="outline" className="w-full">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Team
+                  </Button>
                 </div>
-              )}
-            </div>
-          )}
+                {teams.length > 0 && (
+                  <div className="space-y-2">
+                    {teams.map((t, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">{t.name}</p>
+                          {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
+                        </div>
+                        <button onClick={() => removeTeam(i)} className="text-muted-foreground hover:text-foreground">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Navigation */}
-          <div className="mt-6 flex items-center justify-between">
-            <div>
+            {/* Navigation */}
+            <Separator className="mt-8 mb-6" />
+            <div className="flex items-center gap-3">
               {step > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)}>
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  Back
-                </Button>
+                <Button variant="outline" onClick={() => setStep(step - 1)}>Back</Button>
               )}
-            </div>
-            <div className="flex gap-2">
+              <div className="flex-1" />
               {step < 2 ? (
                 <>
                   {step > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setStep(step + 1)}>
-                      Skip
-                    </Button>
+                    <Button variant="ghost" onClick={() => setStep(step + 1)}>Skip</Button>
                   )}
-                  <Button
-                    size="sm"
-                    onClick={() => setStep(step + 1)}
-                    disabled={!canProceed()}
-                  >
+                  <Button onClick={() => setStep(step + 1)} disabled={!canProceed()}>
                     Continue
-                    <ArrowRight className="h-4 w-4 ml-1" />
                   </Button>
                 </>
               ) : (
@@ -404,9 +470,17 @@ export default function SetupPage() {
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
+        {/* Right: Preview */}
+        <div className="hidden lg:flex lg:w-[55%] items-center justify-center p-6 xl:p-10">
+          <div className="w-full max-w-3xl">
+            {step === 0 && <DashboardPreview orgName={orgName} userName={user.name} />}
+            {step === 1 && <InvitesPreview invites={invites} user={user} />}
+            {step === 2 && <TeamsPreview teams={teams} />}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
