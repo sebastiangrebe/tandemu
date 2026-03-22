@@ -76,6 +76,7 @@
 
 /* ── Light theme ─────────────────────────────────────── */
 :root {
+  --header-height: calc(var(--spacing) * 12);
   --bg: #fafafa;
   --fg: #09090b;
   --card: oklch(1 0 0);
