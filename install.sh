@@ -215,7 +215,7 @@ EOF
   # 2. settings.json — OTEL env vars + permissions
   step "Configuring telemetry and permissions..."
   SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-  OTEL_HOST=$(echo "$API_URL" | sed 's|https\?://||' | sed 's|:.*||')
+  OTEL_HOST=$(echo "$API_URL" | sed 's|https://||;s|http://||' | sed 's|:.*||')
   OTEL_ENDPOINT="http://${OTEL_HOST}:4318"
 
   python3 << PYEOF
