@@ -4,39 +4,24 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, ChevronsUpDown, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, MoreHorizontal, Pencil } from 'lucide-react';
 import { TeamsSkeleton } from '@/components/ui/skeleton-helpers';
+import { CreateTeamDialog } from '@/components/teams/create-team-dialog';
+import { DeleteTeamDialog } from '@/components/teams/delete-team-dialog';
+import { RenameTeamDialog } from '@/components/teams/rename-team-dialog';
+import { AddMemberDialog } from '@/components/teams/add-member-dialog';
 import {
   getOrganizations,
   getTeams,
-  createTeam,
-  deleteTeam,
   getTeamMembers,
-  addTeamMember,
   removeTeamMember,
   getMembers,
   getInvites,
@@ -63,17 +48,11 @@ export default function TeamsPage() {
   const [teamInvites, setTeamInvites] = useState<Invite[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  // Create team dialog
+  // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamDescription, setNewTeamDescription] = useState('');
-  const [creating, setCreating] = useState(false);
-
-  // Add member dialog
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
-  const [memberComboboxOpen, setMemberComboboxOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TeamWithMembers | null>(null);
+  const [renameTarget, setRenameTarget] = useState<TeamWithMembers | null>(null);
 
   const loadTeams = useCallback(async (orgId: string) => {
     try {
@@ -86,7 +65,6 @@ export default function TeamsPage() {
       const pending = inviteList.filter((inv) => inv.status === 'pending');
       setPendingInvites(pending);
 
-      // Load member counts for each team and count pending invites per team
       const teamsWithCounts = await Promise.all(
         teamList.map(async (team) => {
           try {
@@ -119,40 +97,6 @@ export default function TeamsPage() {
       .finally(() => setLoading(false));
   }, [loadTeams]);
 
-  const handleCreateTeam = async () => {
-    if (!org || !newTeamName.trim()) return;
-    setCreating(true);
-    setError('');
-    try {
-      await createTeam(org.id, {
-        name: newTeamName.trim(),
-        description: newTeamDescription.trim() || undefined,
-      });
-      await loadTeams(org.id);
-      setShowCreateDialog(false);
-      setNewTeamName('');
-      setNewTeamDescription('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create team');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteTeam = async (teamId: string) => {
-    if (!org) return;
-    setError('');
-    try {
-      await deleteTeam(org.id, teamId);
-      if (selectedTeam?.id === teamId) {
-        setSelectedTeam(null);
-      }
-      await loadTeams(org.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete team');
-    }
-  };
-
   const handleSelectTeam = async (team: TeamWithMembers) => {
     if (!org) return;
     setSelectedTeam(team);
@@ -169,24 +113,6 @@ export default function TeamsPage() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!org || !selectedTeam || !selectedUserId) return;
-    setAddingMember(true);
-    setError('');
-    try {
-      await addTeamMember(org.id, selectedTeam.id, selectedUserId);
-      const members = await getTeamMembers(org.id, selectedTeam.id);
-      setTeamMembers(members);
-      await loadTeams(org.id);
-      setShowAddMemberDialog(false);
-      setSelectedUserId('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add member');
-    } finally {
-      setAddingMember(false);
-    }
-  };
-
   const handleRemoveMember = async (userId: string) => {
     if (!org || !selectedTeam) return;
     setError('');
@@ -200,11 +126,16 @@ export default function TeamsPage() {
     }
   };
 
+  const refreshAfterMemberChange = async () => {
+    if (!org || !selectedTeam) return;
+    const members = await getTeamMembers(org.id, selectedTeam.id);
+    setTeamMembers(members);
+    await loadTeams(org.id);
+  };
+
   const availableMembers = orgMembers.filter(
     (m: any) => !teamMembers.some((tm) => tm.userId === (m.id ?? m.userId))
   );
-
-  const selectedMember = availableMembers.find((m: any) => (m.id ?? m.userId) === selectedUserId);
 
   if (loading) {
     return (
@@ -219,20 +150,44 @@ export default function TeamsPage() {
   }
 
   // Team detail view
-  if (selectedTeam) {
+  if (selectedTeam && org) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedTeam(null)}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{selectedTeam.name}</h1>
-            {selectedTeam.description && (
-              <p className="text-muted-foreground">{selectedTeam.description}</p>
-            )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedTeam(null)}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{selectedTeam.name}</h1>
+              {selectedTeam.description && (
+                <p className="text-muted-foreground">{selectedTeam.description}</p>
+              )}
+            </div>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => setRenameTarget(selectedTeam)}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setDeleteTarget(selectedTeam)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {error && (
@@ -337,96 +292,40 @@ export default function TeamsPage() {
           </CardContent>
         </Card>
 
-        {/* Add Member Dialog */}
-        <Dialog open={showAddMemberDialog} onOpenChange={(open) => {
-          if (!open) {
-            setShowAddMemberDialog(false);
-            setSelectedUserId('');
-            setMemberComboboxOpen(false);
-          }
-        }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Member to Team</DialogTitle>
-              <DialogDescription>Select an organization member to add to this team.</DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              {availableMembers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  All organization members are already in this team.
-                </p>
-              ) : (
-                <Popover open={memberComboboxOpen} onOpenChange={setMemberComboboxOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={memberComboboxOpen}
-                      className="w-full justify-between font-normal"
-                    >
-                      {selectedMember
-                        ? (selectedMember as any).name || (selectedMember as any).email
-                        : 'Select a member...'}
-                      <ChevronsUpDown className="opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search members..." />
-                      <CommandList>
-                        <CommandEmpty>No members found.</CommandEmpty>
-                        <CommandGroup>
-                          {availableMembers.map((m: any) => {
-                            const id = m.id ?? m.userId;
-                            const label = m.name || m.email || id;
-                            return (
-                              <CommandItem
-                                key={id}
-                                value={label}
-                                onSelect={() => {
-                                  setSelectedUserId(id);
-                                  setMemberComboboxOpen(false);
-                                }}
-                              >
-                                <div className="flex flex-col">
-                                  <span>{label}</span>
-                                  {m.email && m.name && (
-                                    <span className="text-xs text-muted-foreground">{m.email}</span>
-                                  )}
-                                </div>
-                                <Check
-                                  className={cn(
-                                    'ml-auto',
-                                    selectedUserId === id ? 'opacity-100' : 'opacity-0',
-                                  )}
-                                />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddMemberDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddMember}
-                disabled={addingMember || !selectedUserId}
-              >
-                {addingMember ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  'Add Member'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <AddMemberDialog
+          open={showAddMemberDialog}
+          onOpenChange={setShowAddMemberDialog}
+          orgId={org.id}
+          teamId={selectedTeam.id}
+          availableMembers={availableMembers}
+          onAdded={refreshAfterMemberChange}
+        />
+
+        <DeleteTeamDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+          orgId={org.id}
+          teamId={deleteTarget?.id ?? ''}
+          teamName={deleteTarget?.name ?? ''}
+          onDeleted={() => {
+            if (selectedTeam?.id === deleteTarget?.id) setSelectedTeam(null);
+            loadTeams(org.id);
+          }}
+        />
+
+        <RenameTeamDialog
+          open={!!renameTarget}
+          onOpenChange={(open) => { if (!open) setRenameTarget(null); }}
+          orgId={org.id}
+          teamId={renameTarget?.id ?? ''}
+          currentName={renameTarget?.name ?? ''}
+          onRenamed={(newName) => {
+            if (selectedTeam?.id === renameTarget?.id) {
+              setSelectedTeam((prev) => prev ? { ...prev, name: newName } : prev);
+            }
+            loadTeams(org.id);
+          }}
+        />
       </div>
     );
   }
@@ -481,7 +380,7 @@ export default function TeamsPage() {
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteTeam(team.id);
+                      setDeleteTarget(team);
                     }}
                     className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                   >
@@ -515,55 +414,25 @@ export default function TeamsPage() {
         </div>
       )}
 
-      {/* Create Team Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) setShowCreateDialog(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Team</DialogTitle>
-            <DialogDescription>Add a new team to your organization.</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 py-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground">Name</label>
-              <Input
-                value={newTeamName}
-                onChange={(e) => setNewTeamName(e.target.value)}
-                placeholder="Engineering"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleCreateTeam();
-                  }
-                }}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground">Description</label>
-              <Input
-                value={newTeamDescription}
-                onChange={(e) => setNewTeamDescription(e.target.value)}
-                placeholder="Optional description"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleCreateTeam}
-              disabled={creating || !newTeamName.trim()}
-            >
-              {creating ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                'Create'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {org && (
+        <>
+          <CreateTeamDialog
+            open={showCreateDialog}
+            onOpenChange={setShowCreateDialog}
+            orgId={org.id}
+            onCreated={() => loadTeams(org.id)}
+          />
+
+          <DeleteTeamDialog
+            open={!!deleteTarget}
+            onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+            orgId={org.id}
+            teamId={deleteTarget?.id ?? ''}
+            teamName={deleteTarget?.name ?? ''}
+            onDeleted={() => loadTeams(org.id)}
+          />
+        </>
+      )}
     </div>
   );
 }

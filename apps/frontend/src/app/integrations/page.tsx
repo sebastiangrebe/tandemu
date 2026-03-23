@@ -3,6 +3,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
@@ -22,7 +31,9 @@ import {
   EyeOff,
   AlertTriangle,
   ExternalLink,
+  Info,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { SiGithub, SiJira, SiLinear, SiClickup, SiAsana } from '@icons-pack/react-simple-icons';
 import Image from 'next/image';
 import { IntegrationsSkeleton } from '@/components/ui/skeleton-helpers';
@@ -124,7 +135,6 @@ export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
 
   // Org + teams for mappings
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -154,13 +164,7 @@ export default function IntegrationsPage() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [savingMapping, setSavingMapping] = useState(false);
 
-  const inputClass =
-    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
-
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 3000);
-  };
+  const [connectError, setConnectError] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -191,7 +195,7 @@ export default function IntegrationsPage() {
     if (!connectProvider || !connectToken.trim()) return;
     const meta = getProviderMeta(connectProvider);
     setConnecting(true);
-    setError('');
+    setConnectError('');
     try {
       await createIntegration({
         provider: connectProvider,
@@ -203,10 +207,11 @@ export default function IntegrationsPage() {
       setConnectToken('');
       setConnectWorkspace('');
       setShowToken(false);
+      setConnectError('');
       await loadData();
-      showSuccess(`${meta?.name ?? connectProvider} connected successfully.`);
+      toast.success(`${meta?.name ?? connectProvider} connected successfully.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect integration');
+      setConnectError(err instanceof Error ? err.message : 'Failed to connect integration');
     } finally {
       setConnecting(false);
     }
@@ -223,7 +228,7 @@ export default function IntegrationsPage() {
       setDisconnectProvider(null);
       setIntegrations((prev) => prev.filter((i) => i.provider !== disconnectProvider));
       if (expandedProvider === disconnectProvider) setExpandedProvider(null);
-      showSuccess(`${meta?.name ?? disconnectProvider} disconnected.`);
+      toast.success(`${meta?.name ?? disconnectProvider} disconnected.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect integration');
     } finally {
@@ -284,7 +289,7 @@ export default function IntegrationsPage() {
       const mappings = await getProjectMappings(addMappingProvider);
       setMappingsMap((prev) => ({ ...prev, [addMappingProvider]: mappings }));
       setAddMappingProvider(null);
-      showSuccess('Project mapping added.');
+      toast.success('Project mapping added.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create mapping');
     } finally {
@@ -301,7 +306,7 @@ export default function IntegrationsPage() {
         ...prev,
         [provider]: (prev[provider] ?? []).filter((m) => m.id !== mappingId),
       }));
-      showSuccess('Mapping removed.');
+      toast.success('Mapping removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove mapping');
     }
@@ -329,12 +334,6 @@ export default function IntegrationsPage() {
       {error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
           {error}
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-400">
-          {successMsg}
         </div>
       )}
 
@@ -535,48 +534,67 @@ export default function IntegrationsPage() {
       )}
 
       {/* Connect Dialog */}
-      <Dialog open={!!connectProvider} onOpenChange={(open) => { if (!open) setConnectProvider(null); }}>
+      <Dialog open={!!connectProvider} onOpenChange={(open) => {
+        if (!open) {
+          setConnectProvider(null);
+          setConnectError('');
+        }
+      }}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Connect {connectProvider ? getProviderMeta(connectProvider)?.name : ''}
-            </DialogTitle>
-            <DialogDescription>
-              Provide your API credentials to connect this integration.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {connectProvider && (() => {
-              const meta = getProviderMeta(connectProvider);
-              if (!meta) return null;
-              return (
-                <>
+          {connectProvider && (() => {
+            const meta = getProviderMeta(connectProvider);
+            if (!meta) return null;
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center rounded-lg border bg-muted p-2">
+                      <ProviderIcon providerId={connectProvider} size={24} />
+                    </div>
+                    <div>
+                      <DialogTitle>Connect {meta.name}</DialogTitle>
+                      <DialogDescription>
+                        Provide your API credentials to connect this integration.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
                   {/* Help text */}
-                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-blue-300">
-                    <p>{meta.helpText}</p>
-                    <a
-                      href={meta.helpUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 mt-1 underline underline-offset-2"
-                    >
-                      Open settings
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                  <div className="flex gap-3 rounded-lg border bg-muted/50 p-3">
+                    <Info className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                    <div className="text-sm text-muted-foreground">
+                      <p>{meta.helpText}</p>
+                      <a
+                        href={meta.helpUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
+                      >
+                        Open settings
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
 
+                  {/* Error inside dialog */}
+                  {connectError && (
+                    <div className="flex gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 text-destructive flex-shrink-0" />
+                      <p className="text-sm text-destructive">{connectError}</p>
+                    </div>
+                  )}
+
                   {/* Token input */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      API Token / Personal Access Token
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">API Token / Personal Access Token</label>
                     <div className="relative">
-                      <input
+                      <Input
                         type={showToken ? 'text' : 'password'}
                         value={connectToken}
                         onChange={(e) => setConnectToken(e.target.value)}
                         placeholder="Paste your token here"
-                        className={`${inputClass} pr-10`}
+                        className="pr-10"
                         autoComplete="off"
                       />
                       <button
@@ -584,57 +602,51 @@ export default function IntegrationsPage() {
                         onClick={() => setShowToken(!showToken)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        {showToken ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
 
                   {/* Workspace input */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">
                       {meta.workspaceLabel}
                       {!meta.workspaceRequired && (
                         <span className="text-muted-foreground font-normal ml-1">(optional)</span>
                       )}
                     </label>
-                    <input
-                      type="text"
+                    <Input
                       value={connectWorkspace}
                       onChange={(e) => setConnectWorkspace(e.target.value)}
                       placeholder={meta.workspacePlaceholder}
-                      className={inputClass}
                     />
                   </div>
-                </>
-              );
-            })()}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setConnectProvider(null)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleConnect}
-              disabled={
-                connecting ||
-                !connectToken.trim() ||
-                (!!connectProvider &&
-                  !!getProviderMeta(connectProvider)?.workspaceRequired &&
-                  !connectWorkspace.trim())
-              }
-            >
-              {connecting ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setConnectProvider(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConnect}
+                    disabled={
+                      connecting ||
+                      !connectToken.trim() ||
+                      (meta.workspaceRequired && !connectWorkspace.trim())
+                    }
+                  >
+                    {connecting ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <>
+                        <Plug className="h-4 w-4 mr-2" />
+                        Connect
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -684,55 +696,58 @@ export default function IntegrationsPage() {
               Map an external project to a Tandemu team to sync issues.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 py-4">
             {loadingProjects ? (
               <div className="flex items-center justify-center py-6">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">External Project</label>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">External Project</label>
                   {externalProjects.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No projects found. Verify your token has the right permissions.
                     </p>
                   ) : (
-                    <select
-                      value={selectedExternalProject}
-                      onChange={(e) => setSelectedExternalProject(e.target.value)}
-                      className={inputClass}
-                    >
-                      <option value="">Select a project...</option>
-                      {externalProjects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                          {p.key ? ` (${p.key})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <Select value={selectedExternalProject} onValueChange={setSelectedExternalProject}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a project..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {externalProjects.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}{p.key ? ` (${p.key})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Tandemu Team</label>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Tandemu Team</label>
                   {teams.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No teams found. Create a team in Settings first.
+                      No teams found. Create a team first.
                     </p>
                   ) : (
-                    <select
-                      value={selectedTeamId}
-                      onChange={(e) => setSelectedTeamId(e.target.value)}
-                      className={inputClass}
-                    >
-                      <option value="">Select a team...</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a team..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {teams.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
               </>
