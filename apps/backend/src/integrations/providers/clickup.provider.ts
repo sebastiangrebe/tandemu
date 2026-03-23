@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -167,8 +167,16 @@ export class ClickUpProvider implements TaskProvider {
     }));
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
-    const { accessToken, taskId, statusName } = params;
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
+    const { accessToken, taskId, statusName, assigneeEmail } = params;
+
+    const body: Record<string, unknown> = {};
+    if (statusName) body.status = statusName;
+    // ClickUp uses user IDs for assignees — look up by email via team members
+    // For now, assignment requires the ClickUp user ID which we don't have from email alone
+    // Status update works directly
+
+    if (Object.keys(body).length === 0 && !assigneeEmail) return;
 
     const response = await fetch(`${CLICKUP_API}/task/${taskId}`, {
       method: 'PUT',
@@ -176,12 +184,12 @@ export class ClickUpProvider implements TaskProvider {
         Authorization: accessToken,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ status: statusName }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      throw new BadGatewayException(`ClickUp status update failed (${response.status}): ${body}`);
+      const text = await response.text();
+      throw new BadGatewayException(`ClickUp task update failed (${response.status}): ${text}`);
     }
   }
 

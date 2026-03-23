@@ -62,18 +62,18 @@ export class TasksController {
     );
   }
 
-  @Patch(':taskId/status')
+  @Patch(':taskId')
   @HttpCode(HttpStatus.OK)
-  async updateStatus(
+  async updateTask(
     @CurrentUser() user: RequestUser,
     @Param('taskId') taskId: string,
-    @Body() body: { statusName: string; provider: IntegrationProvider },
+    @Body() body: { statusName?: string; assigneeEmail?: string; provider: IntegrationProvider },
   ): Promise<{ success: boolean }> {
-    await this.tasksService.updateTaskStatus(
+    await this.tasksService.updateTask(
       user.organizationId,
       taskId,
-      body.statusName,
       body.provider,
+      { statusName: body.statusName, assigneeEmail: body.assigneeEmail },
     );
     return { success: true };
   }

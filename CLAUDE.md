@@ -34,7 +34,7 @@ It installs Claude Code skills and config. No Docker, no git, no server setup. T
 `~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
 
 ### Task status sync is dynamic
-No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id/status` with the exact provider status name.
+No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id` with `{ statusName, assigneeEmail, provider }`. Any combination of fields is accepted in a single call.
 
 ### Telemetry via OTLP from `/finish`
 The `/finish` skill sends a `task_session` span and `tandemu.lines_of_code` metrics to the OTEL collector via curl. This is real OTLP — standard protocol, custom metric names. No fake data.
@@ -132,7 +132,7 @@ The test temporarily disables CLAUDE.md and MCP during skill runs to prevent ses
 ### Tasks
 - `GET /api/tasks?teamId=&mine=true&status=&unassigned=true` — fetch tasks
 - `GET /api/tasks/:taskId/statuses?provider=linear` — available statuses
-- `PATCH /api/tasks/:taskId/status` — update status `{statusName, provider}`
+- `PATCH /api/tasks/:taskId` — update task `{statusName?, assigneeEmail?, provider}`
 
 ### Telemetry
 - `GET /api/telemetry/ai-ratio?startDate=&endDate=` — AI vs manual lines

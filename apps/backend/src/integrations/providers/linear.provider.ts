@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -198,20 +198,40 @@ export class LinearProvider implements TaskProvider {
     }));
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
-    const { accessToken, taskId, statusName } = params;
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
+    const { accessToken, taskId, statusName, assigneeEmail } = params;
 
     const issue = await this.findIssueByIdentifier(accessToken, taskId);
     if (!issue) return;
 
-    const target = issue.team.states.nodes.find(
-      (s) => s.name.toLowerCase() === statusName.toLowerCase(),
-    );
-    if (!target) return;
+    // Build a single mutation input with all requested changes
+    const input: Record<string, string> = {};
+
+    if (statusName) {
+      const target = issue.team.states.nodes.find(
+        (s) => s.name.toLowerCase() === statusName.toLowerCase(),
+      );
+      if (target) input.stateId = target.id;
+    }
+
+    if (assigneeEmail) {
+      const userData = await linearFetch<{ users: { nodes: Array<{ id: string }> } }>(
+        accessToken,
+        `query { users(filter: { email: { eq: "${assigneeEmail}" } }) { nodes { id } } }`,
+      );
+      const userId = userData.users.nodes[0]?.id;
+      if (userId) input.assigneeId = userId;
+    }
+
+    if (Object.keys(input).length === 0) return;
+
+    const inputStr = Object.entries(input)
+      .map(([k, v]) => `${k}: "${v}"`)
+      .join(', ');
 
     await linearFetch<{ issueUpdate: { success: boolean } }>(
       accessToken,
-      `mutation { issueUpdate(id: "${issue.id}", input: { stateId: "${target.id}" }) { success } }`,
+      `mutation { issueUpdate(id: "${issue.id}", input: { ${inputStr} }) { success } }`,
     );
   }
 

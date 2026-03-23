@@ -136,23 +136,25 @@ cat > ~/.claude/tandemu-active-task.json << EOF
 EOF
 ```
 
-- Update the task status to "in progress" on the ticket system. First fetch the available statuses, then pick the one that best represents "in progress":
+- Update the task on the ticket system — set status to "in progress" AND assign it to the current developer. First fetch the available statuses, then pick the one that best represents "in progress":
 
 ```bash
 # Fetch available statuses for this task
 curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks/<task.id>/statuses?provider=<task.provider>"
 ```
 
-This returns an array of `{ id, name, type }` objects — the actual statuses available in the team's workflow (e.g., "Backlog", "In Progress", "In Review", "Done"). Pick the one that best represents "in progress" or "started" and send:
+This returns an array of `{ id, name, type }` objects — the actual statuses available in the team's workflow (e.g., "Backlog", "In Progress", "In Review", "Done"). Pick the one that best represents "in progress" or "started".
+
+Then send a single PATCH to update both status and assignee. Read the developer's email from `~/.claude/tandemu.json` (`user.email`):
 
 ```bash
-curl -sf -X PATCH "<api_url>/api/tasks/<task.id>/status" \
+curl -sf -X PATCH "<api_url>/api/tasks/<task.id>" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"statusName": "<chosen status name>", "provider": "<task.provider>"}'
+  -d '{"statusName": "<chosen status name>", "assigneeEmail": "<user.email>", "provider": "<task.provider>"}'
 ```
 
-If you can't determine which status to use, skip this step silently.
+If you can't determine which status to use, still send the assignee update without statusName. The endpoint accepts any combination of the fields.
 
 - If the task has a description, summarize what needs to be done
 - Search the codebase for files relevant to the task title/description

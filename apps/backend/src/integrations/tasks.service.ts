@@ -76,14 +76,20 @@ export class TasksService {
     });
   }
 
-  async updateTaskStatus(orgId: string, taskId: string, statusName: string, provider: IntegrationProvider): Promise<void> {
+  async updateTask(
+    orgId: string,
+    taskId: string,
+    provider: IntegrationProvider,
+    updates: { statusName?: string; assigneeEmail?: string },
+  ): Promise<void> {
     const integration = await this.integrationsService.findOne(orgId, provider);
     const taskProvider = getProvider(provider);
 
-    await taskProvider.updateTaskStatus({
+    await taskProvider.updateTask({
       accessToken: integration.access_token,
       taskId,
-      statusName,
+      statusName: updates.statusName,
+      assigneeEmail: updates.assigneeEmail,
       config: integration.config,
     });
   }

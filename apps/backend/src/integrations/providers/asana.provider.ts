@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -178,38 +178,45 @@ export class AsanaProvider implements TaskProvider {
     }));
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
-    const { accessToken, taskId, statusName } = params;
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
+    const { accessToken, taskId, statusName, assigneeEmail } = params;
 
-    // Get available statuses to find the section GID
-    const statuses = await this.getTaskStatuses({
-      accessToken,
-      taskId,
-      config: {},
-    });
+    if (statusName) {
+      const statuses = await this.getTaskStatuses({ accessToken, taskId, config: {} });
+      const targetSection = statuses.find((s) => s.name === statusName);
+      if (targetSection) {
+        await asanaFetch(`/sections/${targetSection.id}/addTask`, accessToken, 'POST', { task: taskId });
 
-    const targetSection = statuses.find((s) => s.name === statusName);
-    if (!targetSection) {
-      throw new BadGatewayException(`Asana section "${statusName}" not found`);
+        const isDone = mapStatus(statusName, false) === 'done';
+        const isTodo = mapStatus(statusName, false) === 'todo';
+        if (isDone) {
+          await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { completed: true });
+        } else if (isTodo) {
+          await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { completed: false });
+        }
+      }
     }
 
-    // Move task to the target section
-    await asanaFetch(
-      `/sections/${targetSection.id}/addTask`,
-      accessToken,
-      'POST',
-      { task: taskId },
-    );
-
-    // If moving to a "done" section, also mark as completed
-    const isDone = mapStatus(statusName, false) === 'done';
-    const isTodo = mapStatus(statusName, false) === 'todo';
-
-    if (isDone) {
-      await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { completed: true });
-    } else if (isTodo) {
-      // Moving back to todo — ensure completed is false
-      await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { completed: false });
+    if (assigneeEmail) {
+      // Asana uses user GIDs — look up by email via workspace users
+      const workspaceRes = await asanaFetch<{ data: Array<{ gid: string }> }>(
+        `/tasks/${taskId}`,
+        accessToken,
+        'GET',
+      ) as Record<string, unknown>;
+      const taskData = workspaceRes as { data?: { workspace?: { gid?: string } } };
+      const workspaceGid = taskData?.data?.workspace?.gid;
+      if (workspaceGid) {
+        const usersRes = await asanaFetch<{ data: Array<{ gid: string; email: string }> }>(
+          `/workspaces/${workspaceGid}/users?opt_fields=email`,
+          accessToken,
+          'GET',
+        ) as { data?: Array<{ gid: string; email: string }> };
+        const user = usersRes?.data?.find((u) => u.email === assigneeEmail);
+        if (user) {
+          await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { assignee: user.gid });
+        }
+      }
     }
   }
 

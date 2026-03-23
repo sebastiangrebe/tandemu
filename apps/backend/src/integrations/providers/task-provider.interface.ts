@@ -8,10 +8,11 @@ export interface TaskProviderFetchParams {
   config: Record<string, unknown>;
 }
 
-export interface TaskProviderUpdateStatusParams {
+export interface TaskProviderUpdateParams {
   accessToken: string;
-  taskId: string;  // external task ID (e.g., "SGS-11", "TAND-42")
-  statusName: string;  // exact status name from the provider (e.g., "In Progress", "Doing", "Shipped")
+  taskId: string;
+  statusName?: string;
+  assigneeEmail?: string;
   config: Record<string, unknown>;
 }
 
@@ -36,5 +37,5 @@ export interface TaskProvider {
   fetchTasks(params: TaskProviderFetchParams): Promise<Task[]>;
   fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]>;
   getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]>;
-  updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void>;
+  updateTask(params: TaskProviderUpdateParams): Promise<void>;
 }

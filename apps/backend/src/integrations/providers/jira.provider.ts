@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -152,30 +152,46 @@ export class JiraProvider implements TaskProvider {
     }));
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
-    const { accessToken, taskId, statusName, config } = params;
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
+    const { accessToken, taskId, statusName, assigneeEmail, config } = params;
     const siteId = config.siteId as string | undefined;
     if (!siteId) return;
 
     const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+    const authHeader = `Basic ${Buffer.from(`${config.email}:${accessToken}`).toString('base64')}`;
 
-    // Get transitions and find the one whose target matches the requested status name
-    const statuses = await this.getTaskStatuses({ accessToken, taskId, config });
-    const transition = statuses.find((s) => s.name.toLowerCase() === statusName.toLowerCase());
-    if (!transition) return;
+    if (statusName) {
+      const statuses = await this.getTaskStatuses({ accessToken, taskId, config });
+      const transition = statuses.find((s) => s.name.toLowerCase() === statusName.toLowerCase());
+      if (transition) {
+        const res = await fetch(`${baseUrl}/issue/${taskId}/transitions`, {
+          method: 'POST',
+          headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transition: { id: transition.id } }),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          throw new BadGatewayException(`Jira transition failed (${res.status}): ${body}`);
+        }
+      }
+    }
 
-    const res = await fetch(`${baseUrl}/issue/${taskId}/transitions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${config.email}:${accessToken}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ transition: { id: transition.id } }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new BadGatewayException(`Jira transition failed (${res.status}): ${body}`);
+    if (assigneeEmail) {
+      // Jira Cloud uses accountId, look up by email
+      const searchRes = await fetch(
+        `${baseUrl}/user/search?query=${encodeURIComponent(assigneeEmail)}`,
+        { headers: { Authorization: authHeader, Accept: 'application/json' } },
+      );
+      if (searchRes.ok) {
+        const users = (await searchRes.json()) as Array<{ accountId: string }>;
+        if (users[0]) {
+          await fetch(`${baseUrl}/issue/${taskId}/assignee`, {
+            method: 'PUT',
+            headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: users[0].accountId }),
+          });
+        }
+      }
     }
   }
 

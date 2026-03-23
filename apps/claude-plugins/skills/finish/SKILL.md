@@ -241,7 +241,7 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks/<taskId>/status
 Pick the status that best represents "done", "completed", or "closed" from the returned list, then:
 
 ```bash
-curl -sf -X PATCH "<api_url>/api/tasks/<taskId>/status" \
+curl -sf -X PATCH "<api_url>/api/tasks/<taskId>" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"statusName": "<chosen status name>", "provider": "<provider>"}'

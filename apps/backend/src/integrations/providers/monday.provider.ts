@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -285,10 +285,13 @@ export class MondayProvider implements TaskProvider {
     }
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
     const { accessToken, taskId, statusName } = params;
+    // Monday.com assignment by email is not straightforward (requires people column + user lookup)
+    // Status update is supported
 
-    // Get the board ID and status column ID
+    if (!statusName) return;
+
     const itemData = await mondayQuery<{
       items: Array<{
         board: { id: string };

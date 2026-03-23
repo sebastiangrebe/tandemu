@@ -8,7 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
-  TaskProviderUpdateStatusParams,
+  TaskProviderUpdateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -122,10 +122,19 @@ export class GitHubProvider implements TaskProvider {
     ];
   }
 
-  async updateTaskStatus(params: TaskProviderUpdateStatusParams): Promise<void> {
-    const { accessToken, taskId, statusName, config } = params;
+  async updateTask(params: TaskProviderUpdateParams): Promise<void> {
+    const { accessToken, taskId, statusName, assigneeEmail, config } = params;
     const repo = config.repo as string | undefined;
     if (!repo) return;
+
+    const body: Record<string, unknown> = {};
+    if (statusName) body.state = statusName.toLowerCase();
+    if (assigneeEmail) {
+      // GitHub uses usernames, not emails — extract username portion as best effort
+      body.assignees = [assigneeEmail.split('@')[0]];
+    }
+
+    if (Object.keys(body).length === 0) return;
 
     const response = await fetch(`${GITHUB_API}/repos/${repo}/issues/${taskId}`, {
       method: 'PATCH',
@@ -134,7 +143,7 @@ export class GitHubProvider implements TaskProvider {
         Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ state: statusName.toLowerCase() }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
