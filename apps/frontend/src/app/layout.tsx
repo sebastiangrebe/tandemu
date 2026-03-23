@@ -20,9 +20,38 @@ const jetbrains = JetBrains_Mono({
   variable: "--font-mono",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Tandemu - AI Teammate Dashboard",
-  description: "Management dashboard for Tandemu AI Teammate platform",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Tandemu — AI Teammate Dashboard",
+    template: "%s | Tandemu",
+  },
+  description:
+    "Tandemu is an AI teammate that learns your coding style, adapts to your personality, and gives engineering leads the visibility they need.",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "Tandemu",
+    title: "Tandemu — AI Teammate Dashboard",
+    description:
+      "An AI that remembers you. A team that sees everything. Developers love it. Leads trust it.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Tandemu — AI Teammate Dashboard",
+    description:
+      "An AI that remembers you. A team that sees everything.",
+  },
+  icons: {
+    icon: "/logo.svg",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

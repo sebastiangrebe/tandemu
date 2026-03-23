@@ -151,10 +151,12 @@ print(start_ns, end_ns, duration_s, secrets.token_hex(16), secrets.token_hex(8))
 ")
 ```
 
+**IMPORTANT: Telemetry MUST succeed for /finish to complete. If either the trace or metrics call fails, tell the developer and STOP — do not clear the active task, do not update the ticket status, do not proceed. The whole point of /finish is to record the work.**
+
 **Send trace span** — this represents the completed task session:
 
 ```bash
-curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
+TRACE_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/traces" \
   -H "Content-Type: application/json" \
   -d '{
     "resourceSpans": [{
@@ -165,7 +167,7 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
         ]
       },
       "scopeSpans": [{
-        "scope tandemu"},
+        "scope": {"name": "tandemu"},
         "spans": [{
           "traceId": "'"$TRACE_ID"'",
           "spanId": "'"$SPAN_ID"'",
@@ -186,13 +188,15 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
         }]
       }]
     }]
-  }' >/dev/null 2>&1 || true
+  }' 2>/dev/null)
 ```
+
+If `TRACE_HTTP` is not `200`, tell the developer: "Telemetry failed (trace span returned HTTP <code>). Check that the OTEL collector is running at $OTEL_ENDPOINT. You may need to re-run install.sh to fix the endpoint." Then **STOP** — do not continue with the rest of /finish.
 
 **Send metrics** — lines of code and task completion:
 
 ```bash
-curl -sf -X POST "$OTEL_ENDPOINT/v1/metrics" \
+METRICS_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/metrics" \
   -H "Content-Type: application/json" \
   -d '{
     "resourceMetrics": [{
@@ -203,7 +207,7 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/metrics" \
         ]
       },
       "scopeMetrics": [{
-        "scope tandemu"},
+        "scope": {"name": "tandemu"},
         "metrics": [
           {
             "name": "tandemu.task.completed",
@@ -227,8 +231,10 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/metrics" \
         ]
       }]
     }]
-  }' >/dev/null 2>&1 || true
+  }' 2>/dev/null)
 ```
+
+If `METRICS_HTTP` is not `200`, tell the developer: "Telemetry failed (metrics returned HTTP <code>). Check that the OTEL collector is running at $OTEL_ENDPOINT. You may need to re-run install.sh to fix the endpoint." Then **STOP** — do not continue with the rest of /finish.
 
 #### 4c. Update task status on ticket system
 
@@ -261,7 +267,7 @@ Tell the developer:
 Task completed: <title>
 Duration: <elapsed>
 Code: <ai_lines> AI lines + <manual_lines> manual lines (<total_commits> commits)
-Telemetry: sent ✓
+Telemetry: trace ✓ | metrics ✓
 ```
 
 ### 5. Reflect and store memories
