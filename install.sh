@@ -29,11 +29,11 @@ TANDEMU_RELEASE_URL="${TANDEMU_RELEASE_URL:-https://github.com/anthropics/tandem
 
 header() {
   echo ""
-  printf '%b\n' "${BOLD}  ┌─────────────────────────────────┐${NC}"
-  printf '%b\n' "${BOLD}  │                                   │${NC}"
-  printf '%b\n' "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate        │${NC}"
-  printf '%b\n' "${BOLD}  │                                   │${NC}"
-  printf '%b\n' "${BOLD}  └─────────────────────────────────┘${NC}"
+  printf '%b\n' "${BOLD}  ┌────────────────────────────────────┐${NC}"
+  printf '%b\n' "${BOLD}  │                                      │${NC}"
+  printf '%b\n' "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate          │${NC}"
+  printf '%b\n' "${BOLD}  │                                      │${NC}"
+  printf '%b\n' "${BOLD}  └────────────────────────────────────┘${NC}"
   echo ""
 }
 
@@ -335,11 +335,11 @@ install_assets() {
 
 print_done() {
   echo ""
-  printf '%b\n' "${BOLD}  ┌─────────────────────────────────────────────┐${NC}"
-  printf '%b\n' "${BOLD}  │                                               │${NC}"
-  printf '%b\n' "${BOLD}  │   ${GREEN}Tandemu installed successfully!${NC}${BOLD}              │${NC}"
-  printf '%b\n' "${BOLD}  │                                               │${NC}"
-  printf '%b\n' "${BOLD}  └─────────────────────────────────────────────┘${NC}"
+  printf '%b\n' "${BOLD}  ┌───────────────────────────────────────────┐${NC}"
+  printf '%b\n' "${BOLD}  │                                             │${NC}"
+  printf '%b\n' "${BOLD}  │   ${GREEN}Tandemu installed successfully!${NC}${BOLD}           │${NC}"
+  printf '%b\n' "${BOLD}  │                                             │${NC}"
+  printf '%b\n' "${BOLD}  └───────────────────────────────────────────┘${NC}"
   echo ""
   printf '%b\n' "  ${BOLD}Connected as:${NC}"
   printf '%b\n' "    Account       ${BLUE}${USER_NAME}${NC} (${USER_EMAIL})"
