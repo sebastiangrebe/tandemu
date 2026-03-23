@@ -29,11 +29,11 @@ TANDEMU_RELEASE_URL="${TANDEMU_RELEASE_URL:-https://github.com/anthropics/tandem
 
 header() {
   echo ""
-  printf '%b\n' "${BOLD}  ┌────────────────────────────────────┐${NC}"
-  printf '%b\n' "${BOLD}  │                                      │${NC}"
-  printf '%b\n' "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate          │${NC}"
-  printf '%b\n' "${BOLD}  │                                      │${NC}"
-  printf '%b\n' "${BOLD}  └────────────────────────────────────┘${NC}"
+  printf '%b\n' "${BOLD}  ┌─────────────────────────────────────┐${NC}"
+  printf '%b\n' "${BOLD}  │                                     │${NC}"
+  printf '%b\n' "${BOLD}  │       ${BLUE}Tandemu${NC}${BOLD} — AI Teammate         │${NC}"
+  printf '%b\n' "${BOLD}  │                                     │${NC}"
+  printf '%b\n' "${BOLD}  └─────────────────────────────────────┘${NC}"
   echo ""
 }
 
