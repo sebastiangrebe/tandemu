@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
@@ -13,7 +14,21 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, ChevronsUpDown, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { TeamsSkeleton } from '@/components/ui/skeleton-helpers';
 import {
   getOrganizations,
@@ -58,6 +73,7 @@ export default function TeamsPage() {
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+  const [memberComboboxOpen, setMemberComboboxOpen] = useState(false);
 
   const loadTeams = useCallback(async (orgId: string) => {
     try {
@@ -188,8 +204,7 @@ export default function TeamsPage() {
     (m: any) => !teamMembers.some((tm) => tm.userId === (m.id ?? m.userId))
   );
 
-  const inputClass =
-    'flex h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/30 transition-all';
+  const selectedMember = availableMembers.find((m: any) => (m.id ?? m.userId) === selectedUserId);
 
   if (loading) {
     return (
@@ -323,38 +338,83 @@ export default function TeamsPage() {
         </Card>
 
         {/* Add Member Dialog */}
-        <Dialog open={showAddMemberDialog} onOpenChange={(open) => { if (!open) setShowAddMemberDialog(false); }}>
+        <Dialog open={showAddMemberDialog} onOpenChange={(open) => {
+          if (!open) {
+            setShowAddMemberDialog(false);
+            setSelectedUserId('');
+            setMemberComboboxOpen(false);
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Member to Team</DialogTitle>
               <DialogDescription>Select an organization member to add to this team.</DialogDescription>
             </DialogHeader>
-            <div className="p-6 pt-0">
+            <div className="py-4">
               {availableMembers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   All organization members are already in this team.
                 </p>
               ) : (
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Select a member...</option>
-                  {availableMembers.map((m: any) => (
-                    <option key={m.id ?? m.userId} value={m.id ?? m.userId}>
-                      {m.name || m.email || m.id} ({m.role})
-                    </option>
-                  ))}
-                </select>
+                <Popover open={memberComboboxOpen} onOpenChange={setMemberComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={memberComboboxOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {selectedMember
+                        ? (selectedMember as any).name || (selectedMember as any).email
+                        : 'Select a member...'}
+                      <ChevronsUpDown className="opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search members..." />
+                      <CommandList>
+                        <CommandEmpty>No members found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableMembers.map((m: any) => {
+                            const id = m.id ?? m.userId;
+                            const label = m.name || m.email || id;
+                            return (
+                              <CommandItem
+                                key={id}
+                                value={label}
+                                onSelect={() => {
+                                  setSelectedUserId(id);
+                                  setMemberComboboxOpen(false);
+                                }}
+                              >
+                                <div className="flex flex-col">
+                                  <span>{label}</span>
+                                  {m.email && m.name && (
+                                    <span className="text-xs text-muted-foreground">{m.email}</span>
+                                  )}
+                                </div>
+                                <Check
+                                  className={cn(
+                                    'ml-auto',
+                                    selectedUserId === id ? 'opacity-100' : 'opacity-0',
+                                  )}
+                                />
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setShowAddMemberDialog(false)}>
+              <Button variant="outline" onClick={() => setShowAddMemberDialog(false)}>
                 Cancel
               </Button>
               <Button
-                size="sm"
                 onClick={handleAddMember}
                 disabled={addingMember || !selectedUserId}
               >
@@ -462,15 +522,13 @@ export default function TeamsPage() {
             <DialogTitle>Create Team</DialogTitle>
             <DialogDescription>Add a new team to your organization.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-2">
+          <div className="flex flex-col gap-3 py-4">
+            <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-foreground">Name</label>
-              <input
-                type="text"
+              <Input
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
                 placeholder="Engineering"
-                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -479,14 +537,12 @@ export default function TeamsPage() {
                 }}
               />
             </div>
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-foreground">Description</label>
-              <input
-                type="text"
+              <Input
                 value={newTeamDescription}
                 onChange={(e) => setNewTeamDescription(e.target.value)}
                 placeholder="Optional description"
-                className={inputClass}
               />
             </div>
           </div>

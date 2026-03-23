@@ -29,19 +29,19 @@ TANDEMU_RELEASE_URL="${TANDEMU_RELEASE_URL:-https://github.com/anthropics/tandem
 
 header() {
   echo ""
-  echo -e "${BOLD}  ┌─────────────────────────────────┐${NC}"
-  echo -e "${BOLD}  │                                   │${NC}"
-  echo -e "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate        │${NC}"
-  echo -e "${BOLD}  │                                   │${NC}"
-  echo -e "${BOLD}  └─────────────────────────────────┘${NC}"
+  printf '%b\n' "${BOLD}  ┌─────────────────────────────────┐${NC}"
+  printf '%b\n' "${BOLD}  │                                   │${NC}"
+  printf '%b\n' "${BOLD}  │      ${BLUE}Tandemu${NC}${BOLD} — AI Teammate        │${NC}"
+  printf '%b\n' "${BOLD}  │                                   │${NC}"
+  printf '%b\n' "${BOLD}  └─────────────────────────────────┘${NC}"
   echo ""
 }
 
-step() { echo -e "  ${BLUE}→${NC} $1"; }
-ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
-warn() { echo -e "  ${YELLOW}!${NC} $1"; }
-fail() { echo -e "  ${RED}✗${NC} $1"; exit 1; }
-dim()  { echo -e "  ${DIM}$1${NC}"; }
+step() { printf '%b\n' "  ${BLUE}→${NC} $1"; }
+ok()   { printf '%b\n' "  ${GREEN}✓${NC} $1"; }
+warn() { printf '%b\n' "  ${YELLOW}!${NC} $1"; }
+fail() { printf '%b\n' "  ${RED}✗${NC} $1"; exit 1; }
+dim()  { printf '%b\n' "  ${DIM}$1${NC}"; }
 
 # ─────────────────────────────────────────────────────────
 # Prerequisites
@@ -71,12 +71,12 @@ check_prerequisites() {
 
 choose_instance() {
   echo ""
-  echo -e "  ${BOLD}Which Tandemu instance do you want to connect to?${NC}"
+  printf '%b\n' "  ${BOLD}Which Tandemu instance do you want to connect to?${NC}"
   echo ""
-  echo -e "    ${BOLD}1.${NC} Tandemu Cloud ${DIM}(Recommended)${NC}"
+  printf '%b\n' "    ${BOLD}1.${NC} Tandemu Cloud ${DIM}(Recommended)${NC}"
   dim "      Hosted at https://app.tandemu.dev"
   echo ""
-  echo -e "    ${BOLD}2.${NC} Self-hosted instance"
+  printf '%b\n' "    ${BOLD}2.${NC} Self-hosted instance"
   dim "      You'll provide the URL"
   echo ""
 
@@ -124,7 +124,7 @@ do_oauth() {
   fi
 
   echo ""
-  echo -e "  ${BOLD}Opening your browser to authorize...${NC}"
+  printf '%b\n' "  ${BOLD}Opening your browser to authorize...${NC}"
   echo ""
   dim "  If the browser doesn't open, visit:"
   dim "  ${AUTH_URL}"
@@ -140,7 +140,7 @@ do_oauth() {
   # Poll for authorization
   step "Waiting for you to authorize in the browser..."
   local retries=150
-  local TOKEN=""
+  TOKEN=""
   while [ $retries -gt 0 ]; do
     POLL_RESPONSE=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null) || true
     STATUS=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null || echo "pending")
@@ -335,40 +335,40 @@ install_assets() {
 
 print_done() {
   echo ""
-  echo -e "${BOLD}  ┌─────────────────────────────────────────────┐${NC}"
-  echo -e "${BOLD}  │                                               │${NC}"
-  echo -e "${BOLD}  │   ${GREEN}Tandemu installed successfully!${NC}${BOLD}              │${NC}"
-  echo -e "${BOLD}  │                                               │${NC}"
-  echo -e "${BOLD}  └─────────────────────────────────────────────┘${NC}"
+  printf '%b\n' "${BOLD}  ┌─────────────────────────────────────────────┐${NC}"
+  printf '%b\n' "${BOLD}  │                                               │${NC}"
+  printf '%b\n' "${BOLD}  │   ${GREEN}Tandemu installed successfully!${NC}${BOLD}              │${NC}"
+  printf '%b\n' "${BOLD}  │                                               │${NC}"
+  printf '%b\n' "${BOLD}  └─────────────────────────────────────────────┘${NC}"
   echo ""
-  echo -e "  ${BOLD}Connected as:${NC}"
-  echo -e "    Account       ${BLUE}${USER_NAME}${NC} (${USER_EMAIL})"
+  printf '%b\n' "  ${BOLD}Connected as:${NC}"
+  printf '%b\n' "    Account       ${BLUE}${USER_NAME}${NC} (${USER_EMAIL})"
   if [ -n "$ORG_NAME" ]; then
-    echo -e "    Organization  ${BLUE}${ORG_NAME}${NC}"
+    printf '%b\n' "    Organization  ${BLUE}${ORG_NAME}${NC}"
   else
-    echo -e "    Organization  ${YELLOW}Not set up yet${NC} — visit the dashboard"
+    printf '%b\n' "    Organization  ${YELLOW}Not set up yet${NC} — visit the dashboard"
   fi
   if [ -n "$TEAM_NAME" ]; then
-    echo -e "    Team          ${BLUE}${TEAM_NAME}${NC}"
+    printf '%b\n' "    Team          ${BLUE}${TEAM_NAME}${NC}"
   fi
-  echo -e "    API           ${BLUE}${API_URL}${NC}"
-  echo -e "    Telemetry     ${GREEN}enabled${NC}"
-  echo -e "    Memory        ${GREEN}enabled${NC}"
+  printf '%b\n' "    API           ${BLUE}${API_URL}${NC}"
+  printf '%b\n' "    Telemetry     ${GREEN}enabled${NC}"
+  printf '%b\n' "    Memory        ${GREEN}enabled${NC}"
   echo ""
-  echo -e "  ${BOLD}Get started:${NC}"
+  printf '%b\n' "  ${BOLD}Get started:${NC}"
   echo ""
-  echo -e "    ${GREEN}\$ cd your-project${NC}"
-  echo -e "    ${GREEN}\$ claude${NC}"
-  echo -e "    ${GREEN}> /morning${NC}"
+  printf '%b\n' "    ${GREEN}\$ cd your-project${NC}"
+  printf '%b\n' "    ${GREEN}\$ claude${NC}"
+  printf '%b\n' "    ${GREEN}> /morning${NC}"
   echo ""
-  echo -e "  ${BOLD}Available skills:${NC}"
-  echo -e "    ${GREEN}/morning${NC}   — Pick a task and start working"
-  echo -e "    ${GREEN}/finish${NC}    — Complete task, measure work, send telemetry"
-  echo -e "    ${GREEN}/pause${NC}     — Pause current task, switch to another"
-  echo -e "    ${GREEN}/standup${NC}   — Generate a team standup report"
-  echo -e "    ${GREEN}/blockers${NC}  — See what's slowing the team down"
+  printf '%b\n' "  ${BOLD}Available skills:${NC}"
+  printf '%b\n' "    ${GREEN}/morning${NC}   — Pick a task and start working"
+  printf '%b\n' "    ${GREEN}/finish${NC}    — Complete task, measure work, send telemetry"
+  printf '%b\n' "    ${GREEN}/pause${NC}     — Pause current task, switch to another"
+  printf '%b\n' "    ${GREEN}/standup${NC}   — Generate a team standup report"
+  printf '%b\n' "    ${GREEN}/blockers${NC}  — See what's slowing the team down"
   echo ""
-  echo -e "  ${BOLD}Re-authenticate:${NC}"
+  printf '%b\n' "  ${BOLD}Re-authenticate:${NC}"
   dim "    Run this script again"
   echo ""
 }

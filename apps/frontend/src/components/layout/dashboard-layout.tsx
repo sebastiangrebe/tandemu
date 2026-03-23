@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header } from './header';
 
-const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth'];
+const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth', '/auth/callback'];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

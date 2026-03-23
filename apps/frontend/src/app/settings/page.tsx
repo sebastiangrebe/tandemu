@@ -7,26 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Building2, Users, Mail, Save, Plus, X } from 'lucide-react';
+import { Building2, Users, Save, Plus } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
+import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
 import {
   getOrganizations,
   updateOrganization,
   getMembers,
   getInvites,
-  createInvite,
   cancelInvite,
+  getTeams,
 } from '@/lib/api';
-import type { Organization, Membership, Invite } from '@tandemu/types';
+import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
 function generateSlug(name: string): string {
   return name
@@ -60,12 +53,10 @@ export default function SettingsPage() {
   // Members
   const [members, setMembers] = useState<Membership[]>([]);
   const [invitesList, setInvitesList] = useState<Invite[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
 
-  // Invite form
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('MEMBER');
-  const [sendingInvite, setSendingInvite] = useState(false);
+  // Invite dialog
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -77,13 +68,15 @@ export default function SettingsPage() {
       setEditOrgName(currentOrg.name);
       setEditOrgSlug(currentOrg.slug);
 
-      const [memberList, invites] = await Promise.all([
+      const [memberList, invites, teamList] = await Promise.all([
         getMembers(currentOrg.id),
         getInvites(currentOrg.id),
+        getTeams(currentOrg.id),
       ]);
 
       setMembers(memberList);
       setInvitesList(invites);
+      setTeams(teamList);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load settings');
     }
@@ -107,24 +100,6 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to update organization');
     } finally {
       setSavingOrg(false);
-    }
-  };
-
-  const handleSendInvite = async () => {
-    if (!org || !inviteEmail.trim()) return;
-    setSendingInvite(true);
-    try {
-      await createInvite(org.id, { email: inviteEmail.trim(), role: inviteRole });
-      const invites = await getInvites(org.id);
-      setInvitesList(invites);
-      setInviteEmail('');
-      setInviteRole('MEMBER');
-      setShowInviteForm(false);
-      toast.success('Invite sent.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send invite');
-    } finally {
-      setSendingInvite(false);
     }
   };
 
@@ -227,65 +202,13 @@ export default function SettingsPage() {
                   </CardDescription>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setShowInviteForm(!showInviteForm)}>
-                {showInviteForm ? (
-                  <>
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Invite
-                  </>
-                )}
+              <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Invite
               </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {showInviteForm && (
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                <p className="text-sm font-medium">Send an invitation</p>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="colleague@example.com"
-                    className="flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleSendInvite();
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="MEMBER">Member</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={handleSendInvite} disabled={sendingInvite || !inviteEmail.trim()}>
-                    {sendingInvite ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    ) : (
-                      <>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Send
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {members.length > 0 && (
               <Table>
                 <TableHeader>
@@ -363,6 +286,17 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Invite Dialog */}
+      {org && (
+        <InviteDialog
+          open={showInviteDialog}
+          onOpenChange={setShowInviteDialog}
+          orgId={org.id}
+          teams={teams}
+          onInvitesSent={setInvitesList}
+        />
       )}
     </div>
   );

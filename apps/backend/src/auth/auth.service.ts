@@ -85,24 +85,10 @@ export class AuthService {
         }
       }
 
-      return { user, organizationId, role };
+      return user;
     });
 
-    const token = this.signToken({
-      userId: result.user.id,
-      email: result.user.email,
-      organizationId: result.organizationId,
-      role: result.role,
-    });
-
-    return {
-      accessToken: token,
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-      },
-    };
+    return this.generateAuthResponse(result.id, result.email, result.name);
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -110,7 +96,7 @@ export class AuthService {
       id: string;
       email: string;
       name: string;
-      password_hash: string;
+      password_hash: string | null;
     }>(
       'SELECT id, email, name, password_hash FROM users WHERE email = $1',
       [email],
@@ -122,39 +108,18 @@ export class AuthService {
 
     const user = userResult.rows[0]!;
 
+    if (!user.password_hash) {
+      throw new UnauthorizedException(
+        'This account uses social login. Please sign in with Google or GitHub.',
+      );
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Get the user's first membership for the default org
-    const membershipResult = await this.db.query<{
-      organization_id: string;
-      role: string;
-    }>(
-      'SELECT organization_id, role FROM memberships WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1',
-      [user.id],
-    );
-
-    const membership = membershipResult.rows[0];
-    const organizationId = membership?.organization_id ?? '';
-    const role = membership?.role?.toUpperCase() ?? 'MEMBER';
-
-    const token = this.signToken({
-      userId: user.id,
-      email: user.email,
-      organizationId,
-      role,
-    });
-
-    return {
-      accessToken: token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    };
+    return this.generateAuthResponse(user.id, user.email, user.name);
   }
 
   async switchOrganization(userId: string, email: string, organizationId: string): Promise<{ accessToken: string }> {
@@ -207,6 +172,124 @@ export class AuthService {
       createdAt: user.created_at.toISOString(),
       updatedAt: user.updated_at.toISOString(),
     };
+  }
+
+  async generateAuthResponse(userId: string, email: string, name: string): Promise<AuthResponse> {
+    const membershipResult = await this.db.query<{
+      organization_id: string;
+      role: string;
+    }>(
+      'SELECT organization_id, role FROM memberships WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1',
+      [userId],
+    );
+
+    const membership = membershipResult.rows[0];
+    const organizationId = membership?.organization_id ?? '';
+    const role = membership?.role?.toUpperCase() ?? 'MEMBER';
+
+    const token = this.signToken({
+      userId,
+      email,
+      organizationId,
+      role,
+    });
+
+    return {
+      accessToken: token,
+      user: { id: userId, email, name },
+    };
+  }
+
+  async findOrCreateOAuthUser(
+    provider: string,
+    providerUserId: string,
+    email: string,
+    name: string,
+    avatarUrl?: string,
+  ): Promise<AuthResponse> {
+    // 1. Check if OAuth account already linked
+    const oauthResult = await this.db.query<{ user_id: string }>(
+      'SELECT user_id FROM oauth_accounts WHERE provider = $1 AND provider_user_id = $2',
+      [provider, providerUserId],
+    );
+
+    if (oauthResult.rows.length > 0) {
+      const userId = oauthResult.rows[0]!.user_id;
+      const userResult = await this.db.query<{ id: string; email: string; name: string }>(
+        'SELECT id, email, name FROM users WHERE id = $1',
+        [userId],
+      );
+      const user = userResult.rows[0]!;
+      return this.generateAuthResponse(user.id, user.email, user.name);
+    }
+
+    // 2. Check if user with same email exists — link OAuth account
+    const existingUser = await this.db.query<{ id: string; email: string; name: string }>(
+      'SELECT id, email, name FROM users WHERE email = $1',
+      [email],
+    );
+
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0]!;
+      await this.db.query(
+        'INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_email) VALUES ($1, $2, $3, $4)',
+        [user.id, provider, providerUserId, email],
+      );
+      // Update avatar if not set
+      if (avatarUrl) {
+        await this.db.query(
+          'UPDATE users SET avatar_url = COALESCE(avatar_url, $1) WHERE id = $2',
+          [avatarUrl, user.id],
+        );
+      }
+      return this.generateAuthResponse(user.id, user.email, user.name);
+    }
+
+    // 3. Create new user + OAuth account + auto-accept invites
+    const result = await this.db.withTransaction(async (client) => {
+      const userResult = await client.query<{ id: string; email: string; name: string }>(
+        'INSERT INTO users (email, name, avatar_url) VALUES ($1, $2, $3) RETURNING id, email, name',
+        [email, name, avatarUrl ?? null],
+      );
+      const user = userResult.rows[0]!;
+
+      await client.query(
+        'INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_email) VALUES ($1, $2, $3, $4)',
+        [user.id, provider, providerUserId, email],
+      );
+
+      // Auto-accept pending invites
+      const pendingInvites = await client.query<{
+        id: string;
+        organization_id: string;
+        role: string;
+        team_id: string | null;
+      }>(
+        `SELECT id, organization_id, role, team_id FROM invites WHERE email = $1 AND status = 'pending'`,
+        [email],
+      );
+
+      for (const invite of pendingInvites.rows) {
+        await client.query(
+          `UPDATE invites SET status = 'accepted' WHERE id = $1`,
+          [invite.id],
+        );
+        await client.query(
+          'INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, $3)',
+          [user.id, invite.organization_id, invite.role],
+        );
+        if (invite.team_id) {
+          await client.query(
+            'INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [invite.team_id, user.id],
+          );
+        }
+      }
+
+      return user;
+    });
+
+    return this.generateAuthResponse(result.id, result.email, result.name);
   }
 
   private signToken(payload: JwtPayload): string {

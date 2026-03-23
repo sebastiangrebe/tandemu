@@ -61,6 +61,16 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
+// ---- Auth Config ----
+
+export interface AuthConfig {
+  providers: string[];
+}
+
+export async function getAuthConfig(): Promise<AuthConfig> {
+  return fetchApi<AuthConfig>('/api/auth/config');
+}
+
 // ---- Auth ----
 
 export interface AuthResponse {
