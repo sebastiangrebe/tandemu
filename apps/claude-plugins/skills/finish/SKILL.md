@@ -42,7 +42,10 @@ Check what the task was about:
 
 ```bash
 git branch --show-current
-git log main..HEAD --oneline
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+git log $DEFAULT_BRANCH..HEAD --oneline
 ```
 
 If there's a linked issue, check its state:
@@ -99,11 +102,16 @@ Extract `organization.id` and `user.id`.
 For each repo in the `repos` array:
 
 ```bash
+# Detect default branch for this repo
+DEFAULT_BRANCH=$(git -C <repo> symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git -C <repo> branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+
 # Total lines added and removed on this branch
-git -C <repo> diff main...HEAD --numstat 2>/dev/null
+git -C <repo> diff $DEFAULT_BRANCH...HEAD --numstat 2>/dev/null
 
 # All commits on this branch
-git -C <repo> log main..HEAD --format='%H|||%an|||%s|||%b' 2>/dev/null
+git -C <repo> log $DEFAULT_BRANCH..HEAD --format='%H|||%an|||%s|||%b' 2>/dev/null
 ```
 
 For AI vs Manual attribution:
@@ -311,7 +319,9 @@ Would you like to start another task?
 If the developer is done with the task:
 
 ```bash
-git checkout main
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+git checkout "${DEFAULT_BRANCH:-main}"
 ```
 
 ### Notes

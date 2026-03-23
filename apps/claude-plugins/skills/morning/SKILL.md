@@ -110,10 +110,44 @@ If there are more than 4 tasks, show the top 4 by priority and mention how many 
 
 Once the developer picks a task:
 
-- Create a feature branch from the default branch:
+#### 5a. Check for uncommitted changes
+
+Before switching branches, check if the working tree is dirty:
 
 ```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+git status --short
+```
+
+If there is output (uncommitted changes exist), use AskUserQuestion:
+- Question: "You have uncommitted changes. What should I do before switching branches?"
+- Header: "Changes"
+- Options:
+  - Label: "Commit on current branch", Description: "Stage and commit changes with a conventional commit message before switching"
+  - Label: "Stash for later", Description: "Stash changes — you can restore them later with git stash pop"
+  - Label: "Bring to new branch", Description: "Carry uncommitted changes into the new feature branch"
+
+If **Commit**: help write a commit message based on the diff, stage and commit, then proceed.
+If **Stash**: run `git stash push -m "WIP before <task.id>"`, then proceed.
+If **Bring to new branch**: do nothing — changes will carry over when creating the branch.
+
+If the working tree is clean, skip this step.
+
+#### 5b. Create a feature branch
+
+Detect the repo's default branch dynamically (supports main, master, develop, or whatever the remote uses):
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  # Fallback: check which common branch names exist on the remote
+  DEFAULT_BRANCH=$(git branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+fi
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+```
+
+Then switch and create the feature branch:
+
+```bash
 git checkout "$DEFAULT_BRANCH"
 git pull origin "$DEFAULT_BRANCH" 2>/dev/null || true
 git checkout -b feat/<task.id>-<short-kebab-description>

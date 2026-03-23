@@ -38,8 +38,13 @@ Calculate elapsed time from `startedAt` to now.
 For each repo in the `repos` array, gather git stats:
 
 ```bash
-git -C <repo> diff main...HEAD --numstat 2>/dev/null | awk '{a+=$1; d+=$2} END {print a+0, d+0}'
-git -C <repo> rev-list main..HEAD --count 2>/dev/null || echo 0
+# Detect default branch for this repo
+DEFAULT_BRANCH=$(git -C <repo> symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git -C <repo> branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+
+git -C <repo> diff $DEFAULT_BRANCH...HEAD --numstat 2>/dev/null | awk '{a+=$1; d+=$2} END {print a+0, d+0}'
+git -C <repo> rev-list $DEFAULT_BRANCH..HEAD --count 2>/dev/null || echo 0
 ```
 
 Sum additions, deletions, and commits across all repos.
@@ -108,7 +113,7 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks/<taskId>/status
 Pick the status that best represents "todo", "backlog", "on hold", or "paused" from the returned list, then:
 
 ```bash
-curl -sf -X PATCH "<api_url>/api/tasks/<taskId>/status" \
+curl -sf -X PATCH "<api_url>/api/tasks/<taskId>" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"statusName": "<chosen status name>", "provider": "<provider>"}'
