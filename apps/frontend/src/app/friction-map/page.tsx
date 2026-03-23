@@ -8,6 +8,7 @@ import { getFrictionHeatmap } from '@/lib/api';
 import type { FrictionEvent } from '@tandemu/types';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { FrictionSkeleton } from '@/components/ui/skeleton-helpers';
+import { InstallBanner } from '@/components/install-banner';
 
 interface FrictionItem {
   path: string;
@@ -138,15 +139,19 @@ export default function FrictionMapPage() {
       </div>
 
       {!hasData ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Flame className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">No friction events detected yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">
-              Friction data will appear as developers use Claude Code in your repositories.
-            </p>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Flame className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">No friction events detected yet</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">
+                Friction data will appear as developers use Claude Code in your repositories.
+              </p>
+            </CardContent>
+          </Card>
+
+          <InstallBanner />
+        </>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-3">

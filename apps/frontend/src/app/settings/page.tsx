@@ -1,11 +1,23 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Mail, Save } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Building2, Users, Mail, Save, Plus, X } from 'lucide-react';
+import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
+import { toast } from 'sonner';
 import {
   getOrganizations,
   updateOrganization,
@@ -16,17 +28,6 @@ import {
 } from '@/lib/api';
 import type { Organization, Membership, Invite } from '@tandemu/types';
 
-function getPlanColor(tier: string) {
-  switch (tier) {
-    case 'ENTERPRISE':
-      return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-    case 'PRO':
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-    default:
-      return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
-  }
-}
-
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -36,11 +37,20 @@ function generateSlug(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
+function RoleBadge({ role }: { role: string }) {
+  switch (role) {
+    case 'OWNER':
+      return <Badge variant="default">Owner</Badge>;
+    case 'ADMIN':
+      return <Badge variant="secondary">Admin</Badge>;
+    default:
+      return <Badge variant="outline">Member</Badge>;
+  }
+}
+
 export default function SettingsPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
 
   // Org editing
   const [editOrgName, setEditOrgName] = useState('');
@@ -75,7 +85,7 @@ export default function SettingsPage() {
       setMembers(memberList);
       setInvitesList(invites);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load settings');
+      toast.error(err instanceof Error ? err.message : 'Failed to load settings');
     }
   }, []);
 
@@ -83,24 +93,18 @@ export default function SettingsPage() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 3000);
-  };
-
   const handleSaveOrg = async () => {
     if (!org) return;
     setSavingOrg(true);
-    setError('');
     try {
       const updated = await updateOrganization(org.id, {
         name: editOrgName.trim(),
         slug: editOrgSlug.trim(),
       });
       setOrg(updated);
-      showSuccess('Organization updated.');
+      toast.success('Organization updated.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update organization');
+      toast.error(err instanceof Error ? err.message : 'Failed to update organization');
     } finally {
       setSavingOrg(false);
     }
@@ -109,7 +113,6 @@ export default function SettingsPage() {
   const handleSendInvite = async () => {
     if (!org || !inviteEmail.trim()) return;
     setSendingInvite(true);
-    setError('');
     try {
       await createInvite(org.id, { email: inviteEmail.trim(), role: inviteRole });
       const invites = await getInvites(org.id);
@@ -117,9 +120,9 @@ export default function SettingsPage() {
       setInviteEmail('');
       setInviteRole('MEMBER');
       setShowInviteForm(false);
-      showSuccess('Invite sent.');
+      toast.success('Invite sent.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send invite');
+      toast.error(err instanceof Error ? err.message : 'Failed to send invite');
     } finally {
       setSendingInvite(false);
     }
@@ -127,18 +130,16 @@ export default function SettingsPage() {
 
   const handleCancelInvite = async (inviteId: string) => {
     if (!org) return;
-    setError('');
     try {
       await cancelInvite(org.id, inviteId);
       setInvitesList(invitesList.filter((i) => i.id !== inviteId));
-      showSuccess('Invite cancelled.');
+      toast.success('Invite cancelled.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel invite');
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel invite');
     }
   };
 
-  const inputClass =
-    'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors';
+  const hasChanges = org && (editOrgName !== org.name || editOrgSlug !== org.slug);
 
   if (loading) {
     return (
@@ -147,31 +148,17 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">Manage your organization.</p>
         </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <SettingsSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">Manage your organization.</p>
       </div>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-400">
-          {successMsg}
-        </div>
-      )}
 
       {/* Organization Card */}
       {org && (
@@ -185,52 +172,43 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Name</label>
-                <input
-                  type="text"
+                <label className="text-sm font-medium">Name</label>
+                <Input
                   value={editOrgName}
                   onChange={(e) => setEditOrgName(e.target.value)}
-                  className={inputClass}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Slug</label>
-                <input
-                  type="text"
+                <label className="text-sm font-medium">Slug</label>
+                <Input
                   value={editOrgSlug}
                   onChange={(e) => setEditOrgSlug(generateSlug(e.target.value))}
-                  className={inputClass}
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Plan</p>
-                  <Badge className={getPlanColor(org.planTier)} variant="outline">
-                    {org.planTier}
-                  </Badge>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                onClick={handleSaveOrg}
-                disabled={savingOrg || (editOrgName === org.name && editOrgSlug === org.slug)}
-              >
-                {savingOrg ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Plan</span>
+              <Badge variant="secondary">{org.planTier}</Badge>
             </div>
           </CardContent>
+          <CardFooter className="border-t px-6 py-4 flex justify-end">
+            <Button
+              onClick={handleSaveOrg}
+              disabled={savingOrg || !hasChanges}
+            >
+              {savingOrg ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </CardFooter>
         </Card>
       )}
 
@@ -243,46 +221,65 @@ export default function SettingsPage() {
                 <Users className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <CardTitle>Members</CardTitle>
-                  <CardDescription>People in your organization.</CardDescription>
+                  <CardDescription>
+                    {members.length} member{members.length !== 1 ? 's' : ''}
+                    {invitesList.length > 0 && ` · ${invitesList.length} pending`}
+                  </CardDescription>
                 </div>
               </div>
-              <Button size="sm" onClick={() => setShowInviteForm(!showInviteForm)}>
-                <Mail className="h-4 w-4 mr-2" />
-                Invite Member
+              <Button size="sm" variant="outline" onClick={() => setShowInviteForm(!showInviteForm)}>
+                {showInviteForm ? (
+                  <>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Invite
+                  </>
+                )}
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             {showInviteForm && (
-              <div className="rounded-lg border border-border p-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">Send an invitation</p>
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <p className="text-sm font-medium">Send an invitation</p>
                 <div className="flex gap-2">
-                  <input
+                  <Input
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="colleague@example.com"
-                    className={`${inputClass} flex-1`}
+                    className="flex-1"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         handleSendInvite();
                       }
                     }}
+                    autoFocus
                   />
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value)}
-                    className="flex h-10 rounded-md border border-input bg-background px-2 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  >
-                    <option value="MEMBER">Member</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                  <Button size="sm" onClick={handleSendInvite} disabled={sendingInvite || !inviteEmail.trim()} className="h-10">
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="MEMBER">Member</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={handleSendInvite} disabled={sendingInvite || !inviteEmail.trim()}>
                     {sendingInvite ? (
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     ) : (
-                      'Send'
+                      <>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send
+                      </>
                     )}
                   </Button>
                 </div>
@@ -295,27 +292,16 @@ export default function SettingsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right">Role</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {members.map((m: any) => (
                     <TableRow key={m.id}>
                       <TableCell className="font-medium">{m.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{m.email}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            m.role === 'OWNER'
-                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                              : m.role === 'ADMIN'
-                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                              : 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'
-                          }
-                        >
-                          {m.role}
-                        </Badge>
+                      <TableCell className="text-muted-foreground">{m.email}</TableCell>
+                      <TableCell className="text-right">
+                        <RoleBadge role={m.role} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -324,52 +310,53 @@ export default function SettingsPage() {
             )}
 
             {invitesList.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Pending Invites</p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Sent</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invitesList.map((inv) => (
-                      <TableRow key={inv.id}>
-                        <TableCell>{inv.email}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-zinc-500/20 text-zinc-400 border-zinc-500/30">
-                            {inv.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(inv.createdAt).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCancelInvite(inv.id)}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                          >
-                            Cancel
-                          </Button>
-                        </TableCell>
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-muted-foreground">Pending Invites</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Sent</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {invitesList.map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-medium">{inv.email}</TableCell>
+                          <TableCell>
+                            <RoleBadge role={inv.role} />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(inv.createdAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCancelInvite(inv.id)}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              Cancel
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
 
             {members.length === 0 && invitesList.length === 0 && (
-              <div className="flex flex-col items-center py-6">
+              <div className="flex flex-col items-center py-8">
                 <Users className="h-8 w-8 text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">No members yet.</p>
               </div>

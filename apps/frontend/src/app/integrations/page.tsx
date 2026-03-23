@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { SiGithub, SiJira, SiLinear, SiClickup, SiAsana } from '@icons-pack/react-simple-icons';
 import Image from 'next/image';
+import { IntegrationsSkeleton } from '@/components/ui/skeleton-helpers';
 import {
   getIntegrations,
   createIntegration,
@@ -313,9 +314,7 @@ export default function IntegrationsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
           <p className="text-muted-foreground">Connect your ticket system and map projects to teams.</p>
         </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <IntegrationsSkeleton />
       </div>
     );
   }

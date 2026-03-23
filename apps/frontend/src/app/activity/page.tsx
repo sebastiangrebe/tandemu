@@ -7,7 +7,8 @@ import { getTimesheets, type TimesheetEntry } from '@/lib/api';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { SessionTable } from '@/components/charts/session-table';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
-import { CardSkeleton, ChartSkeleton, TableSkeleton } from '@/components/ui/skeleton-helpers';
+import { ActivitySkeleton } from '@/components/ui/skeleton-helpers';
+import { InstallBanner } from '@/components/install-banner';
 
 function formatDuration(minutes: number): string {
   if (minutes < 1) return '<1m';
@@ -42,11 +43,7 @@ export default function ActivityPage() {
           </div>
           <TelemetryFilters />
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
-        </div>
-        <ChartSkeleton height={280} />
-        <TableSkeleton />
+        <ActivitySkeleton />
       </div>
     );
   }
@@ -80,15 +77,19 @@ export default function ActivityPage() {
       </div>
 
       {!hasData ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">No session data recorded yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">
-              Session tracking data will appear as developers use Claude Code.
-            </p>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">No session data recorded yet</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">
+                Session tracking data will appear as developers use Claude Code.
+              </p>
+            </CardContent>
+          </Card>
+
+          <InstallBanner />
+        </>
       ) : (
         <>
           {/* Stats */}

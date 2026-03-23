@@ -7,10 +7,11 @@ import { Activity, Brain, GitPullRequest, Users, Rocket, Clock, AlertCircle, Rot
 import { getAIRatio, getDORAMetrics, getTimesheets } from '@/lib/api';
 import type { TimesheetEntry } from '@/lib/api';
 import type { AIvsManualRatio, DORAMetrics } from '@tandemu/types';
+import { InstallBanner } from '@/components/install-banner';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { AIRatioChart } from '@/components/charts/ai-ratio-chart';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
-import { CardSkeleton, ChartSkeleton } from '@/components/ui/skeleton-helpers';
+import { DashboardSkeleton } from '@/components/ui/skeleton-helpers';
 
 function formatDuration(minutes: number): string {
   if (minutes < 1) return '<1m';
@@ -92,13 +93,7 @@ export default function DashboardPage() {
           </div>
           <TelemetryFilters />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ChartSkeleton />
-          <ChartSkeleton />
-        </div>
+        <DashboardSkeleton />
       </div>
     );
   }
@@ -186,15 +181,22 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {!hasData ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">No data yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Start using Claude Code with Tandemu to see metrics here.</p>
-          </CardContent>
-        </Card>
-      ) : (
+      {!hasData && (
+        <>
+          {/* No data card */}
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">No data yet</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">Start using Claude Code with Tandemu to see metrics here.</p>
+            </CardContent>
+          </Card>
+
+          <InstallBanner />
+        </>
+      )}
+
+      {hasData && (
         <>
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-2">

@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock } from 'lucide-react';
+import { TeamsSkeleton } from '@/components/ui/skeleton-helpers';
 import {
   getOrganizations,
   getTeams,
@@ -197,9 +198,7 @@ export default function TeamsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Teams</h1>
           <p className="text-muted-foreground">Manage your teams and members.</p>
         </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <TeamsSkeleton />
       </div>
     );
   }
