@@ -3,9 +3,7 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { usePathname, useRouter } from 'next/navigation';
-import { AppSidebar } from './sidebar';
 import { Header } from './header';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 
 const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth'];
 
@@ -46,14 +44,11 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <Header />
-        <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
-          {children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
+        {children}
+      </main>
+    </div>
   );
 }
