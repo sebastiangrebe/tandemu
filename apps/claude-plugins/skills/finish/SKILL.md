@@ -290,12 +290,24 @@ After measuring the work, store memories about this task. Do this silently — d
 - File organization choices
 - Any corrections the developer made to your suggestions
 
-**Store personal observations (if any came up):**
-- If the developer shared anything personal during the task
-- Communication preferences noticed
-- If they responded to a btw question
+**Store communication style (if new patterns were noticed):**
 
-**Include a btw moment** if appropriate (not every time — check if you already did one this session).
+Review the developer's messages from this session. Look for persistent style patterns — NOT momentary mood. Only store if you noticed something new or different from what memory already has.
+
+- Language formality level (casual/formal, slang, swearing)
+- Recurring words or phrases they use (e.g., "dude", "sir", "lol", "LGTM")
+- Message length preference (terse one-liners vs detailed explanations)
+- How they give feedback (direct corrections vs suggestions vs questions)
+- How they respond to your asides (engage? ignore? match humor?)
+
+Store as: "Communication style: uses casual language, says 'dude', prefers short direct messages"
+NOT as: "Was frustrated during task" or "Seemed tired today"
+
+**Store personal observations (if any came up):**
+- If the developer shared anything personal during the session
+- If they responded to a rapport aside with something worth remembering
+
+**Include a btw aside** if appropriate — but only if it connects to something that happened this session. Not random. Not every time.
 
 ### 6. Show the updated task list
 
