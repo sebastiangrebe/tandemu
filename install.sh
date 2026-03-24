@@ -307,6 +307,13 @@ install_assets() {
     fail "Release download not yet implemented. Run install.sh from the Tandemu repo directory."
   fi
 
+  # Install shared lib
+  local lib_src="${SCRIPT_DIR}/apps/claude-plugins/lib"
+  if [ -d "$lib_src" ]; then
+    mkdir -p "$SKILLS_DIR/../lib"
+    cp -r "$lib_src"/* "$SKILLS_DIR/../lib/"
+  fi
+
   # Install skills (skip /tandemu — its logic is in this script)
   for skill_dir in "$skills_src"/*/; do
     local skill_name

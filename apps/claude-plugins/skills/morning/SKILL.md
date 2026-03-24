@@ -9,9 +9,12 @@ allowed-tools:
   - Agent
   - WebFetch
   - AskUserQuestion
+  - EnterPlanMode
 ---
 
 Help the developer start their work session by picking a task.
+
+**Execution style:** Minimize tool call noise. Combine pure-read infrastructure commands (config loads, active task reads, timestamp calculations) into as few Bash calls as possible with brief descriptions like "Setup". Keep user-facing operations (task selection, PR checks, summaries) as separate, clearly described calls.
 
 ## Steps
 
@@ -26,34 +29,39 @@ If you remember what they worked on recently, mention it: "Last time you were wo
 
 Do this naturally, don't announce you're searching memories.
 
-### 1. Load Tandemu config
+### 1. Setup — load config, check active task, and check git state
 
-Read `~/.claude/tandemu.json`:
-
-```bash
-cat ~/.claude/tandemu.json
-```
-
-Extract `auth.token`, `api.url`, `organization.id`, and `team.id`.
-
-If the file doesn't exist, tell the developer: "Tandemu is not configured. Run /tandemu to set it up."
-
-### 2. Check for active task
+Run all setup reads in a **single Bash call**:
 
 ```bash
-cat ~/.claude/tandemu-active-task.json 2>/dev/null
+# Load Tandemu config
+source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+echo "---CONFIG---"
+echo "TOKEN=$TANDEMU_TOKEN"
+echo "API=$TANDEMU_API"
+echo "ORG=$TANDEMU_ORG_ID"
+echo "TEAM=$TANDEMU_TEAM_ID"
+echo "EMAIL=$TANDEMU_USER_EMAIL"
+echo "NAME=$TANDEMU_USER_NAME"
+
+# Check for active task
+echo "---ACTIVE_TASK---"
+cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+
+# Git state
+echo "---GIT---"
+echo "REPO=$(git rev-parse --show-toplevel 2>/dev/null)"
+echo "STATUS=$(git status --short)"
 ```
 
-If the file exists and contains valid JSON:
+If the config load fails, tell the developer: "Tandemu is not configured. Run install.sh to set it up."
+
+### 2. Handle active task (if found)
+
+If the active task JSON was returned (not "NONE"):
 
 - Extract `taskId`, `title`, `startedAt`, `repos` from it.
 - Calculate how long ago the task was started.
-- Get the current repo path:
-
-```bash
-git rev-parse --show-toplevel 2>/dev/null
-```
-
 - Tell the developer: "You have an active task: **<title>** (started <relative time ago>)"
 - Use AskUserQuestion:
   - Question: "You're currently working on **<title>**. What would you like to do?"
@@ -65,17 +73,17 @@ git rev-parse --show-toplevel 2>/dev/null
 - If they choose **Continue here**:
   - If the current repo is not already in the `repos` array, add it by reading, modifying, and rewriting `~/.claude/tandemu-active-task.json`.
   - Check if a branch for the task already exists, if not create one.
-  - Skip to the readiness summary (Step 5).
+  - Skip to the readiness summary (Step 6).
 - If they choose **Pause and pick another**: tell the developer to run `/pause` first, then `/morning` again. Stop here.
 
-If the file does not exist, proceed to Step 3.
+If no active task was found, proceed to Step 3.
 
 ### 3. Fetch tasks from Tandemu
 
-Fetch tasks assigned to the current developer:
+Fetch tasks assigned to the current developer (use the config values from setup):
 
 ```bash
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>&mine=true"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&mine=true"
 ```
 
 The response is `{ success, data: Task[] }` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`.
@@ -87,7 +95,7 @@ If the developer has assigned tasks, proceed to Step 4 with those.
 If no tasks are assigned to the developer, fetch **unassigned todo tasks** that they could pick up:
 
 ```bash
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>&status=todo&unassigned=true"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&status=todo&unassigned=true"
 ```
 
 Tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
@@ -112,13 +120,7 @@ Once the developer picks a task:
 
 #### 5a. Check for uncommitted changes
 
-Before switching branches, check if the working tree is dirty:
-
-```bash
-git status --short
-```
-
-If there is output (uncommitted changes exist), use AskUserQuestion:
+Use the git status output from the setup call. If it showed uncommitted changes, use AskUserQuestion:
 - Question: "You have uncommitted changes. What should I do before switching branches?"
 - Header: "Changes"
 - Options:
@@ -174,18 +176,18 @@ EOF
 
 ```bash
 # Fetch available statuses for this task
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks/<task.id>/statuses?provider=<task.provider>"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/statuses?provider=<task.provider>"
 ```
 
 This returns an array of `{ id, name, type }` objects — the actual statuses available in the team's workflow (e.g., "Backlog", "In Progress", "In Review", "Done"). Pick the one that best represents "in progress" or "started".
 
-Then send a single PATCH to update both status and assignee. Read the developer's email from `~/.claude/tandemu.json` (`user.email`):
+Then send a single PATCH to update both status and assignee:
 
 ```bash
-curl -sf -X PATCH "<api_url>/api/tasks/<task.id>" \
-  -H "Authorization: Bearer <token>" \
+curl -sf -X PATCH "$TANDEMU_API/api/tasks/<task.id>" \
+  -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"statusName": "<chosen status name>", "assigneeEmail": "<user.email>", "provider": "<task.provider>"}'
+  -d '{"statusName": "<chosen status name>", "assigneeEmail": "'"$TANDEMU_USER_EMAIL"'", "provider": "<task.provider>"}'
 ```
 
 If you can't determine which status to use, still send the assignee update without statusName. The endpoint accepts any combination of the fields.
@@ -194,7 +196,9 @@ If you can't determine which status to use, still send the assignee update witho
 - Search the codebase for files relevant to the task title/description
 - List the related files
 
-### 6. Confirm readiness
+### 6. Confirm readiness and choose approach
+
+Show the readiness summary:
 
 ```
 Ready to work on: <task title>
@@ -202,9 +206,20 @@ Branch: feat/<task.id>-<description>
 Task: <task.url>
 Related files:
   - <list of relevant files>
-
-Let's get started!
 ```
+
+Then use AskUserQuestion to let the developer choose how to proceed:
+- Question: "How would you like to approach this?"
+- Header: "Approach"
+- Options:
+  - Label: "Plan first", Description: "Enter plan mode to design the implementation before writing code"
+  - Label: "Manual", Description: "I'll drive — just give me the context and I'll prompt as I go"
+
+If they choose **Plan first**: call `EnterPlanMode`. The developer can then give an initial prompt to guide the plan (e.g., "focus on the auth context first" or "keep it minimal"). Stop here — plan mode takes over.
+
+If they choose **Manual**: say "All yours — let me know what you need." and stop. The developer will prompt from here.
+
+**IMPORTANT: Do NOT start implementing the task during /morning.** This skill only handles setup: branch creation, ticket updates, codebase research, and readiness confirmation. Implementation happens after /morning completes, driven by the developer.
 
 ### Notes
 
