@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
@@ -18,6 +18,8 @@ import {
   getInvites,
   cancelInvite,
   getTeams,
+  createCheckout,
+  createBillingPortal,
 } from '@/lib/api';
 import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
@@ -184,6 +186,75 @@ export default function SettingsPage() {
               )}
             </Button>
           </CardFooter>
+        </Card>
+      )}
+
+      {/* Billing Section — only shown when billing is enabled */}
+      {org && process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Billing</CardTitle>
+                <CardDescription>Manage your subscription and billing.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Current Plan</p>
+                <p className="text-2xl font-bold">{org.planTier === 'FREE' ? 'Free' : 'Pro'}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">
+                  {members.length} seat{members.length !== 1 ? 's' : ''}
+                </p>
+                {org.planTier !== 'FREE' && (
+                  <p className="text-sm text-muted-foreground">
+                    ${members.length * 10}/month
+                  </p>
+                )}
+              </div>
+            </div>
+            {org.planTier === 'FREE' ? (
+              <Button
+                onClick={async () => {
+                  try {
+                    const { url } = await createCheckout({
+                      organizationId: org.id,
+                      planTier: 'PRO',
+                      successUrl: `${window.location.origin}/settings?billing=success`,
+                      cancelUrl: `${window.location.origin}/settings`,
+                    });
+                    window.location.href = url;
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+                  }
+                }}
+              >
+                Upgrade to Pro — $10/seat/month
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const { url } = await createBillingPortal({
+                      organizationId: org.id,
+                      returnUrl: `${window.location.origin}/settings`,
+                    });
+                    window.location.href = url;
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
+                  }
+                }}
+              >
+                Manage Billing
+              </Button>
+            )}
+          </CardContent>
         </Card>
       )}
 

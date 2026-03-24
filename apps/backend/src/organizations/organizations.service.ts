@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service.js';
 import type {
   Organization,
@@ -13,7 +14,10 @@ import type {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(dto: CreateOrganizationDto, userId: string): Promise<Organization> {
     const result = await this.db.withTransaction(async (client) => {
@@ -151,10 +155,21 @@ export class OrganizationsService {
   }
 
   async delete(orgId: string): Promise<boolean> {
-    // Delete memberships first (FK constraint)
     await this.db.query('DELETE FROM memberships WHERE organization_id = $1', [orgId]);
     const result = await this.db.query('DELETE FROM organizations WHERE id = $1', [orgId]);
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async removeMember(orgId: string, userId: string): Promise<boolean> {
+    const result = await this.db.query(
+      'DELETE FROM memberships WHERE organization_id = $1 AND user_id = $2',
+      [orgId, userId],
+    );
+    const removed = (result.rowCount ?? 0) > 0;
+    if (removed) {
+      this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
+    }
+    return removed;
   }
 
   async addMember(orgId: string, email: string, role: string): Promise<Membership> {
@@ -191,6 +206,7 @@ export class OrganizationsService {
     );
 
     const row = result.rows[0]!;
+    this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
     return {
       id: row.id,
       userId: row.user_id,

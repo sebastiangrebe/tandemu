@@ -375,3 +375,27 @@ export async function getTasks(params?: {
   const qs = searchParams.toString();
   return fetchApi<Task[]>(`/api/tasks${qs ? `?${qs}` : ""}`);
 }
+
+// Billing (only functional when billing module is available in the backend)
+
+export async function createCheckout(data: {
+  organizationId: string;
+  planTier: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ sessionId: string; url: string }> {
+  return fetchApi<{ sessionId: string; url: string }>("/api/billing/checkout", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function createBillingPortal(data: {
+  organizationId: string;
+  returnUrl: string;
+}): Promise<{ url: string }> {
+  return fetchApi<{ url: string }>("/api/billing/portal", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
