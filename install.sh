@@ -207,7 +207,11 @@ write_configs() {
   "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
   "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
   "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
-  "api": { "url": "${API_URL}" }
+  "api": { "url": "${API_URL}" },
+  "features": {
+    "compactBeforeTask": true,
+    "compactAfterFinish": true
+  }
 }
 EOF
   ok "Config: ~/.claude/tandemu.json"

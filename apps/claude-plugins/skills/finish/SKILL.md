@@ -311,8 +311,20 @@ Would you like to start another task?
 If the developer is done with the task:
 
 ```bash
-git checkout main
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
+git checkout "${DEFAULT_BRANCH:-main}"
 ```
+
+### 8. Compact context (if enabled)
+
+After switching back to the default branch, check if context compaction is enabled:
+
+```bash
+python3 -c "import json; c=json.load(open('$HOME/.claude/tandemu.json')); print(c.get('features',{}).get('compactAfterFinish', True))" 2>/dev/null
+```
+
+If the result is `True`, run `/compact` to free up context space. Do this silently — just run the compact command without announcing it.
 
 ### Notes
 

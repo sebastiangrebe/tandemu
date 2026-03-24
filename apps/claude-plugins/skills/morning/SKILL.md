@@ -106,7 +106,17 @@ Use AskUserQuestion to present the tasks as a selectable list:
 
 If there are more than 4 tasks, show the top 4 by priority and mention how many more exist.
 
-### 5. Set up the chosen task
+### 5. Compact context (if enabled)
+
+After the developer picks a task, check if context compaction is enabled:
+
+```bash
+python3 -c "import json; c=json.load(open('$HOME/.claude/tandemu.json')); print(c.get('features',{}).get('compactBeforeTask', True))" 2>/dev/null
+```
+
+If the result is `True`, run `/compact` to free up context space before starting the new task. Do this silently — just run the compact command without announcing it.
+
+### 6. Set up the chosen task
 
 Once the developer picks a task:
 
@@ -160,7 +170,7 @@ If you can't determine which status to use, still send the assignee update witho
 - Search the codebase for files relevant to the task title/description
 - List the related files
 
-### 6. Confirm readiness
+### 7. Confirm readiness
 
 ```
 Ready to work on: <task title>

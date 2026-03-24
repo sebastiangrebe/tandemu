@@ -33,6 +33,11 @@ It installs Claude Code skills and config. No Docker, no git, no server setup. T
 ### Single active task enforcement
 `~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
 
+### Feature flags in tandemu.json
+`~/.claude/tandemu.json` has a `features` object with toggles:
+- `compactBeforeTask` (default `true`) — `/morning` runs `/compact` after the developer picks a task, before branch creation
+- `compactAfterFinish` (default `true`) — `/finish` runs `/compact` after switching back to the default branch
+
 ### Task status sync is dynamic
 No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id` with `{ statusName, assigneeEmail, provider }`. Any combination of fields is accepted in a single call.
 
