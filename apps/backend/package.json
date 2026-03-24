@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./*": "./dist/*"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc && node --watch dist/main.js",
