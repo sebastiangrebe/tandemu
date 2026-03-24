@@ -121,7 +121,7 @@ const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assign
 
 export class AsanaProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail } = params;
+    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
 
     // Fetch incomplete tasks
     let tasks = await asanaFetch<AsanaTask[]>(
@@ -129,20 +129,22 @@ export class AsanaProvider implements TaskProvider {
       accessToken,
     );
 
-    // Also fetch recently completed tasks (last 7 days) for standup
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-    try {
-      const completedTasks = await asanaFetch<AsanaTask[]>(
-        `/projects/${externalProjectId}/tasks?opt_fields=${TASK_OPT_FIELDS}&completed_since=${sevenDaysAgo}&limit=100`,
-        accessToken,
-      );
-      // completed_since returns tasks completed after that date, plus incomplete tasks.
-      // Filter to only completed ones we don't already have.
-      const incompleteGids = new Set(tasks.map((t) => t.gid));
-      const newCompleted = completedTasks.filter((t) => t.completed && !incompleteGids.has(t.gid));
-      tasks = [...tasks, ...newCompleted];
-    } catch {
-      // Non-critical — incomplete tasks are enough
+    // Also fetch recently completed tasks (for standup etc.) unless excludeDone is set
+    if (!excludeDone) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+      try {
+        const completedTasks = await asanaFetch<AsanaTask[]>(
+          `/projects/${externalProjectId}/tasks?opt_fields=${TASK_OPT_FIELDS}&completed_since=${sevenDaysAgo}&limit=100`,
+          accessToken,
+        );
+        // completed_since returns tasks completed after that date, plus incomplete tasks.
+        // Filter to only completed ones we don't already have.
+        const incompleteGids = new Set(tasks.map((t) => t.gid));
+        const newCompleted = completedTasks.filter((t) => t.completed && !incompleteGids.has(t.gid));
+        tasks = [...tasks, ...newCompleted];
+      } catch {
+        // Non-critical — incomplete tasks are enough
+      }
     }
 
     if (assigneeEmail) {

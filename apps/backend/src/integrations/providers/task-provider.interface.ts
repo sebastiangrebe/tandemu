@@ -5,6 +5,7 @@ export interface TaskProviderFetchParams {
   externalProjectId: string;
   assigneeEmail?: string;
   sprint?: string;  // "current" or sprint name
+  excludeDone?: boolean;
   config: Record<string, unknown>;
 }
 

@@ -84,7 +84,7 @@ interface JiraProject {
 
 export class JiraProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, sprint, config } = params;
+    const { accessToken, externalProjectId, assigneeEmail, sprint, excludeDone, config } = params;
     const siteId = config.siteId as string | undefined;
     if (!siteId) {
       throw new BadGatewayException('Jira integration requires a siteId in config');
@@ -100,6 +100,9 @@ export class JiraProvider implements TaskProvider {
       jql += ' AND sprint in openSprints()';
     } else if (sprint) {
       jql += ` AND sprint = "${sprint}"`;
+    }
+    if (excludeDone) {
+      jql += ' AND statusCategory != "Done"';
     }
 
     const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,description,status,priority,assignee,labels,sprint,updated`;

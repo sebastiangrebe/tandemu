@@ -81,9 +81,10 @@ interface GitHubRepo {
 
 export class GitHubProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail } = params;
+    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
     // externalProjectId is "owner/repo"
-    let url = `${GITHUB_API}/repos/${externalProjectId}/issues?state=all&per_page=100`;
+    const state = excludeDone ? 'open' : 'all';
+    let url = `${GITHUB_API}/repos/${externalProjectId}/issues?state=${state}&per_page=100`;
     if (assigneeEmail) {
       // GitHub uses usernames, not emails, for assignment filtering.
       // The config can map email -> username, otherwise we fetch all and filter.

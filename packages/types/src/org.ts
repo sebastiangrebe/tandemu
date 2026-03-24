@@ -56,10 +56,15 @@ export interface InviteMemberDto {
   readonly role: MembershipRole;
 }
 
+export interface TeamSettings {
+  readonly doneWindowDays?: number; // default: 14
+}
+
 export interface Team {
   readonly id: string;
   readonly name: string;
   readonly description?: string;
+  readonly settings: TeamSettings;
   readonly organizationId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -80,6 +85,7 @@ export interface CreateTeamDto {
 export interface UpdateTeamDto {
   readonly name?: string;
   readonly description?: string;
+  readonly settings?: Partial<TeamSettings>;
 }
 
 export interface Invite {

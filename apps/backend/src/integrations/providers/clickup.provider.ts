@@ -110,12 +110,13 @@ function mapTask(task: ClickUpTask, externalProjectId: string): Task {
 
 export class ClickUpProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail } = params;
+    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
 
     // externalProjectId can be a folder ID (preferred) or a list ID.
     // Try as folder first — fetch all lists in the folder and aggregate tasks.
     // If that fails (404), fall back to treating it as a list ID.
     let allTasks: ClickUpTask[] = [];
+    const includeClosed = excludeDone ? 'false' : 'true';
 
     try {
       const folderData = await clickupFetch<ClickUpFolder>(
@@ -125,7 +126,7 @@ export class ClickUpProvider implements TaskProvider {
       // It's a folder — fetch tasks from every list in it
       for (const list of folderData.lists) {
         const listData = await clickupFetch<ClickUpTasksResponse>(
-          `${CLICKUP_API}/list/${list.id}/task?include_closed=true&subtasks=true`,
+          `${CLICKUP_API}/list/${list.id}/task?include_closed=${includeClosed}&subtasks=true`,
           accessToken,
         );
         allTasks.push(...listData.tasks);
@@ -133,7 +134,7 @@ export class ClickUpProvider implements TaskProvider {
     } catch (err) {
       // Not a folder — try as a list ID
       const listData = await clickupFetch<ClickUpTasksResponse>(
-        `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=true&subtasks=true`,
+        `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=${includeClosed}&subtasks=true`,
         accessToken,
       );
       allTasks = listData.tasks;

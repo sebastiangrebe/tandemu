@@ -8,6 +8,7 @@ export interface GetTasksParams {
   teamId?: string;
   assigneeEmail?: string;
   sprint?: string;
+  excludeDone?: boolean;
 }
 
 @Injectable()
@@ -43,6 +44,7 @@ export class TasksService {
           externalProjectId: mapping.externalProjectId,
           assigneeEmail: params.assigneeEmail,
           sprint: params.sprint,
+          excludeDone: params.excludeDone,
           config: { ...rawIntegration.config, ...mapping.config },
         });
         allTasks.push(...tasks);
