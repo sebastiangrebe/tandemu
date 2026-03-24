@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Header } from './header';
 
 const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth', '/auth/callback'];
+const ADMIN_PATHS = ['/settings', '/integrations', '/teams'];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,8 +21,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 }
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, hasOrganization, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, hasOrganization, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !hasOrganization) {
@@ -29,11 +31,21 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, isAuthenticated, hasOrganization, router]);
 
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && !isAdmin && ADMIN_PATHS.some((p) => pathname.startsWith(p))) {
+      router.push('/');
+    }
+  }, [isLoading, isAuthenticated, isAdmin, pathname, router]);
+
   if (isLoading) {
     return <LoadingScreen />;
   }
 
   if (!isAuthenticated || !hasOrganization) {
+    return null;
+  }
+
+  if (!isAdmin && ADMIN_PATHS.some((p) => pathname.startsWith(p))) {
     return null;
   }
 

@@ -9,12 +9,14 @@ interface AuthUser {
   id: string;
   email: string;
   name: string;
+  role?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   hasOrganization: boolean;
   currentOrg: Organization | null;
   organizations: Organization[];
@@ -142,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isAuthenticated: !!token && !!user,
+        isAdmin: user?.role === 'OWNER' || user?.role === 'ADMIN',
         hasOrganization: organizations.length > 0,
         currentOrg,
         organizations,
