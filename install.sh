@@ -282,6 +282,13 @@ with open(mcp_file, "w") as f:
     json.dump(config, f, indent=2)
 PYEOF
   ok "Memory: enabled (→ ${MEM0_URL})"
+
+  # Verify memory server is reachable
+  if curl -sf -m 5 "${MEM0_URL}/api/v1/config/" >/dev/null 2>&1; then
+    ok "Memory server: reachable"
+  else
+    warn "Memory server not reachable at ${MEM0_URL} — make sure the OpenMemory and Qdrant containers are running (docker compose up -d)"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────

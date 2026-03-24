@@ -68,6 +68,7 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 
 ### Memory via OpenMemory MCP
 - OpenMemory runs as a Docker container (`mem0/openmemory-mcp:latest`) on port 8765
+- Requires a Qdrant vector store (`qdrant/qdrant:latest`) at hostname `mem0_store` on port 6333
 - Claude Code connects via SSE: `http://host:8765/mcp/tandemu/sse/{userId}`
 - Memory scoped per user via the userId in the URL path
 - install.sh writes the MCP config to `~/.claude.json`
@@ -160,4 +161,5 @@ The test temporarily disables CLAUDE.md and MCP during skill runs to prevent ses
 | otel-collector | 4317/4318 | Telemetry ingestion |
 | backend | 3001 | API |
 | frontend | 3000 | Dashboard |
+| mem0_store | 6333 | Qdrant vector store for memory |
 | openmemory | 8765 | MCP memory server |
