@@ -97,6 +97,9 @@ install.sh writes permissions to `~/.claude/settings.json` so skills can:
 - Edit/Write `~/.claude/tandemu*` files without prompting
 - Run curl to the Tandemu API and OTEL collector without prompting
 
+### Team done window
+Teams have a `doneWindowDays` setting (default: 14). When fetching tasks with a `teamId`, done/cancelled tasks older than this window are automatically filtered out.
+
 ### Setup wizard team creation bug
 The setup wizard's team creation silently fails because the JWT at that point has `MEMBER` role with no org context, but the teams endpoint requires `OWNER`/`ADMIN`. Workaround: create teams via the Teams page after login.
 
@@ -131,7 +134,7 @@ The test temporarily disables CLAUDE.md and MCP during skill runs to prevent ses
 ## API Endpoints
 
 ### Tasks
-- `GET /api/tasks?teamId=&mine=true&status=&unassigned=true` — fetch tasks
+- `GET /api/tasks?teamId=&mine=true&status=&unassigned=true&sort=priority&order=desc&excludeDone=true` — fetch tasks (sort: `priority`|`updatedAt`, order: `asc`|`desc`, excludeDone removes all done/cancelled). When `teamId` is set and `excludeDone` is not, done tasks are filtered by the team's `doneWindowDays` setting (default: 14 days).
 - `GET /api/tasks/:taskId/statuses?provider=linear` — available statuses
 - `PATCH /api/tasks/:taskId` — update task `{statusName?, assigneeEmail?, provider}`
 

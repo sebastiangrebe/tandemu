@@ -202,7 +202,7 @@ export async function createTeam(orgId: string, data: { name: string; descriptio
   });
 }
 
-export async function updateTeam(orgId: string, teamId: string, data: { name?: string; description?: string }): Promise<Team> {
+export async function updateTeam(orgId: string, teamId: string, data: { name?: string; description?: string; settings?: { doneWindowDays?: number } }): Promise<Team> {
   return fetchApi<Team>(`/api/organizations/${orgId}/teams/${teamId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
@@ -362,10 +362,16 @@ export async function deleteProjectMapping(
 export async function getTasks(params?: {
   teamId?: string;
   sprint?: string;
+  sort?: 'priority' | 'updatedAt';
+  order?: 'asc' | 'desc';
+  excludeDone?: boolean;
 }): Promise<Task[]> {
   const searchParams = new URLSearchParams();
   if (params?.teamId) searchParams.set("teamId", params.teamId);
   if (params?.sprint) searchParams.set("sprint", params.sprint);
+  if (params?.sort) searchParams.set("sort", params.sort);
+  if (params?.order) searchParams.set("order", params.order);
+  if (params?.excludeDone) searchParams.set("excludeDone", "true");
   const qs = searchParams.toString();
   return fetchApi<Task[]>(`/api/tasks${qs ? `?${qs}` : ""}`);
 }

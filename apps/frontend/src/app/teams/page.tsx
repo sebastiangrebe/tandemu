@@ -12,12 +12,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, MoreHorizontal, Pencil } from 'lucide-react';
+import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, MoreHorizontal, Pencil, Settings } from 'lucide-react';
 import { TeamsSkeleton } from '@/components/ui/skeleton-helpers';
 import { CreateTeamDialog } from '@/components/teams/create-team-dialog';
 import { DeleteTeamDialog } from '@/components/teams/delete-team-dialog';
 import { RenameTeamDialog } from '@/components/teams/rename-team-dialog';
 import { AddMemberDialog } from '@/components/teams/add-member-dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+import { updateTeam } from '@/lib/api';
 import {
   getOrganizations,
   getTeams,
@@ -53,6 +57,7 @@ export default function TeamsPage() {
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TeamWithMembers | null>(null);
   const [renameTarget, setRenameTarget] = useState<TeamWithMembers | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const loadTeams = useCallback(async (orgId: string) => {
     try {
@@ -289,6 +294,63 @@ export default function TeamsPage() {
                 </TableBody>
               </Table>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Settings</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="doneWindowDays">Done window (days)</Label>
+                <p className="text-sm text-muted-foreground">
+                  Show completed tasks from the last {selectedTeam.settings?.doneWindowDays ?? 14} days.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <Input
+                  id="doneWindowDays"
+                  type="number"
+                  min={1}
+                  max={365}
+                  className="w-20"
+                  value={selectedTeam.settings?.doneWindowDays ?? 14}
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value, 10) || 14);
+                    setSelectedTeam((prev) => prev ? { ...prev, settings: { ...prev.settings, doneWindowDays: val } } : prev);
+                  }}
+                />
+                <Button
+                  size="sm"
+                  disabled={savingSettings}
+                  onClick={async () => {
+                    setSavingSettings(true);
+                    try {
+                      await updateTeam(org.id, selectedTeam.id, {
+                        settings: { doneWindowDays: selectedTeam.settings?.doneWindowDays ?? 14 },
+                      });
+                      toast.success('Settings saved.');
+                      loadTeams(org.id);
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+                    } finally {
+                      setSavingSettings(false);
+                    }
+                  }}
+                >
+                  {savingSettings ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

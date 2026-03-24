@@ -4,21 +4,18 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service.js';
-import type { Team, CreateTeamDto, UpdateTeamDto } from '@tandemu/types';
+import type { Team, TeamSettings, CreateTeamDto, UpdateTeamDto } from '@tandemu/types';
+
+const DEFAULT_TEAM_SETTINGS: Required<TeamSettings> = {
+  doneWindowDays: 14,
+};
 
 @Injectable()
 export class TeamsService {
   constructor(private readonly db: DatabaseService) {}
 
   async create(orgId: string, dto: CreateTeamDto): Promise<Team> {
-    const result = await this.db.query<{
-      id: string;
-      name: string;
-      description: string | null;
-      organization_id: string;
-      created_at: Date;
-      updated_at: Date;
-    }>(
+    const result = await this.db.query<TeamRow>(
       `INSERT INTO teams (name, description, organization_id)
        VALUES ($1, $2, $3)
        RETURNING *`,
@@ -29,14 +26,7 @@ export class TeamsService {
   }
 
   async findAll(orgId: string): Promise<Team[]> {
-    const result = await this.db.query<{
-      id: string;
-      name: string;
-      description: string | null;
-      organization_id: string;
-      created_at: Date;
-      updated_at: Date;
-    }>(
+    const result = await this.db.query<TeamRow>(
       `SELECT * FROM teams WHERE organization_id = $1`,
       [orgId],
     );
@@ -45,14 +35,7 @@ export class TeamsService {
   }
 
   async findOne(teamId: string): Promise<Team> {
-    const result = await this.db.query<{
-      id: string;
-      name: string;
-      description: string | null;
-      organization_id: string;
-      created_at: Date;
-      updated_at: Date;
-    }>(
+    const result = await this.db.query<TeamRow>(
       `SELECT * FROM teams WHERE id = $1`,
       [teamId],
     );
@@ -77,6 +60,11 @@ export class TeamsService {
       fields.push(`description = $${paramIndex++}`);
       values.push(dto.description);
     }
+    if (dto.settings !== undefined) {
+      // Merge new settings with existing settings using jsonb concat
+      fields.push(`settings = settings || $${paramIndex++}::jsonb`);
+      values.push(JSON.stringify(dto.settings));
+    }
 
     if (fields.length === 0) {
       return this.findOne(teamId);
@@ -85,14 +73,7 @@ export class TeamsService {
     fields.push(`updated_at = now()`);
     values.push(teamId);
 
-    const result = await this.db.query<{
-      id: string;
-      name: string;
-      description: string | null;
-      organization_id: string;
-      created_at: Date;
-      updated_at: Date;
-    }>(
+    const result = await this.db.query<TeamRow>(
       `UPDATE teams SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       values,
     );
@@ -191,21 +172,36 @@ export class TeamsService {
     }));
   }
 
-  private mapTeam(row: {
-    id: string;
-    name: string;
-    description: string | null;
-    organization_id: string;
-    created_at: Date;
-    updated_at: Date;
-  }): Team {
+  async getSettings(teamId: string): Promise<Required<TeamSettings>> {
+    const team = await this.findOne(teamId);
+    return {
+      ...DEFAULT_TEAM_SETTINGS,
+      ...team.settings,
+    };
+  }
+
+  private mapTeam(row: TeamRow): Team {
+    const settings = (row.settings && typeof row.settings === 'object')
+      ? row.settings as TeamSettings
+      : {};
     return {
       id: row.id,
       name: row.name,
       description: row.description ?? undefined,
+      settings,
       organizationId: row.organization_id,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
   }
+}
+
+interface TeamRow {
+  id: string;
+  name: string;
+  description: string | null;
+  settings: unknown;
+  organization_id: string;
+  created_at: Date;
+  updated_at: Date;
 }
