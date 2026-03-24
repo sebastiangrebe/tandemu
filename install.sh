@@ -254,6 +254,18 @@ for p in tandemu_perms:
         allow.append(p)
 perms["allow"] = allow
 settings["permissions"] = perms
+hooks = settings.get("hooks", {})
+hooks["Stop"] = [
+    {
+        "hooks": [
+            {
+                "type": "prompt",
+                "prompt": "Before finishing your response, briefly reflect on the developer's recent messages: (1) If they expressed frustration or a sharp tone shift you haven't acknowledged, add a brief natural check-in at the end — one line max, like a colleague ('rough one?', 'my bad'). If nothing notable, do nothing. NEVER block work or ask a formal question. (2) If the developer revealed a personal fact (family, location, plans, interests) in any message this turn, store it to memory immediately using add_memories. Store the fact, not the mood. Example: 'my kid is sick' → store 'Has a child'. NEVER store emotions or temporary states."
+            }
+        ]
+    }
+]
+settings["hooks"] = hooks
 with open(settings_file, "w") as f:
     json.dump(settings, f, indent=2)
 PYEOF
