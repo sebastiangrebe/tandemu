@@ -64,7 +64,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: RequestUser) {
     const fullUser = await this.authService.getMe(user.userId);
-    return { user: fullUser };
+    return { user: { ...fullUser, role: user.role } };
   }
 
   @Post('switch-org')

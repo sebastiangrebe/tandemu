@@ -76,12 +76,12 @@ const workspaceItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const allNavItems = [...overviewItems, ...analyticsItems, ...teamItems, ...workspaceItems];
+const adminOnlyItems = new Set(['/integrations', '/settings', '/teams']);
 
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, currentOrg, organizations, switchOrg, logout } = useAuth();
+  const { user, currentOrg, organizations, switchOrg, logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const [commandOpen, setCommandOpen] = useState(false);
@@ -230,8 +230,8 @@ export function AppSidebar() {
         <SidebarContent>
           <NavGroup label="Overview" items={overviewItems} />
           <NavGroup label="Analytics" items={analyticsItems} />
-          <NavGroup label="Team" items={teamItems} />
-          <NavGroup label="Workspace" items={workspaceItems} />
+          {isAdmin && <NavGroup label="Team" items={teamItems} />}
+          {isAdmin && <NavGroup label="Workspace" items={workspaceItems} />}
         </SidebarContent>
 
         {/* User footer */}
@@ -314,7 +314,9 @@ export function AppSidebar() {
           <CommandEmpty>No results found.</CommandEmpty>
 
           <CommandGroup heading="Pages">
-            {allNavItems.map((item) => (
+            {[...overviewItems, ...analyticsItems, ...teamItems, ...workspaceItems]
+              .filter((item) => isAdmin || !adminOnlyItems.has(item.href))
+              .map((item) => (
               <CommandItem key={item.href} onSelect={() => handleSelect(item.href)}>
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.label}

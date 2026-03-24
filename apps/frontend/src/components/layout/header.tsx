@@ -46,11 +46,11 @@ import {
   BadgeCheck,
 } from "lucide-react";
 
-const mainNav = [
+const mainNavAll = [
   { href: "/", label: "Dashboard" },
-  { href: "/teams", label: "Teams" },
-  { href: "/integrations", label: "Integrations" },
-  { href: "/settings", label: "Settings" },
+  { href: "/teams", label: "Teams", adminOnly: true },
+  { href: "/integrations", label: "Integrations", adminOnly: true },
+  { href: "/settings", label: "Settings", adminOnly: true },
 ];
 
 const subNavMap: Record<
@@ -78,15 +78,15 @@ const allNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: Clock },
   { href: "/friction-map", label: "Friction Map", icon: Flame },
-  { href: "/teams", label: "Teams", icon: Layers },
-  { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/teams", label: "Teams", icon: Layers, adminOnly: true },
+  { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
+  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, currentOrg, organizations, switchOrg, logout } = useAuth();
+  const { user, currentOrg, organizations, switchOrg, logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const [commandOpen, setCommandOpen] = useState(false);
@@ -196,7 +196,7 @@ export function Header() {
 
           {/* Main nav */}
           <nav className="hidden md:flex items-center gap-0.5">
-            {mainNav.map((item) => {
+            {mainNavAll.filter((item) => isAdmin || !item.adminOnly).map((item) => {
               const isActive =
                 item.href === "/"
                   ? pathname === "/" ||
@@ -327,7 +327,7 @@ export function Header() {
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
             <CommandGroup heading="Pages">
-              {allNavItems.map((item) => (
+              {allNavItems.filter((item) => isAdmin || !item.adminOnly).map((item) => (
                 <CommandItem
                   key={item.href}
                   onSelect={() => handleSelect(item.href)}

@@ -274,7 +274,7 @@ except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
 servers["tandemu-memory"] = {
-    "type": "url",
+    "type": "sse",
     "url": "${MEM0_URL}/mcp/tandemu/sse/${USER_ID}"
 }
 config["mcpServers"] = servers
