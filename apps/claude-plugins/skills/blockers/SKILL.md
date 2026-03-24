@@ -12,34 +12,33 @@ allowed-tools:
 
 Show the team's friction points and blockers. Options: $ARGUMENTS
 
+**Execution style:** Minimize tool call noise. Load config and fetch all API data in a single Bash call ("Fetch blocker data"). Keep the analysis and formatted report as separate steps.
+
 ## Steps
 
-### 1. Load Tandemu config
+### 1. Fetch blocker data
 
-Read `~/.claude/tandemu.json`:
-
-```bash
-cat ~/.claude/tandemu.json
-```
-
-Extract `auth.token`, `api.url`, `organization.id`, and `team.id`. If `--team` is specified, override the default team. Default time range: last 7 days (override with `--days`).
-
-If the file doesn't exist, tell the developer: "Tandemu is not configured. Run /tandemu to set it up."
-
-### 2. Fetch data from Tandemu API
+Load config and fetch all data in a **single Bash call** ("Fetch blocker data"):
 
 ```bash
-# Friction heatmap from telemetry
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/friction-heatmap"
+# Load Tandemu config
+source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 
-# DORA metrics
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/dora-metrics"
+# If --team is specified, override $TANDEMU_TEAM_ID here
 
-# Tasks from connected ticket system — look for blocked/stale items
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>&sprint=current"
+echo "---FRICTION---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/friction-heatmap"
+
+echo "---DORA---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/dora-metrics"
+
+echo "---TASKS---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID"
 ```
 
-### 3. Identify blockers
+If the config load fails, tell the developer: "Tandemu is not configured. Run install.sh to set it up."
+
+### 2. Identify blockers
 
 **From telemetry (friction heatmap):**
 - Rank files by prompt loop count + error count
@@ -55,7 +54,7 @@ curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id
 - For high-friction files, read the actual source code to understand why it's complex
 - Check if the friction files relate to any in-progress tasks
 
-### 4. Present the report
+### 3. Present the report
 
 ```markdown
 ## Team Blockers & Friction Report

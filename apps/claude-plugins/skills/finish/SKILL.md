@@ -13,6 +13,8 @@ allowed-tools:
 
 Help the developer wrap up their current task cleanly, measure the work done, and report telemetry.
 
+**Execution style:** Minimize tool call noise. Combine pure-read infrastructure commands (config loads, active task reads, OTEL setup, timestamp calculations) into as few Bash calls as possible with brief descriptions like "Prepare telemetry". Keep context-dependent operations (git diff, git stash) and user-facing operations (task selection, PR checks, summaries) as separate calls.
+
 ## Steps
 
 ### 1. Check for uncommitted work
@@ -81,21 +83,28 @@ If no PR exists and there are commits ahead of main, use AskUserQuestion:
 
 ### 4. Measure and report work
 
-Read the active task metadata:
+Load config, active task, and OTEL setup in a **single Bash call** ("Prepare telemetry"):
 
 ```bash
-cat ~/.claude/tandemu-active-task.json 2>/dev/null
+# Load Tandemu config
+source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+
+# Active task metadata
+echo "---ACTIVE_TASK---"
+cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+
+# OTEL endpoint
+echo "---OTEL---"
+python3 -c "
+import json
+try:
+    s = json.load(open('$HOME/.claude/settings.json'))
+    print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))
+except: print('http://localhost:4318')
+" 2>/dev/null
 ```
 
-Extract `taskId`, `title`, `startedAt`, `repos`. If the file does not exist, use the current repo and estimate start from the first commit on the branch.
-
-Read the Tandemu config:
-
-```bash
-cat ~/.claude/tandemu.json
-```
-
-Extract `organization.id` and `user.id`.
+Extract `taskId`, `title`, `startedAt`, `repos` from the active task. If the file does not exist, use the current repo and estimate start from the first commit on the branch. Extract `organization.id` and `user.id` from the config env vars. Extract the OTEL endpoint.
 
 #### 4a. Measure work across all repos
 
@@ -132,19 +141,7 @@ Calculate:
 
 #### 4b. Send telemetry
 
-Derive the OTEL endpoint:
-
-```bash
-OTEL_ENDPOINT=$(python3 -c "
-import json
-try:
-    s = json.load(open('$HOME/.claude/settings.json'))
-    print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))
-except: print('http://localhost:4318')
-" 2>/dev/null)
-```
-
-Convert timestamps to nanoseconds using a single Python script to avoid errors:
+Convert timestamps to nanoseconds (use the OTEL endpoint from the setup call above):
 
 ```bash
 read START_NS END_NS DURATION_S TRACE_ID SPAN_ID <<< $(python3 -c "
@@ -249,14 +246,14 @@ If `METRICS_HTTP` is not `200`, tell the developer: "Telemetry failed (metrics r
 If the developer marked the task as "Done", update the status on the provider. First fetch the available statuses, then pick the one that best represents "done" or "completed":
 
 ```bash
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks/<taskId>/statuses?provider=<provider>"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<taskId>/statuses?provider=<provider>"
 ```
 
 Pick the status that best represents "done", "completed", or "closed" from the returned list, then:
 
 ```bash
-curl -sf -X PATCH "<api_url>/api/tasks/<taskId>" \
-  -H "Authorization: Bearer <token>" \
+curl -sf -X PATCH "$TANDEMU_API/api/tasks/<taskId>" \
+  -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"statusName": "<chosen status name>", "provider": "<provider>"}'
 ```

@@ -10,44 +10,42 @@ allowed-tools:
 
 Generate a team standup report. Options: $ARGUMENTS
 
+**Execution style:** Minimize tool call noise. Load config and fetch all API data in a single Bash call ("Fetch team data"). Keep the formatted report output as a separate step.
+
 ## Steps
 
-### 1. Load Tandemu config
+### 1. Fetch team data
 
-Read `~/.claude/tandemu.json`:
-
-```bash
-cat ~/.claude/tandemu.json
-```
-
-Extract `auth.token`, `api.url`, `organization.id`, and `team.id`. If `--team` is specified, override the default team.
-
-If the file doesn't exist, tell the developer: "Tandemu is not configured. Run /tandemu to set it up."
-
-### 2. Fetch data from Tandemu API
-
-Make these calls in parallel:
+Load config and fetch all data in a **single Bash call** ("Fetch team data"):
 
 ```bash
-# Team members (these are the Tandemu users on the team)
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/organizations/<org_id>/teams/<team_id>/members"
+# Load Tandemu config
+source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 
-# All tasks from connected ticket system
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/tasks?teamId=<team_id>"
+# If --team is specified, override $TANDEMU_TEAM_ID here
 
-# Telemetry: session timesheets (last 24h)
 YESTERDAY=$(date -u -v-1d +%Y-%m-%dT00:00:00Z 2>/dev/null || date -u -d "yesterday" +%Y-%m-%dT00:00:00Z)
 NOW=$(date -u +%Y-%m-%dT23:59:59Z)
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/timesheets?startDate=$YESTERDAY&endDate=$NOW"
 
-# Telemetry: AI ratio
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/ai-ratio"
+echo "---MEMBERS---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/organizations/$TANDEMU_ORG_ID/teams/$TANDEMU_TEAM_ID/members"
 
-# Telemetry: friction events
-curl -sf -H "Authorization: Bearer <token>" "<api_url>/api/telemetry/friction-heatmap"
+echo "---TASKS---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID"
+
+echo "---TIMESHEETS---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/timesheets?startDate=$YESTERDAY&endDate=$NOW"
+
+echo "---AI_RATIO---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/ai-ratio"
+
+echo "---FRICTION---"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/friction-heatmap"
 ```
 
-### 3. Compile the team standup
+If the config load fails, tell the developer: "Tandemu is not configured. Run install.sh to set it up."
+
+### 2. Compile the team standup
 
 **IMPORTANT attribution rules:**
 
@@ -108,7 +106,7 @@ Tasks assigned to people not on this Tandemu team:
 - If no blockers detected, say "No blockers detected."
 ```
 
-### 4. Format output
+### 3. Format output
 
 Default: markdown. If `--format slack`, use Slack bold markers. If `--format plain`, plain text.
 
