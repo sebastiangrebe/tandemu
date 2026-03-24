@@ -497,27 +497,102 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
 
   test('MCP config points to OpenMemory', async () => {
     const mcpConfigPath = path.join(HOME, '.claude.json');
+    expect(fs.existsSync(mcpConfigPath)).toBe(true);
 
-    // Merge tandemu-memory into existing config (as install.sh would)
-    const existing = fs.existsSync(mcpConfigPath)
-      ? JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'))
-      : {};
-
-    const servers = existing.mcpServers ?? {};
-    servers['tandemu-memory'] = {
-      type: 'url',
-      url: 'http://localhost:8765/mcp',
-    };
-    existing.mcpServers = servers;
-    fs.writeFileSync(mcpConfigPath, JSON.stringify(existing, null, 2), 'utf-8');
-
-    // Verify
+    // Read the config that install.sh wrote — don't write our own
     const config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
     expect(config.mcpServers).toBeTruthy();
     expect(config.mcpServers['tandemu-memory']).toBeTruthy();
-    const mcpUrl = config.mcpServers['tandemu-memory'].url;
-    expect(mcpUrl).toContain('8765');
-    expect(mcpUrl).toContain('mcp');
+
+    const memoryServer = config.mcpServers['tandemu-memory'];
+    expect(memoryServer.type).toBe('sse');
+    expect(memoryServer.url).toContain('8765');
+    expect(memoryServer.url).toMatch(/\/mcp\/tandemu\/sse\/.+/);
+  });
+
+  test('OpenMemory can add and search memories', async () => {
+    // Test actual memory operations via the MCP SSE message endpoint
+    // First, establish an SSE session
+    const sseRes = await fetch(
+      `http://localhost:8765/mcp/tandemu/sse/${userId}`,
+      { headers: { Accept: 'text/event-stream' } },
+    );
+    expect(sseRes.status).toBe(200);
+
+    const reader = sseRes.body!.getReader();
+    const decoder = new TextDecoder();
+    const { value } = await reader.read();
+    const sseData = decoder.decode(value);
+
+    // Extract the messages endpoint from the SSE event
+    const endpointMatch = sseData.match(/data:\s*(\/mcp\/messages\/\?session_id=\S+)/);
+    expect(endpointMatch).toBeTruthy();
+    const messagesUrl = `http://localhost:8765${endpointMatch![1]}`;
+
+    // Initialize the MCP session
+    const initRes = await fetch(messagesUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'tandemu-e2e', version: '1.0.0' },
+        },
+      }),
+    });
+    expect(initRes.ok).toBe(true);
+
+    // Send initialized notification
+    await fetch(messagesUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+      }),
+    });
+
+    // Add a test memory
+    const addRes = await fetch(messagesUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'add_memories',
+          arguments: { text: 'E2E test memory — Tandemu memory system works' },
+        },
+      }),
+    });
+    expect(addRes.ok).toBe(true);
+
+    // Wait for memory to be indexed
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // Search for the memory
+    const searchRes = await fetch(messagesUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'search_memory',
+          arguments: { query: 'Tandemu memory system' },
+        },
+      }),
+    });
+    expect(searchRes.ok).toBe(true);
+
+    // Clean up the SSE reader
+    reader.cancel();
   });
 
   test('skills reference memory in CLAUDE.md', async () => {
