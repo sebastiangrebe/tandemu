@@ -9,6 +9,7 @@ allowed-tools:
   - Agent
   - WebFetch
   - AskUserQuestion
+  - EnterPlanMode
 ---
 
 Help the developer start their work session by picking a task.
@@ -194,7 +195,9 @@ If you can't determine which status to use, still send the assignee update witho
 - Search the codebase for files relevant to the task title/description
 - List the related files
 
-### 6. Confirm readiness
+### 6. Confirm readiness and choose approach
+
+Show the readiness summary:
 
 ```
 Ready to work on: <task title>
@@ -202,9 +205,20 @@ Branch: feat/<task.id>-<description>
 Task: <task.url>
 Related files:
   - <list of relevant files>
-
-Let's get started!
 ```
+
+Then use AskUserQuestion to let the developer choose how to proceed:
+- Question: "How would you like to approach this?"
+- Header: "Approach"
+- Options:
+  - Label: "Plan first", Description: "Enter plan mode to design the implementation before writing code"
+  - Label: "Manual", Description: "I'll drive — just give me the context and I'll prompt as I go"
+
+If they choose **Plan first**: call `EnterPlanMode`. The developer can then give an initial prompt to guide the plan (e.g., "focus on the auth context first" or "keep it minimal"). Stop here — plan mode takes over.
+
+If they choose **Manual**: say "All yours — let me know what you need." and stop. The developer will prompt from here.
+
+**IMPORTANT: Do NOT start implementing the task during /morning.** This skill only handles setup: branch creation, ticket updates, codebase research, and readiness confirmation. Implementation happens after /morning completes, driven by the developer.
 
 ### Notes
 
