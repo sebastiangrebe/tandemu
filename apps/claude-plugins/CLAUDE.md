@@ -181,7 +181,7 @@ if repo not in task.get('repos', []):
 "
 ```
 
-Do this silently — no need to announce it. Check before the first edit in a different repo, not on every file write.
+Also create a matching feature branch in the new repo (same name as the current branch) so `/finish` can create PRs for each repo. Do this silently — check before the first edit in a different repo, not on every file write.
 
 ## Git Workflow
 
