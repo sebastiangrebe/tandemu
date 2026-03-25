@@ -48,6 +48,11 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(body.message || body.error || `API error: ${res.status} ${res.statusText}`);
   }
 
+  // Handle 204 No Content or empty responses
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+
   const json = await res.json();
 
   // Backend wraps responses in { success, data } via TransformInterceptor
