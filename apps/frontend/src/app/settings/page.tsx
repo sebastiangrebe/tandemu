@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard, Mail, Trash2 } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
@@ -19,11 +19,7 @@ import {
   getTeams,
   createCheckout,
   createBillingPortal,
-  getEmailAliases,
-  addEmailAlias,
-  removeEmailAlias,
 } from '@/lib/api';
-import type { UserEmail } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
@@ -62,11 +58,6 @@ export default function SettingsPage() {
   const [invitesList, setInvitesList] = useState<Invite[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
 
-  // Email aliases
-  const [emailAliases, setEmailAliases] = useState<UserEmail[]>([]);
-  const [newAliasEmail, setNewAliasEmail] = useState('');
-  const [addingAlias, setAddingAlias] = useState(false);
-
   // Invite dialog
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -76,17 +67,15 @@ export default function SettingsPage() {
       setEditOrgName(activeOrg.name);
       setEditOrgSlug(activeOrg.slug);
 
-      const [memberList, invites, teamList, emails] = await Promise.all([
+      const [memberList, invites, teamList] = await Promise.all([
         getMembers(activeOrg.id),
         getInvites(activeOrg.id),
         getTeams(activeOrg.id),
-        getEmailAliases().catch(() => []),
       ]);
 
       setMembers(memberList);
       setInvitesList(invites);
       setTeams(teamList);
-      setEmailAliases(emails);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load settings');
     }
@@ -97,21 +86,6 @@ export default function SettingsPage() {
       loadData(authOrg).finally(() => setLoading(false));
     }
   }, [authOrg, loadData]);
-
-  const handleAddAlias = async () => {
-    if (!newAliasEmail.trim()) return;
-    setAddingAlias(true);
-    try {
-      const alias = await addEmailAlias(newAliasEmail.trim());
-      setEmailAliases((prev) => [...prev, alias]);
-      setNewAliasEmail('');
-      toast.success('Email alias added');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add email');
-    } finally {
-      setAddingAlias(false);
-    }
-  };
 
   const handleSaveOrg = async () => {
     if (!org) return;
@@ -213,76 +187,6 @@ export default function SettingsPage() {
           </CardFooter>
         </Card>
       )}
-
-      {/* Email Aliases */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle>Email Aliases</CardTitle>
-              <CardDescription>
-                Add alternative emails so tasks assigned to those addresses show up as yours.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {emailAliases.length > 0 && (
-            <div className="space-y-2">
-              {emailAliases.map((alias) => (
-                <div key={alias.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span>{alias.email}</span>
-                    {alias.isPrimary && <Badge variant="secondary">Primary</Badge>}
-                  </div>
-                  {!alias.isPrimary && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          await removeEmailAlias(alias.id);
-                          setEmailAliases((prev) => prev.filter((a) => a.id !== alias.id));
-                          toast.success('Email removed');
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : 'Failed to remove');
-                        }
-                      }}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <Input
-              type="email"
-              value={newAliasEmail}
-              onChange={(e) => setNewAliasEmail(e.target.value)}
-              placeholder="alias@example.com"
-              className="flex-1"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddAlias();
-                }
-              }}
-            />
-            <Button
-              size="sm"
-              disabled={addingAlias || !newAliasEmail.trim()}
-              onClick={handleAddAlias}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Billing Section — only shown when billing is enabled */}
       {org && process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && (
