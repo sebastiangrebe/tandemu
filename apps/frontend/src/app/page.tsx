@@ -54,7 +54,6 @@ const badgeColor = (color: string) => {
 };
 
 export default function DashboardPage() {
-  console.log('[DashboardPage] rendering, BILLING_ENABLED:', process.env.NEXT_PUBLIC_BILLING_ENABLED);
   const [aiData, setAiData] = useState<AIvsManualRatio[]>([]);
   const [doraData, setDoraData] = useState<DORAMetrics | null>(null);
   const [timesheetData, setTimesheetData] = useState<TimesheetEntry[]>([]);
