@@ -102,12 +102,15 @@ interface LinearTeamsResponse {
 
 export class LinearProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
 
     // externalProjectId is the Linear team ID
     const filters: string[] = [`team: { id: { eq: "${externalProjectId}" } }`];
-    if (assigneeEmail) {
-      filters.push(`assignee: { email: { eq: "${assigneeEmail}" } }`);
+    if (emails.length === 1) {
+      filters.push(`assignee: { email: { eq: "${emails[0]}" } }`);
+    } else if (emails.length > 1) {
+      filters.push(`assignee: { email: { in: [${emails.map((e) => `"${e}"`).join(', ')}] } }`);
     }
     if (excludeDone) {
       filters.push(`state: { type: { nin: ["completed", "canceled"] } }`);

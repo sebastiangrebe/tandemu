@@ -121,7 +121,8 @@ const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assign
 
 export class AsanaProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
 
     // Fetch incomplete tasks
     let tasks = await asanaFetch<AsanaTask[]>(
@@ -147,8 +148,8 @@ export class AsanaProvider implements TaskProvider {
       }
     }
 
-    if (assigneeEmail) {
-      tasks = tasks.filter((t) => t.assignee?.email === assigneeEmail);
+    if (emails.length > 0) {
+      tasks = tasks.filter((t) => t.assignee?.email && emails.includes(t.assignee.email));
     }
 
     return tasks.map((task) => mapTask(task, externalProjectId));

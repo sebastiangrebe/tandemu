@@ -292,6 +292,51 @@ export class AuthService {
     return this.generateAuthResponse(result.id, result.email, result.name);
   }
 
+  // --- Email aliases ---
+
+  async getEmailsForUser(userId: string): Promise<Array<{ id: string; email: string; isPrimary: boolean; createdAt: string }>> {
+    const result = await this.db.query<{ id: string; email: string; is_primary: boolean; created_at: Date }>(
+      'SELECT id, email, is_primary, created_at FROM user_emails WHERE user_id = $1 ORDER BY is_primary DESC, created_at ASC',
+      [userId],
+    );
+    return result.rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      isPrimary: r.is_primary,
+      createdAt: r.created_at.toISOString(),
+    }));
+  }
+
+  async getAllEmailAddresses(userId: string): Promise<string[]> {
+    const result = await this.db.query<{ email: string }>(
+      'SELECT email FROM user_emails WHERE user_id = $1',
+      [userId],
+    );
+    if (result.rows.length === 0) {
+      // Fallback: user_emails table might not be seeded yet
+      const user = await this.db.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [userId]);
+      return user.rows.map((r) => r.email);
+    }
+    return result.rows.map((r) => r.email);
+  }
+
+  async addEmailAlias(userId: string, email: string): Promise<{ id: string; email: string; isPrimary: boolean; createdAt: string }> {
+    const result = await this.db.query<{ id: string; email: string; is_primary: boolean; created_at: Date }>(
+      'INSERT INTO user_emails (user_id, email, is_primary) VALUES ($1, $2, FALSE) RETURNING id, email, is_primary, created_at',
+      [userId, email.toLowerCase().trim()],
+    );
+    const r = result.rows[0]!;
+    return { id: r.id, email: r.email, isPrimary: r.is_primary, createdAt: r.created_at.toISOString() };
+  }
+
+  async removeEmailAlias(userId: string, emailId: string): Promise<boolean> {
+    const result = await this.db.query(
+      'DELETE FROM user_emails WHERE id = $1 AND user_id = $2 AND is_primary = FALSE',
+      [emailId, userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   private signToken(payload: JwtPayload): string {
     return jwt.sign(payload, this.jwtSecret, { expiresIn: '24h' });
   }

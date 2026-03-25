@@ -150,7 +150,7 @@ export class TeamsService {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async getMembers(teamId: string): Promise<Array<{ id: string; email: string; name: string; createdAt: string }>> {
+  async getMembers(teamId: string): Promise<Array<{ id: string; email: string; emails: string[]; name: string; createdAt: string }>> {
     const result = await this.db.query<{
       id: string;
       email: string;
@@ -164,9 +164,26 @@ export class TeamsService {
       [teamId],
     );
 
+    // Fetch all email aliases for these members
+    const userIds = result.rows.map((r) => r.id);
+    const aliasResult = userIds.length > 0
+      ? await this.db.query<{ user_id: string; email: string }>(
+          `SELECT user_id, email FROM user_emails WHERE user_id = ANY($1)`,
+          [userIds],
+        )
+      : { rows: [] };
+
+    const aliasesByUser = new Map<string, string[]>();
+    for (const row of aliasResult.rows) {
+      const existing = aliasesByUser.get(row.user_id) ?? [];
+      existing.push(row.email);
+      aliasesByUser.set(row.user_id, existing);
+    }
+
     return result.rows.map((row) => ({
       id: row.id,
       email: row.email,
+      emails: aliasesByUser.get(row.id) ?? [row.email],
       name: row.name,
       createdAt: row.created_at.toISOString(),
     }));

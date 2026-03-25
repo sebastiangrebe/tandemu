@@ -50,9 +50,9 @@ If the config load fails, tell the developer: "Tandemu is not configured. Run in
 **IMPORTANT attribution rules:**
 
 - Each task has an `assigneeEmail` field from the ticket system.
-- Each Tandemu team member has an `email` field.
-- Match tasks to team members by comparing `task.assigneeEmail` to `member.email`.
-- Only show a task under a person if their email matches the task's `assigneeEmail`.
+- Each Tandemu team member has an `email` field and an `emails` array (which includes their primary email plus any aliases).
+- Match tasks to team members by checking if `task.assigneeEmail` is in `member.emails`.
+- Only show a task under a person if their `emails` array contains the task's `assigneeEmail`.
 - Tasks where `assigneeEmail` doesn't match any team member go in an "Other contributors" section (they may be assigned to people not in Tandemu yet).
 - Unassigned tasks (no `assigneeEmail`) go in the "Unassigned" section.
 
@@ -117,5 +117,5 @@ Default: markdown. If `--format slack`, use Slack bold markers. If `--format pla
 - If no ticket system is connected, show telemetry-only data and note that tasks are unavailable
 - If no telemetry data exists, show task-only data
 - Respect privacy — show work output, not surveillance metrics
-- NEVER attribute a task to someone unless their email matches the task's assigneeEmail
+- NEVER attribute a task to someone unless their `emails` array contains the task's assigneeEmail
 - Do not mention sprints, cycles, or iteration boundaries — use time-based recency instead

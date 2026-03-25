@@ -4,6 +4,7 @@ export interface TaskProviderFetchParams {
   accessToken: string;
   externalProjectId: string;
   assigneeEmail?: string;
+  assigneeEmails?: string[];  // Multiple emails for alias matching
   sprint?: string;  // "current" or sprint name
   excludeDone?: boolean;
   config: Record<string, unknown>;

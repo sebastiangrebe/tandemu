@@ -110,7 +110,8 @@ function mapTask(task: ClickUpTask, externalProjectId: string): Task {
 
 export class ClickUpProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
 
     // externalProjectId can be a folder ID (preferred) or a list ID.
     // Try as folder first — fetch all lists in the folder and aggregate tasks.
@@ -140,9 +141,9 @@ export class ClickUpProvider implements TaskProvider {
       allTasks = listData.tasks;
     }
 
-    if (assigneeEmail) {
+    if (emails.length > 0) {
       allTasks = allTasks.filter((t) =>
-        t.assignees.some((a) => a.email === assigneeEmail),
+        t.assignees.some((a) => emails.includes(a.email)),
       );
     }
 

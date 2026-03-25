@@ -120,6 +120,32 @@ export async function getMe(): Promise<AuthUser> {
   return response.user;
 }
 
+// ---- Email aliases ----
+
+export interface UserEmail {
+  id: string;
+  email: string;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export async function getEmailAliases(): Promise<UserEmail[]> {
+  return fetchApi<UserEmail[]>("/api/auth/emails");
+}
+
+export async function addEmailAlias(email: string): Promise<UserEmail> {
+  return fetchApi<UserEmail>("/api/auth/emails", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function removeEmailAlias(emailId: string): Promise<void> {
+  return fetchApi<void>(`/api/auth/emails/${emailId}`, {
+    method: "DELETE",
+  });
+}
+
 // ---- Organizations ----
 
 export async function getOrganizations(): Promise<Organization[]> {

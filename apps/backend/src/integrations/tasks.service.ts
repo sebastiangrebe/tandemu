@@ -7,6 +7,7 @@ import type { ExternalProject } from './providers/index.js';
 export interface GetTasksParams {
   teamId?: string;
   assigneeEmail?: string;
+  assigneeEmails?: string[];
   sprint?: string;
   excludeDone?: boolean;
 }
@@ -43,6 +44,7 @@ export class TasksService {
           accessToken: rawIntegration.access_token,
           externalProjectId: mapping.externalProjectId,
           assigneeEmail: params.assigneeEmail,
+          assigneeEmails: params.assigneeEmails,
           sprint: params.sprint,
           excludeDone: params.excludeDone,
           config: { ...rawIntegration.config, ...mapping.config },
@@ -56,6 +58,7 @@ export class TasksService {
             accessToken: rawIntegration.access_token,
             externalProjectId: mapping.externalProjectId,
             assigneeEmail: params.assigneeEmail,
+            assigneeEmails: params.assigneeEmails,
             sprint: params.sprint,
             config: { ...rawIntegration.config, ...mapping.config },
           });

@@ -84,7 +84,8 @@ interface JiraProject {
 
 export class JiraProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, sprint, excludeDone, config } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, sprint, excludeDone, config } = params;
+    const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
     const siteId = config.siteId as string | undefined;
     if (!siteId) {
       throw new BadGatewayException('Jira integration requires a siteId in config');
@@ -93,8 +94,10 @@ export class JiraProvider implements TaskProvider {
     const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
 
     let jql = `project = "${externalProjectId}"`;
-    if (assigneeEmail) {
-      jql += ` AND assignee = "${assigneeEmail}"`;
+    if (emails.length === 1) {
+      jql += ` AND assignee = "${emails[0]}"`;
+    } else if (emails.length > 1) {
+      jql += ` AND assignee in (${emails.map((e) => `"${e}"`).join(', ')})`;
     }
     if (sprint === 'current') {
       jql += ' AND sprint in openSprints()';

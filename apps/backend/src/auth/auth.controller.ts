@@ -1,13 +1,17 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
   BadRequestException,
+  ConflictException,
+  NotFoundException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from './auth.guard.js';
@@ -122,5 +126,35 @@ export class AuthController {
       throw new BadRequestException('code query parameter is required');
     }
     return this.cliAuthService.checkStatus(code);
+  }
+
+  // --- Email aliases ---
+
+  @Get('emails')
+  @UseGuards(JwtAuthGuard)
+  async getEmails(@CurrentUser() user: RequestUser) {
+    return this.authService.getEmailsForUser(user.userId);
+  }
+
+  @Post('emails')
+  @UseGuards(JwtAuthGuard)
+  async addEmail(@CurrentUser() user: RequestUser, @Body() dto: { email: string }) {
+    if (!dto.email) throw new BadRequestException('email is required');
+    try {
+      return await this.authService.addEmailAlias(user.userId, dto.email);
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23505') {
+        throw new ConflictException('This email is already in use');
+      }
+      throw err;
+    }
+  }
+
+  @Delete('emails/:emailId')
+  @UseGuards(JwtAuthGuard)
+  async removeEmail(@CurrentUser() user: RequestUser, @Param('emailId') emailId: string) {
+    const deleted = await this.authService.removeEmailAlias(user.userId, emailId);
+    if (!deleted) throw new NotFoundException('Email alias not found or cannot delete primary email');
+    return { success: true };
   }
 }

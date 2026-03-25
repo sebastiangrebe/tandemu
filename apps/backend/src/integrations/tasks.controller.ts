@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { TasksService } from './tasks.service.js';
 import { TeamsService } from '../teams/teams.service.js';
+import { AuthService } from '../auth/auth.service.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
@@ -31,6 +32,7 @@ export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
     private readonly teamsService: TeamsService,
+    private readonly authService: AuthService,
   ) {}
 
   @Get()
@@ -45,9 +47,16 @@ export class TasksController {
     @Query('order') order?: 'asc' | 'desc',
     @Query('excludeDone') excludeDone?: string,
   ): Promise<Task[]> {
+    // When fetching "my" tasks, use all email aliases for matching
+    let assigneeEmails: string[] | undefined;
+    if (mine === 'true') {
+      assigneeEmails = await this.authService.getAllEmailAddresses(user.userId);
+    }
+
     const tasks = await this.tasksService.getTasks(user.organizationId, {
       teamId,
       assigneeEmail: mine === 'true' ? user.email : undefined,
+      assigneeEmails,
       sprint: sprint ?? 'current',
       excludeDone: excludeDone === 'true',
     });
