@@ -205,30 +205,43 @@ PYEOF
 
 #### 5c. MCP memory config (~/.mcp.json)
 
+Fetch the memory config from the API (returns the correct URL for both self-hosted OpenMemory and Mem0 Cloud):
+
+```bash
+MEM_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/memory/config")
+MEM_TYPE=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
+MEM_URL=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
+```
+
+If the API returns a config, write it to `~/.mcp.json`:
+
 ```bash
 python3 << 'PYEOF'
 import json, os
 mcp_file = os.path.expanduser("~/.mcp.json")
+mem_type = os.environ.get("MEM_TYPE", "")
+mem_url = os.environ.get("MEM_URL", "")
+if not mem_url:
+    print("SKIP: no memory config from API")
+    exit(0)
 try:
     with open(mcp_file) as f:
         config = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     config = {}
-
 servers = config.get("mcpServers", {})
-mem0_url = f"http://{os.environ.get('OTEL_HOST', 'localhost')}:8765"
-user_id = os.environ.get("USER_ID", "")
 servers["tandemu-memory"] = {
     "type": "sse",
-    "url": f"{mem0_url}/mcp/tandemu/sse/{user_id}"
+    "url": mem_url
 }
 config["mcpServers"] = servers
-
 with open(mcp_file, "w") as f:
     json.dump(config, f, indent=2)
 print("OK")
 PYEOF
 ```
+
+If the API doesn't return a memory config, skip this step and tell the developer that memory is not configured for this instance.
 
 Also migrate legacy config if it exists:
 ```bash
