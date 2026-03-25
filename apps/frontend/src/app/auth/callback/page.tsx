@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { getMe, getOrganizations } from '@/lib/api';
+import { LoadingScreen } from '@/components/loading-screen';
 
 function CallbackHandler() {
   const searchParams = useSearchParams();
@@ -43,25 +44,12 @@ function CallbackHandler() {
       });
   }, [searchParams]);
 
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        <p className="text-sm text-muted-foreground">Signing you in...</p>
-      </div>
-    </div>
-  );
+  return <LoadingScreen />;
 }
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-screen items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingScreen />}>
       <CallbackHandler />
     </Suspense>
   );
