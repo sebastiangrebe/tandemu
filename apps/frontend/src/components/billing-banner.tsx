@@ -15,12 +15,14 @@ export function BillingBanner() {
   const isFree = currentOrg?.planTier === 'FREE';
   const storageKey = currentOrg ? `tandemu_billing_dismissed_${currentOrg.id}` : '';
 
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === 'undefined' || !storageKey) return true;
-    return localStorage.getItem(storageKey) === 'true';
-  });
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!billingEnabled || !isFree || dismissed || !currentOrg) return null;
+  // Re-evaluate dismissal when currentOrg becomes available
+  const isDismissed = dismissed || (
+    typeof window !== 'undefined' && !!storageKey && localStorage.getItem(storageKey) === 'true'
+  );
+
+  if (!billingEnabled || !isFree || isDismissed || !currentOrg) return null;
 
   const handleUpgrade = async () => {
     setLoading(true);
