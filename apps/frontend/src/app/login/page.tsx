@@ -104,7 +104,12 @@ export default function LoginPage() {
                           variant="outline"
                           className="w-full"
                           type="button"
-                          onClick={() => { window.location.href = `${API_URL}/api/auth/google`; }}
+                          onClick={() => {
+                            const params = new URLSearchParams(window.location.search);
+                            const redirect = params.get('redirect');
+                            if (redirect) localStorage.setItem('tandemu_auth_redirect', redirect);
+                            window.location.href = `${API_URL}/api/auth/google`;
+                          }}
                         >
                           <SiGoogle className="mr-2 h-4 w-4" />
                           Continue with Google
@@ -115,7 +120,12 @@ export default function LoginPage() {
                           variant="outline"
                           className="w-full"
                           type="button"
-                          onClick={() => { window.location.href = `${API_URL}/api/auth/github`; }}
+                          onClick={() => {
+                            const params = new URLSearchParams(window.location.search);
+                            const redirect = params.get('redirect');
+                            if (redirect) localStorage.setItem('tandemu_auth_redirect', redirect);
+                            window.location.href = `${API_URL}/api/auth/github`;
+                          }}
                         >
                           <SiGithub className="mr-2 h-4 w-4" />
                           Continue with GitHub

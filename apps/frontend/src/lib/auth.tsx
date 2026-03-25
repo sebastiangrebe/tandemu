@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!storedToken) {
       setIsLoading(false);
       if (!PUBLIC_PATHS.includes(pathname)) {
-        router.push('/login');
+        router.push(`/login?redirect=${encodeURIComponent(pathname + window.location.search)}`);
       }
       return;
     }
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         clearAuth();
         if (!PUBLIC_PATHS.includes(pathname)) {
-          router.push('/login');
+          router.push(`/login?redirect=${encodeURIComponent(pathname + window.location.search)}`);
         }
       })
       .finally(() => {
@@ -112,7 +112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/setup');
     } else {
       const params = new URLSearchParams(window.location.search);
-      const redirect = params.get('redirect');
+      const redirect = params.get('redirect') || localStorage.getItem('tandemu_auth_redirect');
+      localStorage.removeItem('tandemu_auth_redirect');
       router.push(redirect || '/');
     }
   };

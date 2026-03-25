@@ -28,10 +28,12 @@ function CallbackHandler() {
     // Check if user has orgs to decide where to redirect
     Promise.all([getMe(), getOrganizations()])
       .then(([, orgs]) => {
+        const redirect = localStorage.getItem('tandemu_auth_redirect');
+        localStorage.removeItem('tandemu_auth_redirect');
         if (orgs.length === 0) {
           window.location.replace('/setup');
         } else {
-          window.location.replace('/');
+          window.location.replace(redirect || '/');
         }
       })
       .catch(() => {
