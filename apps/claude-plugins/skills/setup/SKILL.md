@@ -334,6 +334,9 @@ API: <API_URL>
 Telemetry: enabled
 Memory: enabled
 
+⚠️  Please restart Claude Code to activate the memory server.
+   Type /exit, then reopen claude.
+
 Available skills:
   /morning   — Pick a task and start working
   /finish    — Complete task, measure work, send telemetry
@@ -341,9 +344,7 @@ Available skills:
   /standup   — Generate a team standup report
   /blockers  — See what's slowing the team down
 
-Get started:
-  $ cd your-project
-  $ claude
+After restarting, get started with:
   > /morning
 ```
 
