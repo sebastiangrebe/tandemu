@@ -512,50 +512,24 @@ PYEOF
 # ─────────────────────────────────────────────────────────
 
 install_assets() {
-  mkdir -p "$SKILLS_DIR"
-
-  step "Installing skills..."
+  step "Installing shared config loader..."
 
   local skills_src=""
 
-  if [ -d "${SCRIPT_DIR}/apps/claude-plugins/skills" ]; then
+  if [ -d "${SCRIPT_DIR}/apps/claude-plugins/lib" ]; then
     skills_src="${SCRIPT_DIR}/apps/claude-plugins"
   else
-    # TODO: download from GitHub releases
-    # curl -fsSL "https://github.com/sebastiangrebe/tandemu/releases/latest/download/claude-plugins.tar.gz" | tar -xz -C /tmp
-    # skills_src="/tmp/claude-plugins"
-    fail "Release download not yet implemented. Run install.sh from the Tandemu repo directory."
+    fail "Run install.sh from the Tandemu repo directory."
   fi
 
-  # Install shared lib
-  if [ -d "$skills_src/lib" ]; then
-    mkdir -p "$CLAUDE_DIR/lib"
-    cp -r "$skills_src/lib"/* "$CLAUDE_DIR/lib/"
-  fi
+  # Install shared lib (skills source it for config)
+  mkdir -p "$CLAUDE_DIR/lib"
+  cp -r "$skills_src/lib"/* "$CLAUDE_DIR/lib/"
+  ok "Config loader installed"
 
-  # Install skills (skip setup — it's the plugin entry point, not needed locally)
-  for skill_dir in "$skills_src/skills"/*/; do
-    local skill_name
-    skill_name=$(basename "$skill_dir")
-    [ "$skill_name" = "setup" ] && continue
-    rm -rf "$SKILLS_DIR/$skill_name"
-    cp -r "$skill_dir" "$SKILLS_DIR/$skill_name"
-  done
-
-  # Copy CLAUDE.md
-  if [ -f "$skills_src/CLAUDE.md" ]; then
-    cp "$skills_src/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-    ok "CLAUDE.md installed (personality + memory)"
-  fi
-
-  # Write version
-  local version
-  version=$(get_plugin_version)
-  echo "$version" > "$VERSION_FILE"
-
-  local count
-  count=$(ls -1d "$SKILLS_DIR"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-  ok "$count skills installed (v${version})"
+  # Skills are distributed via the plugin marketplace — no need to copy them.
+  # Users install via: /plugin marketplace add sebastiangrebe/tandemu && /plugin install tandemu
+  ok "Skills available via plugin marketplace"
 }
 
 # ─────────────────────────────────────────────────────────

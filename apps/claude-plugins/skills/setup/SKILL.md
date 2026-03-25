@@ -270,57 +270,27 @@ except (FileNotFoundError, json.JSONDecodeError):
 PYEOF
 ```
 
-### 6. Install short-named skills
+### 6. Install shared lib
 
-Copy skills from the plugin directory to `~/.claude/skills/` for short invocation names.
-
-The plugin root is available at `${CLAUDE_PLUGIN_ROOT}` if running as a plugin skill. If not available, detect the repo directory:
+Copy the shared config loader so skills can source it:
 
 ```bash
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 if [ -z "$PLUGIN_ROOT" ]; then
-  # Fallback: find the tandemu repo
   REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
-  if [ -d "$REPO_ROOT/apps/claude-plugins/skills" ]; then
+  if [ -d "$REPO_ROOT/apps/claude-plugins/lib" ]; then
     PLUGIN_ROOT="$REPO_ROOT/apps/claude-plugins"
   fi
 fi
 
-if [ -z "$PLUGIN_ROOT" ] || [ ! -d "$PLUGIN_ROOT/skills" ]; then
-  echo "WARN: Could not find plugin skills directory. Short-named skills not installed."
-  echo "You can still use /tandemu:morning, /tandemu:finish, etc."
-else
-  mkdir -p ~/.claude/skills ~/.claude/lib
-  # Copy shared lib
-  [ -d "$PLUGIN_ROOT/lib" ] && cp -r "$PLUGIN_ROOT/lib"/* ~/.claude/lib/
-  # Copy skills (skip setup — it's only needed once)
-  for skill_dir in "$PLUGIN_ROOT/skills"/*/; do
-    skill_name=$(basename "$skill_dir")
-    [ "$skill_name" = "setup" ] && continue
-    rm -rf ~/.claude/skills/$skill_name
-    cp -r "$skill_dir" ~/.claude/skills/$skill_name
-  done
+if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
+  mkdir -p ~/.claude/lib
+  cp -r "$PLUGIN_ROOT/lib"/* ~/.claude/lib/
   echo "OK"
 fi
 ```
 
-### 7. Write version file
-
-```bash
-VERSION=$(cat "${PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('version','unknown'))" 2>/dev/null || echo "unknown")
-echo "$VERSION" > ~/.claude/tandemu-version.txt
-```
-
-### 8. Copy CLAUDE.md
-
-```bash
-if [ -f "$PLUGIN_ROOT/CLAUDE.md" ]; then
-  cp "$PLUGIN_ROOT/CLAUDE.md" ~/.claude/CLAUDE.md
-  echo "OK"
-fi
-```
-
-### 9. Show summary
+### 7. Show summary
 
 Tell the developer:
 
@@ -353,5 +323,5 @@ After restarting, get started with:
 - This skill is idempotent — safe to re-run for re-authentication or updates
 - The OAuth poll loop runs in bash, not interactively — the developer authorizes in their browser
 - Settings.json is merged, not overwritten — other settings are preserved
-- Short-named skills are copies, not symlinks — they work independently of the plugin
+- Skills are distributed via the plugin — no standalone copies needed
 - Legacy `~/.claude.json` MCP config is migrated to `~/.mcp.json` automatically
