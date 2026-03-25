@@ -196,12 +196,22 @@ export class ClickUpProvider implements TaskProvider {
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {
     const { accessToken, externalWorkspaceId } = params;
-    if (!externalWorkspaceId) {
-      throw new BadGatewayException('ClickUp integration requires externalWorkspaceId (team ID)');
+
+    // Auto-fetch workspace ID if not provided
+    let workspaceId = externalWorkspaceId;
+    if (!workspaceId) {
+      const teamsData = await clickupFetch<{ teams: Array<{ id: string; name: string }> }>(
+        `${CLICKUP_API}/team`,
+        accessToken,
+      );
+      if (teamsData.teams.length === 0) {
+        throw new BadGatewayException('No ClickUp workspaces found for this token');
+      }
+      workspaceId = teamsData.teams[0]!.id;
     }
 
     const spacesData = await clickupFetch<{ spaces: Array<{ id: string; name: string }> }>(
-      `${CLICKUP_API}/team/${externalWorkspaceId}/space?archived=false`,
+      `${CLICKUP_API}/team/${workspaceId}/space?archived=false`,
       accessToken,
     );
 
