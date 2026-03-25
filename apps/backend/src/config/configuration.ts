@@ -16,6 +16,11 @@ export interface AppConfig {
   jwt: {
     secret: string;
   };
+  memory: {
+    mem0ApiKey: string;
+    openmemoryHost: string;
+    openmemoryPort: number;
+  };
   oauth: {
     appUrl: string;
     frontendUrl: string;
@@ -55,6 +60,11 @@ export default (): AppConfig => {
     },
     jwt: {
       secret: process.env['JWT_SECRET'] ?? 'change-me-in-production',
+    },
+    memory: {
+      mem0ApiKey: process.env['MEM0_API_KEY'] ?? '',
+      openmemoryHost: process.env['OPENMEMORY_HOST'] ?? 'localhost',
+      openmemoryPort: parseInt(process.env['OPENMEMORY_PORT'] ?? '8765', 10),
     },
     oauth: {
       appUrl: process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3001'}`,

@@ -1,32 +1,179 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  Logger,
+  BadGatewayException,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
+import { MemoryService } from './memory.service.js';
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard)
 export class MemoryController {
-  constructor(private readonly configService: ConfigService) {}
+  private readonly logger = new Logger(MemoryController.name);
+
+  constructor(private readonly memoryService: MemoryService) {}
 
   @Get('config')
-  getConfig(@CurrentUser() user: RequestUser): { type: string; url: string } {
-    const mem0ApiKey = this.configService.get<string>('MEM0_API_KEY', '');
+  getConfig(@Req() req: Request): { type: string; url: string } {
+    const proto = req.headers['x-forwarded-proto'] ?? req.protocol;
+    const host = req.headers['x-forwarded-host'] ?? req.get('host');
+    const baseUrl = `${proto}://${host}`;
+    return {
+      type: 'proxy',
+      url: `${baseUrl}/api/memory/sse`,
+    };
+  }
 
-    if (mem0ApiKey) {
-      // SAAS mode: Mem0 Cloud
-      return {
-        type: 'mem0-cloud',
-        url: `https://api.mem0.ai/v1/mcp/${user.userId}`,
-      };
+  @Get('sse')
+  async proxySse(
+    @CurrentUser() user: RequestUser,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
+    const upstreamHeaders = this.memoryService.getUpstreamHeaders();
+
+    // Derive the backend's own base URL for rewriting endpoint events
+    const proto = req.headers['x-forwarded-proto'] ?? req.protocol;
+    const host = req.headers['x-forwarded-host'] ?? req.get('host');
+    const backendBaseUrl = `${proto}://${host}/api/memory`;
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    let upstreamResponse: globalThis.Response;
+    try {
+      upstreamResponse = await fetch(upstreamUrl, {
+        headers: upstreamHeaders,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to connect to upstream MCP: ${err}`);
+      res.write(`event: error\ndata: {"error":"Failed to connect to memory server"}\n\n`);
+      res.end();
+      return;
     }
 
-    // OSS mode: local OpenMemory
-    const host = this.configService.get<string>('OPENMEMORY_HOST', 'localhost');
-    const port = this.configService.get<string>('OPENMEMORY_PORT', '8765');
-    return {
-      type: 'sse',
-      url: `http://${host}:${port}/mcp/tandemu/sse/${user.userId}`,
+    if (!upstreamResponse.ok || !upstreamResponse.body) {
+      this.logger.error(`Upstream MCP returned ${upstreamResponse.status}`);
+      res.write(`event: error\ndata: {"error":"Memory server returned ${upstreamResponse.status}"}\n\n`);
+      res.end();
+      return;
+    }
+
+    const reader = upstreamResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // Clean up on client disconnect
+    const cleanup = () => {
+      reader.cancel().catch(() => {});
     };
+    req.on('close', cleanup);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages (delimited by \n\n)
+        let delimiterIndex: number;
+        while ((delimiterIndex = buffer.indexOf('\n\n')) !== -1) {
+          const message = buffer.slice(0, delimiterIndex + 2);
+          buffer = buffer.slice(delimiterIndex + 2);
+
+          // Check if this is an endpoint event that needs URL rewriting
+          if (message.includes('event: endpoint') || message.includes('event:endpoint')) {
+            const rewritten = this.rewriteEndpointEvent(message, backendBaseUrl);
+            res.write(rewritten);
+          } else {
+            res.write(message);
+          }
+        }
+      }
+    } catch (err) {
+      // Client disconnected or upstream closed — this is normal for SSE
+      if ((err as { name?: string }).name !== 'AbortError') {
+        this.logger.warn(`SSE proxy stream ended: ${err}`);
+      }
+    } finally {
+      req.off('close', cleanup);
+      res.end();
+    }
+  }
+
+  @Post('messages')
+  async proxyMessage(
+    @CurrentUser() user: RequestUser,
+    @Query('sessionId') sessionId: string,
+    @Body() body: unknown,
+  ): Promise<unknown> {
+    // Look up the upstream message URL from the session
+    // The upstream endpoint URL was captured during SSE connection
+    const upstreamBaseUrl = this.memoryService.getUpstreamSseUrl(user.userId);
+    // Derive the messages endpoint from the SSE URL (replace /sse with /messages)
+    const baseUrl = upstreamBaseUrl.replace(/\/sse(\/.*)?$/, '');
+    const upstreamUrl = `${baseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
+
+    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
+
+    const response = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers: upstreamHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+    return { success: true };
+  }
+
+  /**
+   * Rewrite the endpoint URL in an SSE endpoint event to point to our proxy.
+   * Upstream sends: event: endpoint\ndata: https://mcp.mem0.ai/mcp/messages?sessionId=xxx
+   * We rewrite to: event: endpoint\ndata: https://api.tandemu.dev/api/memory/messages?sessionId=xxx
+   */
+  private rewriteEndpointEvent(message: string, backendBaseUrl: string): string {
+    const lines = message.split('\n');
+    const rewritten = lines.map((line) => {
+      if (line.startsWith('data:')) {
+        const url = line.slice(5).trim();
+        // Extract sessionId from the upstream URL
+        try {
+          const parsed = new URL(url);
+          const sessionId = parsed.searchParams.get('sessionId') ?? '';
+          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
+        } catch {
+          // If URL parsing fails, try regex extraction
+          const sessionMatch = url.match(/sessionId=([^&\s]+)/);
+          const sessionId = sessionMatch?.[1] ?? '';
+          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
+        }
+      }
+      return line;
+    });
+    return rewritten.join('\n');
   }
 }
