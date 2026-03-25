@@ -239,7 +239,7 @@ choose_instance() {
   printf '%b\n' "  ${BOLD}Which Tandemu instance do you want to connect to?${NC}"
   echo ""
   printf '%b\n' "    ${BOLD}1.${NC} Tandemu Cloud ${DIM}(Recommended)${NC}"
-  dim "      Hosted at https://app.tandemu.dev"
+  dim "      Hosted at https://api.tandemu.dev"
   echo ""
   printf '%b\n' "    ${BOLD}2.${NC} Self-hosted instance"
   dim "      You'll provide the URL"
@@ -248,7 +248,7 @@ choose_instance() {
   read -rp "  Choose (1 or 2): " choice
   case "$choice" in
     1)
-      API_URL="https://app.tandemu.dev"
+      API_URL="https://api.tandemu.dev"
       ;;
     2)
       echo ""
@@ -256,7 +256,7 @@ choose_instance() {
       API_URL="${API_URL%/}"
       ;;
     *)
-      API_URL="https://app.tandemu.dev"
+      API_URL="https://api.tandemu.dev"
       ;;
   esac
 

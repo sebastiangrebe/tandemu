@@ -19,10 +19,10 @@ Use AskUserQuestion:
 - Question: "Which Tandemu instance do you want to connect to?"
 - Header: "Instance"
 - Options:
-  - Label: "Tandemu Cloud", Description: "Hosted at https://app.tandemu.dev (Recommended)"
+  - Label: "Tandemu Cloud", Description: "Hosted at https://api.tandemu.dev (Recommended)"
   - Label: "Self-hosted", Description: "You'll provide the URL"
 
-If **Tandemu Cloud**: set `API_URL=https://app.tandemu.dev`
+If **Tandemu Cloud**: set `API_URL=https://api.tandemu.dev`
 If **Self-hosted**: ask for the URL, strip trailing slash.
 
 Verify the instance is reachable:
