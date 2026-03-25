@@ -22,7 +22,7 @@ Help the developer start their work session by picking a task.
 
 Before anything else, search memories for the developer's personal context — their name, what they were working on recently, any preferences. Use this to greet them personally.
 
-If you know their name: "Morning, Sebastian. Let me pull up your tasks."
+If you know their name (from `~/.claude/tandemu.json` under `user.name`): "Morning, {{DEV_NAME}}. Let me pull up your tasks."
 If you don't know their name yet: "Good morning! Let me get your tasks."
 
 If you remember what they worked on recently, mention it: "Last time you were working on the invoice module — want to continue or pick something new?"

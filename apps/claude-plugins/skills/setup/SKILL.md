@@ -290,7 +290,18 @@ if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
 fi
 ```
 
-### 7. Show summary
+### 7. Write personal CLAUDE.md
+
+Write a `~/.claude/CLAUDE.md` that tells Claude the developer's actual name. The plugin's CLAUDE.md uses `{{DEV_NAME}}` as a placeholder — this file provides the real value:
+
+```bash
+cat > ~/.claude/CLAUDE.md << EOF
+# Developer Context
+The developer's name is ${USER_NAME}. Use it naturally in conversation.
+EOF
+```
+
+### 8. Show summary
 
 Tell the developer:
 
