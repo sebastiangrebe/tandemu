@@ -34,7 +34,7 @@ export class CliAuthService implements OnModuleDestroy {
 
   constructor(private readonly configService: ConfigService) {
     this.frontendUrl = this.configService.get<string>(
-      'frontend.url',
+      'oauth.frontendUrl',
       'http://localhost:3000',
     );
     this.cleanupTimer = setInterval(() => this.cleanupExpired(), CLEANUP_INTERVAL_MS);
