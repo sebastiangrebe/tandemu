@@ -426,7 +426,12 @@ PYEOF
   step "Configuring memory server..."
   MEM0_URL="http://${OTEL_HOST}:8765"
 
-  python3 << PYEOF
+  MEM_CONFIG=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null)
+  if [ -n "$MEM_CONFIG" ]; then
+    MEM_TYPE=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
+    MEM_URL=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
+
+    python3 << PYEOF
 import json, os
 mcp_file = os.path.expanduser("~/.mcp.json")
 try:
@@ -436,8 +441,8 @@ except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
 servers["tandemu-memory"] = {
-    "type": "sse",
-    "url": "${MEM0_URL}/mcp/tandemu/sse/${USER_ID}"
+    "type": "${MEM_TYPE}",
+    "url": "${MEM_URL}"
 }
 config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
@@ -469,7 +474,7 @@ PYEOF
   if curl -sf -m 5 "${MEM0_URL}/api/v1/config/" >/dev/null 2>&1; then
     ok "Memory server: reachable"
   else
-    warn "Memory server not reachable at ${MEM0_URL} — make sure the OpenMemory and Qdrant containers are running (docker compose up -d)"
+    warn "Could not fetch memory config from ${API_URL}/api/memory/config — memory server not configured"
   fi
 }
 

@@ -68,8 +68,6 @@ services:
       CLICKHOUSE_URL: http://clickhouse:8123
       CORS_ORIGIN: http://localhost:3000
       JWT_SECRET: dev-secret-change-me
-      STRIPE_SECRET_KEY: ""
-      STRIPE_WEBHOOK_SECRET: ""
       APP_URL: http://localhost:3001
       FRONTEND_URL: http://localhost:3000
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
