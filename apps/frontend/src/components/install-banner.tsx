@@ -15,6 +15,10 @@ export function InstallBanner() {
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
             <span className="text-background/50">&gt;</span>
+            <span>/plugin install tandemu</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+            <span className="text-background/50">&gt;</span>
             <span>/tandemu:setup</span>
           </div>
         </div>

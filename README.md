@@ -75,6 +75,7 @@ pnpm build
 ```bash
 # In Claude Code:
 > /plugin marketplace add sebastiangrebe/tandemu
+> /plugin install tandemu
 > /tandemu:setup
 ```
 

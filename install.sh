@@ -4,7 +4,7 @@ set -euo pipefail
 # ─────────────────────────────────────────────────────────
 #  Tandemu Installer (Developer)
 #  Usage: ./install.sh
-#  Alternative: In Claude Code, run /plugin marketplace add sebastiangrebe/tandemu && /tandemu:setup
+#  Alternative: In Claude Code, run /plugin marketplace add sebastiangrebe/tandemu, then /plugin install tandemu, then /tandemu:setup
 #
 #  Installs Claude Code skills, configures telemetry,
 #  and sets up memory for your Tandemu instance.

@@ -25,7 +25,7 @@ tandemu/
 ## Key Decisions
 
 ### Developer setup
-Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
+Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/plugin install tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
 
 ### Single active task enforcement
 `~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
