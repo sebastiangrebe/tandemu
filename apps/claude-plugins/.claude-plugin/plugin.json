@@ -8,6 +8,5 @@
   },
   "repository": "https://github.com/sebastiangrebe/tandemu",
   "license": "MIT",
-  "keywords": ["task-management", "telemetry", "memory", "ai-teammate", "developer-tools"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": ["task-management", "telemetry", "memory", "ai-teammate", "developer-tools"]
 }

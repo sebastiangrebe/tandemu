@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "tandemu-memory": {
-      "type": "sse",
-      "url": "http://localhost:8765/mcp/tandemu/sse/${TANDEMU_USER_ID}"
-    }
-  }
-}
