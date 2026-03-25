@@ -1,0 +1,22 @@
+{
+  "name": "tandemu",
+  "owner": {
+    "name": "Tandemu",
+    "email": "hello@tandemu.dev"
+  },
+  "metadata": {
+    "description": "AI Teammate plugin for Claude Code",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "tandemu",
+      "source": "./apps/claude-plugins",
+      "description": "AI Teammate — task lifecycle, telemetry, and persistent memory",
+      "version": "1.0.0",
+      "author": {
+        "name": "Tandemu"
+      }
+    }
+  ]
+}

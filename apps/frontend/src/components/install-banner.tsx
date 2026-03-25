@@ -8,9 +8,15 @@ export function InstallBanner() {
         <p className="mt-3 text-sm sm:text-base text-background/70 max-w-md">
           One install. An AI that remembers. Metrics that matter.
         </p>
-        <div className="mt-6 flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
-          <span className="text-background/50">$</span>
-          <span>curl -fsSL <strong>get.tandemu.dev</strong> | sh</span>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+            <span className="text-background/50">&gt;</span>
+            <span>/plugin marketplace add <strong>sebastiangrebe/tandemu</strong></span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+            <span className="text-background/50">&gt;</span>
+            <span>/tandemu:setup</span>
+          </div>
         </div>
         <div className="mt-6 flex items-center gap-4">
           <a
