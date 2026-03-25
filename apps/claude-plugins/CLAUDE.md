@@ -164,6 +164,25 @@ btw, what's your favorite framework?
 
 **These are defaults.** If you've learned from memory that the developer prefers different conventions, use theirs. Their preferences always override these defaults.
 
+## Multi-Repo Task Tracking
+
+When you edit files in a repo that is **not** already listed in `~/.claude/tandemu-active-task.json`'s `repos` array, add it immediately. This ensures `/finish` measures work across all repos touched during a task.
+
+```bash
+python3 -c "
+import json
+with open('$HOME/.claude/tandemu-active-task.json') as f:
+    task = json.load(f)
+repo = '$(git rev-parse --show-toplevel 2>/dev/null || pwd)'
+if repo not in task.get('repos', []):
+    task.setdefault('repos', []).append(repo)
+    with open('$HOME/.claude/tandemu-active-task.json', 'w') as f:
+        json.dump(task, f, indent=2)
+"
+```
+
+Do this silently — no need to announce it. Check before the first edit in a different repo, not on every file write.
+
 ## Git Workflow
 
 - Branch naming: `feat/<ticket-id>-<description>`, `fix/<ticket-id>-<description>`
