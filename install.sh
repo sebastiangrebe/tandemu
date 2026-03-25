@@ -448,7 +448,10 @@ config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
     json.dump(config, f, indent=2)
 PYEOF
-  ok "Memory: enabled (→ ${MEM0_URL})"
+    ok "Memory: enabled (→ ${MEM_URL})"
+  else
+    warn "Could not fetch memory config from ${API_URL}/api/memory/config — memory server not configured"
+  fi
 
   # Migrate legacy ~/.claude.json config
   python3 << 'PYEOF'
@@ -469,13 +472,6 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     pass
 PYEOF
-
-  # Verify memory server is reachable
-  if curl -sf -m 5 "${MEM0_URL}/api/v1/config/" >/dev/null 2>&1; then
-    ok "Memory server: reachable"
-  else
-    warn "Could not fetch memory config from ${API_URL}/api/memory/config — memory server not configured"
-  fi
 }
 
 # ─────────────────────────────────────────────────────────

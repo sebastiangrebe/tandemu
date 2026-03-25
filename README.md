@@ -81,6 +81,7 @@ pnpm build
 The setup skill handles authentication, configuration, and installs short-named skills (`/morning`, `/finish`, etc.) for daily use.
 
 ### Option B: Install script
+
 Run the install script to configure Claude Code with Tandemu skills and memory:
 
 ```bash
