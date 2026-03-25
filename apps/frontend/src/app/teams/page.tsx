@@ -23,13 +23,13 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { updateTeam } from '@/lib/api';
 import {
-  getOrganizations,
   getTeams,
   getTeamMembers,
   removeTeamMember,
   getMembers,
   getInvites,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Team, TeamMember, Membership, Organization, Invite } from '@tandemu/types';
 
 interface TeamWithMembers extends Team {
@@ -39,6 +39,7 @@ interface TeamWithMembers extends Team {
 }
 
 export default function TeamsPage() {
+  const { currentOrg: authOrg } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [teams, setTeams] = useState<TeamWithMembers[]>([]);
   const [orgMembers, setOrgMembers] = useState<Membership[]>([]);
@@ -91,16 +92,13 @@ export default function TeamsPage() {
   }, []);
 
   useEffect(() => {
-    getOrganizations()
-      .then((orgs) => {
-        if (orgs.length > 0) {
-          setOrg(orgs[0]);
-          return loadTeams(orgs[0].id);
-        }
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
-      .finally(() => setLoading(false));
-  }, [loadTeams]);
+    if (authOrg) {
+      setOrg(authOrg);
+      loadTeams(authOrg.id)
+        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
+        .finally(() => setLoading(false));
+    }
+  }, [authOrg, loadTeams]);
 
   const handleSelectTeam = async (team: TeamWithMembers) => {
     if (!org) return;

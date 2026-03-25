@@ -12,7 +12,6 @@ import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
 import {
-  getOrganizations,
   updateOrganization,
   getMembers,
   getInvites,
@@ -21,6 +20,7 @@ import {
   createCheckout,
   createBillingPortal,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
 function generateSlug(name: string): string {
@@ -44,6 +44,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function SettingsPage() {
+  const { currentOrg: authOrg } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -60,20 +61,16 @@ export default function SettingsPage() {
   // Invite dialog
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (activeOrg: Organization) => {
     try {
-      const orgs = await getOrganizations();
-      if (orgs.length === 0) return;
-
-      const currentOrg = orgs[0];
-      setOrg(currentOrg);
-      setEditOrgName(currentOrg.name);
-      setEditOrgSlug(currentOrg.slug);
+      setOrg(activeOrg);
+      setEditOrgName(activeOrg.name);
+      setEditOrgSlug(activeOrg.slug);
 
       const [memberList, invites, teamList] = await Promise.all([
-        getMembers(currentOrg.id),
-        getInvites(currentOrg.id),
-        getTeams(currentOrg.id),
+        getMembers(activeOrg.id),
+        getInvites(activeOrg.id),
+        getTeams(activeOrg.id),
       ]);
 
       setMembers(memberList);
@@ -85,8 +82,10 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    loadData().finally(() => setLoading(false));
-  }, [loadData]);
+    if (authOrg) {
+      loadData(authOrg).finally(() => setLoading(false));
+    }
+  }, [authOrg, loadData]);
 
   const handleSaveOrg = async () => {
     if (!org) return;

@@ -45,9 +45,9 @@ import {
   getProjectMappings,
   createProjectMapping,
   deleteProjectMapping,
-  getOrganizations,
   getTeams,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Integration, IntegrationProjectMapping } from '@/lib/api';
 import type { Team } from '@tandemu/types';
 
@@ -132,6 +132,7 @@ function getProviderMeta(providerId: string) {
 }
 
 export default function IntegrationsPage() {
+  const { currentOrg: authOrg } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -168,20 +169,17 @@ export default function IntegrationsPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [integrationsData, orgs] = await Promise.all([
-        getIntegrations(),
-        getOrganizations(),
-      ]);
+      const integrationsData = await getIntegrations();
       setIntegrations(integrationsData);
-      if (orgs.length > 0) {
-        setOrgId(orgs[0].id);
-        const teamList = await getTeams(orgs[0].id);
+      if (authOrg) {
+        setOrgId(authOrg.id);
+        const teamList = await getTeams(authOrg.id);
         setTeams(teamList);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load integrations');
     }
-  }, []);
+  }, [authOrg]);
 
   useEffect(() => {
     loadData().finally(() => setLoading(false));

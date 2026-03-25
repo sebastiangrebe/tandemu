@@ -1,22 +1,20 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Injectable, NestMiddleware, ForbiddenException } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import type { RequestUser } from '../../auth/auth.decorator.js';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
   async use(
-    req: Request & { user?: RequestUser },
+    req: Request & { user?: RequestUser; params: Record<string, string> },
     _res: Response,
     next: NextFunction,
   ): Promise<void> {
-    const organizationId = req.user?.organizationId;
+    const jwtOrgId = req.user?.organizationId;
+    const paramOrgId = req.params?.orgId;
 
-    if (organizationId) {
-      // TODO: Execute on the active DB connection from @tandemu/database:
-      //   await db.execute(sql`SET LOCAL app.current_tenant = ${organizationId}`);
-      // This enables PostgreSQL row-level security policies to scope
-      // all subsequent queries in this transaction to the tenant.
-      void organizationId;
+    // If both JWT org and URL org param exist, they must match
+    if (jwtOrgId && paramOrgId && jwtOrgId !== paramOrgId) {
+      throw new ForbiddenException('Organization mismatch: you do not have access to this organization');
     }
 
     next();
