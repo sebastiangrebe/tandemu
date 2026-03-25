@@ -22,6 +22,8 @@ export function BillingBanner() {
     typeof window !== 'undefined' && !!storageKey && localStorage.getItem(storageKey) === 'true'
   );
 
+  console.log('[BillingBanner]', { billingEnabled, isFree, isDismissed, planTier: currentOrg?.planTier, orgId: currentOrg?.id });
+
   if (!billingEnabled || !isFree || isDismissed || !currentOrg) return null;
 
   const handleUpgrade = async () => {
