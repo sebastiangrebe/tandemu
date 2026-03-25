@@ -87,16 +87,36 @@ ORGS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations"
 echo "$ORGS" | python3 -c "
 import json, sys
 orgs = json.load(sys.stdin)['data']
-if orgs:
-    print(f\"ORG_ID={orgs[0]['id']}\")
-    print(f\"ORG_NAME={orgs[0]['name']}\")
-else:
-    print('ORG_ID=')
-    print('ORG_NAME=')
+for i, org in enumerate(orgs):
+    print(f\"ORG_{i}_ID={org['id']}\")
+    print(f\"ORG_{i}_NAME={org['name']}\")
+print(f\"ORG_COUNT={len(orgs)}\")
 "
 ```
 
-If an org exists, fetch its teams:
+If there are **multiple organizations**, use AskUserQuestion to let the user pick:
+- Question: "Which organization do you want to connect?"
+- Header: "Organization"
+- Options: build dynamically from the org list (max 4). Each option:
+  - Label: the org name
+  - Description: the org ID
+
+After the user picks an org, switch the token to that org:
+```bash
+SWITCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"organizationId": "'"$CHOSEN_ORG_ID"'"}')
+NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])")
+TOKEN="$NEW_TOKEN"
+```
+
+Use the new `$TOKEN` for all subsequent API calls (team fetch, config writing).
+
+If there is **one organization**, use it directly (no prompt needed).
+If there are **zero organizations**, tell the developer to create one on the dashboard and stop.
+
+Fetch teams for the chosen org:
 ```bash
 TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams")
 echo "$TEAMS" | python3 -c "

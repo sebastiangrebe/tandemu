@@ -4,14 +4,12 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
-import { authorizeCli, getOrganizations } from '@/lib/api';
+import { authorizeCli } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Terminal, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
-import type { Organization } from '@tandemu/types';
-
 type PageStatus = 'prompt' | 'authorizing' | 'success' | 'denied' | 'error';
 
 export default function CliAuthPage() {
@@ -35,7 +33,6 @@ function CliAuthContent() {
 
   const [status, setStatus] = useState<PageStatus>('prompt');
   const [errorMessage, setErrorMessage] = useState('');
-  const [currentOrg, setCurrentOrg] = useState<Organization | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -43,16 +40,6 @@ function CliAuthContent() {
       router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
     }
   }, [isLoading, isAuthenticated, code, router]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      getOrganizations()
-        .then((orgs) => {
-          if (orgs.length > 0) setCurrentOrg(orgs[0]);
-        })
-        .catch(() => {});
-    }
-  }, [isAuthenticated]);
 
   const handleAllow = async () => {
     if (!code) return;
@@ -132,12 +119,6 @@ function CliAuthContent() {
                       <span className="text-muted-foreground">Email</span>
                       <span className="font-medium">{user?.email}</span>
                     </div>
-                    {currentOrg && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Organization</span>
-                        <span className="font-medium">{currentOrg.name}</span>
-                      </div>
-                    )}
                   </div>
                   <Separator />
                   <div className="flex flex-col gap-2">

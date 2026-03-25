@@ -342,10 +342,43 @@ fetch_user_info() {
   TEAM_ID=""
   TEAM_NAME=""
 
-  if [ "$ORG_COUNT" -gt 0 ]; then
+  if [ "$ORG_COUNT" -eq 1 ]; then
     ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
     ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+  elif [ "$ORG_COUNT" -gt 1 ]; then
+    echo ""
+    printf '%b\n' "  ${BOLD}You belong to multiple organizations:${NC}"
+    echo ""
+    echo "$ORGS_RESPONSE" | python3 -c "
+import json, sys
+orgs = json.load(sys.stdin)['data']
+for i, org in enumerate(orgs, 1):
+    print(f'    {i}. {org[\"name\"]}')
+"
+    echo ""
+    read -rp "  Choose (1-${ORG_COUNT}): " org_choice
+    local idx=$((org_choice - 1))
+    if [ "$idx" -lt 0 ] || [ "$idx" -ge "$ORG_COUNT" ]; then
+      idx=0
+    fi
+    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['id'])" 2>/dev/null)
+    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['name'])" 2>/dev/null)
 
+    # Switch token to the chosen org
+    SWITCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"organizationId": "'"$ORG_ID"'"}' 2>/dev/null)
+    NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])" 2>/dev/null)
+    if [ -n "$NEW_TOKEN" ]; then
+      TOKEN="$NEW_TOKEN"
+      ok "Switched to ${ORG_NAME}"
+    else
+      warn "Could not switch org — using default"
+    fi
+  fi
+
+  if [ -n "$ORG_ID" ]; then
     TEAMS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null)
     TEAM_COUNT=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
 
