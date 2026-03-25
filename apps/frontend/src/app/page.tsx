@@ -8,6 +8,7 @@ import { getAIRatio, getDORAMetrics, getTimesheets } from '@/lib/api';
 import type { TimesheetEntry } from '@/lib/api';
 import type { AIvsManualRatio, DORAMetrics } from '@tandemu/types';
 import { InstallBanner } from '@/components/install-banner';
+import { BillingBanner } from '@/components/billing-banner';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { AIRatioChart } from '@/components/charts/ai-ratio-chart';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
@@ -136,6 +137,8 @@ export default function DashboardPage() {
         </div>
         <TelemetryFilters />
       </div>
+
+      <BillingBanner />
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

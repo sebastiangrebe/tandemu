@@ -273,10 +273,32 @@ export default function SettingsPage() {
                   </CardDescription>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Invite
-              </Button>
+              {process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && org.planTier === 'FREE' ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const { url } = await createCheckout({
+                        organizationId: org.id,
+                        planTier: 'PRO',
+                        successUrl: `${window.location.origin}/settings?billing=success`,
+                        cancelUrl: `${window.location.origin}/settings`,
+                      });
+                      window.location.href = url;
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+                    }
+                  }}
+                >
+                  Upgrade to Invite
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setShowInviteDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Invite
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
