@@ -338,6 +338,6 @@ export class AuthService {
   }
 
   private signToken(payload: JwtPayload): string {
-    return jwt.sign(payload, this.jwtSecret, { expiresIn: '24h' });
+    return jwt.sign(payload, this.jwtSecret, { expiresIn: '30d' });
   }
 }
