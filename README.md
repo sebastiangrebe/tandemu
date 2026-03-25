@@ -70,11 +70,45 @@ pnpm build
 
 ## Claude Code Setup
 
+### Option A: Plugin marketplace
+
+```bash
+# In Claude Code:
+> /plugin marketplace add sebastiangrebe/tandemu
+> /tandemu:setup
+```
+
+The setup skill handles authentication, configuration, and installs short-named skills (`/morning`, `/finish`, etc.) for daily use.
+
+### Option B: Install script
 Run the install script to configure Claude Code with Tandemu skills and memory:
 
 ```bash
 ./install.sh
 ```
+
+Same result as the plugin setup, but as a bash script. Useful for scripted onboarding or CI/CD.
+
+### Managing your installation
+
+```bash
+./install.sh --check       # Check for updates
+./install.sh --uninstall   # Remove all Tandemu files
+```
+
+### Why install.sh?
+
+Claude Code has an official plugin marketplace, but plugin skills are namespaced (`/tandemu:morning`). Tandemu uses `install.sh` (or `/tandemu:setup`) to install skills with short names (`/morning`) for daily use. The installer also handles OAuth authentication and user-scoped memory configuration that plugins can't do natively.
+
+### Available skills
+
+| Skill | Description |
+|-------|-------------|
+| `/morning` | Pick a task and start working |
+| `/finish` | Complete task, measure work, send telemetry |
+| `/pause` | Pause current task, switch to another |
+| `/standup` | Generate a team standup report |
+| `/blockers` | See what's slowing the team down |
 
 ## License
 

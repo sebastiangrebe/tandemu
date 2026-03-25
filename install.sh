@@ -3,10 +3,18 @@ set -euo pipefail
 
 # ─────────────────────────────────────────────────────────
 #  Tandemu Installer (Developer)
-#  Usage: curl -fsSL https://tandemu.dev/install.sh | bash
+#  Usage: ./install.sh
+#  Alternative: In Claude Code, run /plugin marketplace add sebastiangrebe/tandemu && /tandemu:setup
 #
 #  Installs Claude Code skills, configures telemetry,
 #  and sets up memory for your Tandemu instance.
+#
+#  Flags:
+#    --url <url>       Set API URL (skip instance selection)
+#    --token <token>   Use provided JWT (non-interactive)
+#    --uninstall       Remove all Tandemu files
+#    --check           Check for updates
+#    --skip-prereqs    Skip prerequisite checks
 # ─────────────────────────────────────────────────────────
 
 RED='\033[0;31m'
@@ -19,11 +27,8 @@ NC='\033[0m'
 
 CLAUDE_DIR="$HOME/.claude"
 SKILLS_DIR="$CLAUDE_DIR/skills"
-TANDEMU_DATA_DIR="$HOME/.tandemu"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
-
-# Where to download skills + MCP server from
-TANDEMU_RELEASE_URL="${TANDEMU_RELEASE_URL:-https://github.com/anthropics/tandemu/releases/latest/download}"
+VERSION_FILE="$CLAUDE_DIR/tandemu-version.txt"
 
 # ─────────────────────────────────────────────────────────
 
@@ -42,6 +47,166 @@ ok()   { printf '%b\n' "  ${GREEN}✓${NC} $1"; }
 warn() { printf '%b\n' "  ${YELLOW}!${NC} $1"; }
 fail() { printf '%b\n' "  ${RED}✗${NC} $1"; exit 1; }
 dim()  { printf '%b\n' "  ${DIM}$1${NC}"; }
+
+# ─────────────────────────────────────────────────────────
+# Get plugin version from plugin.json
+# ─────────────────────────────────────────────────────────
+
+get_plugin_version() {
+  local plugin_json="${SCRIPT_DIR}/apps/claude-plugins/.claude-plugin/plugin.json"
+  if [ -f "$plugin_json" ]; then
+    python3 -c "import json; print(json.load(open('$plugin_json')).get('version','unknown'))" 2>/dev/null || echo "unknown"
+  else
+    echo "unknown"
+  fi
+}
+
+# ─────────────────────────────────────────────────────────
+# Uninstall
+# ─────────────────────────────────────────────────────────
+
+do_uninstall() {
+  header
+  step "Removing Tandemu..."
+
+  # Remove tandemu config
+  rm -f "$CLAUDE_DIR/tandemu.json"
+  rm -f "$CLAUDE_DIR/tandemu-active-task.json"
+  rm -f "$VERSION_FILE"
+  ok "Config removed"
+
+  # Remove skills
+  for skill in morning finish pause standup blockers setup; do
+    rm -rf "$SKILLS_DIR/$skill"
+  done
+  ok "Skills removed"
+
+  # Remove shared lib
+  rm -f "$CLAUDE_DIR/lib/tandemu-env.sh"
+  ok "Shared lib removed"
+
+  # Remove CLAUDE.md if it's Tandemu's
+  if [ -f "$CLAUDE_DIR/CLAUDE.md" ] && grep -q "Tandemu AI Teammate" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null; then
+    rm -f "$CLAUDE_DIR/CLAUDE.md"
+    ok "CLAUDE.md removed"
+  fi
+
+  # Clean MCP config from ~/.mcp.json
+  if [ -f "$HOME/.mcp.json" ]; then
+    python3 << 'PYEOF'
+import json, os
+mcp_file = os.path.expanduser("~/.mcp.json")
+try:
+    with open(mcp_file) as f:
+        config = json.load(f)
+    if "tandemu-memory" in config.get("mcpServers", {}):
+        del config["mcpServers"]["tandemu-memory"]
+        if not config["mcpServers"]:
+            del config["mcpServers"]
+        if config:
+            with open(mcp_file, "w") as f:
+                json.dump(config, f, indent=2)
+        else:
+            os.remove(mcp_file)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+    ok "MCP config cleaned"
+  fi
+
+  # Clean legacy ~/.claude.json MCP config
+  if [ -f "$HOME/.claude.json" ]; then
+    python3 << 'PYEOF'
+import json, os
+mcp_file = os.path.expanduser("~/.claude.json")
+try:
+    with open(mcp_file) as f:
+        config = json.load(f)
+    if "tandemu-memory" in config.get("mcpServers", {}):
+        del config["mcpServers"]["tandemu-memory"]
+        if not config["mcpServers"]:
+            del config["mcpServers"]
+        if config:
+            with open(mcp_file, "w") as f:
+                json.dump(config, f, indent=2)
+        else:
+            os.remove(mcp_file)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+    ok "Legacy MCP config cleaned"
+  fi
+
+  # Clean settings.json (remove tandemu-specific env vars and permissions)
+  if [ -f "$CLAUDE_DIR/settings.json" ]; then
+    python3 << 'PYEOF'
+import json, os
+settings_file = os.path.expanduser("~/.claude/settings.json")
+try:
+    with open(settings_file) as f:
+        settings = json.load(f)
+    # Remove tandemu env vars
+    env = settings.get("env", {})
+    for key in list(env.keys()):
+        if key.startswith("OTEL_") or key == "CLAUDE_CODE_ENABLE_TELEMETRY":
+            del env[key]
+    if env:
+        settings["env"] = env
+    elif "env" in settings:
+        del settings["env"]
+    # Remove tandemu permissions
+    perms = settings.get("permissions", {})
+    allow = perms.get("allow", [])
+    allow = [p for p in allow if "tandemu" not in p.lower() and ":3001" not in p and ":4318" not in p]
+    if allow:
+        perms["allow"] = allow
+    elif "allow" in perms:
+        del perms["allow"]
+    if perms:
+        settings["permissions"] = perms
+    elif "permissions" in settings:
+        del settings["permissions"]
+    with open(settings_file, "w") as f:
+        json.dump(settings, f, indent=2)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+    ok "Settings cleaned"
+  fi
+
+  echo ""
+  printf '%b\n' "  ${GREEN}Tandemu uninstalled.${NC}"
+  echo ""
+  exit 0
+}
+
+# ─────────────────────────────────────────────────────────
+# Check for updates
+# ─────────────────────────────────────────────────────────
+
+do_check() {
+  header
+  local installed="unknown"
+  if [ -f "$VERSION_FILE" ]; then
+    installed=$(cat "$VERSION_FILE")
+  fi
+
+  local latest
+  latest=$(get_plugin_version)
+
+  printf '%b\n' "  Installed: ${BOLD}${installed}${NC}"
+  printf '%b\n' "  Available: ${BOLD}${latest}${NC}"
+
+  if [ "$installed" = "$latest" ]; then
+    ok "You're up to date"
+  elif [ "$installed" = "unknown" ]; then
+    warn "Version not tracked. Run install.sh to update."
+  else
+    warn "Update available. Run install.sh to update."
+  fi
+  echo ""
+  exit 0
+}
 
 # ─────────────────────────────────────────────────────────
 # Prerequisites
@@ -88,7 +253,6 @@ choose_instance() {
     2)
       echo ""
       read -rp "  Enter your Tandemu URL (e.g., https://tandemu.company.com): " API_URL
-      # Strip trailing slash
       API_URL="${API_URL%/}"
       ;;
     *)
@@ -96,7 +260,6 @@ choose_instance() {
       ;;
   esac
 
-  # Verify the instance is reachable
   step "Checking ${API_URL}..."
   if curl -sf "${API_URL}/api/health" &>/dev/null; then
     ok "Tandemu instance is reachable"
@@ -130,14 +293,12 @@ do_oauth() {
   dim "  ${AUTH_URL}"
   echo ""
 
-  # Open browser
   if command -v open &>/dev/null; then
     open "$AUTH_URL" 2>/dev/null || true
   elif command -v xdg-open &>/dev/null; then
     xdg-open "$AUTH_URL" 2>/dev/null || true
   fi
 
-  # Poll for authorization
   step "Waiting for you to authorize in the browser..."
   local retries=150
   TOKEN=""
@@ -161,14 +322,18 @@ do_oauth() {
   fi
 
   ok "Authorized!"
+}
 
-  # Get user info
+# ─────────────────────────────────────────────────────────
+# Fetch user, org, team info
+# ─────────────────────────────────────────────────────────
+
+fetch_user_info() {
   ME_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null)
   USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null)
   USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null)
   USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null)
 
-  # Get organizations (first one if exists)
   ORGS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null)
   ORG_COUNT=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
 
@@ -197,7 +362,6 @@ do_oauth() {
 
 write_configs() {
   mkdir -p "$CLAUDE_DIR"
-  mkdir -p "$TANDEMU_DATA_DIR"
 
   # 1. tandemu.json
   step "Writing Tandemu config..."
@@ -214,7 +378,6 @@ EOF
 
   # 2. settings.json — OTEL env vars + permissions
   step "Configuring telemetry and permissions..."
-  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
   OTEL_HOST=$(echo "$API_URL" | sed 's|https://||;s|http://||' | sed 's|:.*||')
   OTEL_ENDPOINT="http://${OTEL_HOST}:4318"
 
@@ -259,9 +422,9 @@ with open(settings_file, "w") as f:
 PYEOF
   ok "Telemetry: enabled (→ ${OTEL_ENDPOINT})"
 
-  # 3. ~/.claude.json — Memory MCP server (API-driven config)
+  # 3. ~/.mcp.json — Memory MCP server (standard location)
   step "Configuring memory server..."
-  MCP_FILE="$HOME/.claude.json"
+  MEM0_URL="http://${OTEL_HOST}:8765"
 
   MEM_CONFIG=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null)
   if [ -n "$MEM_CONFIG" ]; then
@@ -270,7 +433,7 @@ PYEOF
 
     python3 << PYEOF
 import json, os
-mcp_file = os.path.expanduser("~/.claude.json")
+mcp_file = os.path.expanduser("~/.mcp.json")
 try:
     with open(mcp_file) as f:
         config = json.load(f)
@@ -285,62 +448,85 @@ config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
     json.dump(config, f, indent=2)
 PYEOF
-    ok "Memory: enabled (${MEM_TYPE} → ${MEM_URL})"
+  ok "Memory: enabled (→ ${MEM0_URL})"
+
+  # Migrate legacy ~/.claude.json config
+  python3 << 'PYEOF'
+import json, os
+old_file = os.path.expanduser("~/.claude.json")
+try:
+    with open(old_file) as f:
+        old = json.load(f)
+    if "tandemu-memory" in old.get("mcpServers", {}):
+        del old["mcpServers"]["tandemu-memory"]
+        if not old["mcpServers"]:
+            del old["mcpServers"]
+        if old:
+            with open(old_file, "w") as f:
+                json.dump(old, f, indent=2)
+        else:
+            os.remove(old_file)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+
+  # Verify memory server is reachable
+  if curl -sf -m 5 "${MEM0_URL}/api/v1/config/" >/dev/null 2>&1; then
+    ok "Memory server: reachable"
   else
     warn "Could not fetch memory config from ${API_URL}/api/memory/config — memory server not configured"
   fi
 }
 
 # ─────────────────────────────────────────────────────────
-# Install skills + MCP server
+# Install skills + shared lib
 # ─────────────────────────────────────────────────────────
 
 install_assets() {
   mkdir -p "$SKILLS_DIR"
-  mkdir -p "$TANDEMU_DATA_DIR"
 
-  step "Downloading Tandemu skills and MCP server..."
+  step "Installing skills..."
 
   local skills_src=""
-  local mcp_src=""
 
   if [ -d "${SCRIPT_DIR}/apps/claude-plugins/skills" ]; then
-    # Running from the repo directly
-    skills_src="${SCRIPT_DIR}/apps/claude-plugins/skills"
-    mcp_src="${SCRIPT_DIR}/apps/mcp-server"
+    skills_src="${SCRIPT_DIR}/apps/claude-plugins"
   else
-    # Download from release
-    # TODO: implement release artifact download
+    # TODO: download from GitHub releases
+    # curl -fsSL "https://github.com/sebastiangrebe/tandemu/releases/latest/download/claude-plugins.tar.gz" | tar -xz -C /tmp
+    # skills_src="/tmp/claude-plugins"
     fail "Release download not yet implemented. Run install.sh from the Tandemu repo directory."
   fi
 
   # Install shared lib
-  local lib_src="${SCRIPT_DIR}/apps/claude-plugins/lib"
-  if [ -d "$lib_src" ]; then
-    mkdir -p "$SKILLS_DIR/../lib"
-    cp -r "$lib_src"/* "$SKILLS_DIR/../lib/"
+  if [ -d "$skills_src/lib" ]; then
+    mkdir -p "$CLAUDE_DIR/lib"
+    cp -r "$skills_src/lib"/* "$CLAUDE_DIR/lib/"
   fi
 
-  # Install skills (skip /tandemu — its logic is in this script)
-  for skill_dir in "$skills_src"/*/; do
+  # Install skills (skip setup — it's the plugin entry point, not needed locally)
+  for skill_dir in "$skills_src/skills"/*/; do
     local skill_name
     skill_name=$(basename "$skill_dir")
-    [ "$skill_name" = "tandemu" ] && continue
+    [ "$skill_name" = "setup" ] && continue
     rm -rf "$SKILLS_DIR/$skill_name"
     cp -r "$skill_dir" "$SKILLS_DIR/$skill_name"
   done
 
-  # Copy CLAUDE.md to user's global claude dir
-  if [ -f "${SCRIPT_DIR}/apps/claude-plugins/CLAUDE.md" ]; then
-    cp "${SCRIPT_DIR}/apps/claude-plugins/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+  # Copy CLAUDE.md
+  if [ -f "$skills_src/CLAUDE.md" ]; then
+    cp "$skills_src/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
     ok "CLAUDE.md installed (personality + memory)"
   fi
 
+  # Write version
+  local version
+  version=$(get_plugin_version)
+  echo "$version" > "$VERSION_FILE"
+
   local count
   count=$(ls -1d "$SKILLS_DIR"/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-  ok "$count skills installed"
-
-  ok "Memory server: OpenMemory MCP (connects to Tandemu instance)"
+  ok "$count skills installed (v${version})"
 }
 
 # ─────────────────────────────────────────────────────────
@@ -382,8 +568,10 @@ print_done() {
   printf '%b\n' "    ${GREEN}/standup${NC}   — Generate a team standup report"
   printf '%b\n' "    ${GREEN}/blockers${NC}  — See what's slowing the team down"
   echo ""
-  printf '%b\n' "  ${BOLD}Re-authenticate:${NC}"
-  dim "    Run this script again"
+  printf '%b\n' "  ${BOLD}Manage:${NC}"
+  dim "    Re-authenticate:  ./install.sh"
+  dim "    Check updates:    ./install.sh --check"
+  dim "    Uninstall:        ./install.sh --uninstall"
   echo ""
 }
 
@@ -392,11 +580,15 @@ print_done() {
 # ─────────────────────────────────────────────────────────
 
 NONINTERACTIVE=""
+DO_UNINSTALL=""
+DO_CHECK=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --url) API_URL="$2"; shift 2 ;;
     --token) TOKEN="$2"; NONINTERACTIVE="true"; shift 2 ;;
     --skip-prereqs) SKIP_PREREQS="true"; shift ;;
+    --uninstall) DO_UNINSTALL="true"; shift ;;
+    --check) DO_CHECK="true"; shift ;;
     *) shift ;;
   esac
 done
@@ -406,6 +598,15 @@ done
 # ─────────────────────────────────────────────────────────
 
 main() {
+  # Handle --uninstall and --check early
+  if [ "${DO_UNINSTALL:-}" = "true" ]; then
+    do_uninstall
+  fi
+
+  if [ "${DO_CHECK:-}" = "true" ]; then
+    do_check
+  fi
+
   header
 
   if [ "${SKIP_PREREQS:-}" != "true" ]; then
@@ -420,38 +621,17 @@ main() {
   fi
 
   if [ "${NONINTERACTIVE:-}" = "true" ] && [ -n "${TOKEN:-}" ]; then
-    # Non-interactive: token provided, fetch user info directly
     step "Using provided token..."
-    ME_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null) || {
-      fail "Token is invalid or API is unreachable."
-    }
-    USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null)
-    USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null)
-    USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null)
-
-    ORGS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null)
-    ORG_COUNT=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
-    ORG_ID=""; ORG_NAME=""; TEAM_ID=""; TEAM_NAME=""
-
-    if [ "$ORG_COUNT" -gt 0 ]; then
-      ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-      ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
-      TEAMS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null)
-      TEAM_COUNT=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
-      if [ "$TEAM_COUNT" -gt 0 ]; then
-        TEAM_ID=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-        TEAM_NAME=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
-      fi
-    fi
+    fetch_user_info
     ok "Authorized as ${USER_NAME} (${USER_EMAIL})"
   else
     do_oauth
+    fetch_user_info
   fi
 
   write_configs
   install_assets
   print_done
-
 }
 
 main "$@"

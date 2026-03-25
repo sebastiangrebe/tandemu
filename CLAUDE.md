@@ -24,11 +24,8 @@ tandemu/
 
 ## Key Decisions
 
-### No `/tandemu` skill
-The `/tandemu` skill was removed. All setup (OAuth, config, skills, MCP, CLAUDE.md) is handled by `install.sh`. Re-running install.sh re-authenticates.
-
-### install.sh is for developers only
-It installs Claude Code skills and config. No Docker, no git, no server setup. The company deploys the platform separately via `docker-compose.yml`.
+### Developer setup
+Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
 
 ### Single active task enforcement
 `~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
@@ -71,11 +68,11 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 - Requires a Qdrant vector store (`qdrant/qdrant:latest`) at hostname `mem0_store` on port 6333
 - Claude Code connects via SSE: `http://host:8765/mcp/tandemu/sse/{userId}`
 - Memory scoped per user via the userId in the URL path
-- install.sh writes the MCP config to `~/.claude.json`
+- Setup writes the MCP config to `~/.mcp.json` (migrated from legacy `~/.claude.json`)
 - Requires `OPENAI_API_KEY` env var for embeddings
 
 ### CLAUDE.md personality system
-`~/.claude/CLAUDE.md` (installed by install.sh) instructs Claude to:
+`~/.claude/CLAUDE.md` (installed by `/tandemu:setup` or `install.sh`) instructs Claude to:
 - Search memories at session start (when tools available)
 - Learn coding preferences passively (never ask directly)
 - Use the developer's name when known
@@ -93,7 +90,7 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 ClickUp `fetchProjects` returns folders (not individual lists) as mappable entities. `fetchTasks` auto-detects whether the mapped ID is a folder or list — fetches all lists in a folder if it's a folder.
 
 ### Settings permissions for Tandemu
-install.sh writes permissions to `~/.claude/settings.json` so skills can:
+Setup (`/tandemu:setup` or `install.sh`) writes permissions to `~/.claude/settings.json` so skills can:
 - Edit/Write `~/.claude/tandemu*` files without prompting
 - Run curl to the Tandemu API and OTEL collector without prompting
 
