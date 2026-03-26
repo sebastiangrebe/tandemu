@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -153,6 +154,39 @@ export class GitHubProvider implements TaskProvider {
       const body = await response.text();
       throw new BadGatewayException(`GitHub issue update failed (${response.status}): ${body}`);
     }
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title, description, labels } = params;
+    // externalProjectId is "owner/repo"
+    const body: Record<string, unknown> = { title };
+    if (description) body.body = description;
+    if (labels && labels.length > 0) body.labels = labels;
+
+    const res = await fetch(`${GITHUB_API}/repos/${externalProjectId}/issues`, {
+      method: 'POST',
+      headers: { Authorization: `token ${accessToken}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new BadGatewayException(`GitHub create issue failed (${res.status}): ${text}`);
+    }
+    const issue = (await res.json()) as GitHubIssue;
+    return {
+      id: `#${issue.number}`,
+      title: issue.title,
+      description: issue.body ?? undefined,
+      status: mapStatus(issue.state),
+      priority: mapPriority(issue.labels),
+      assigneeName: issue.assignee?.login,
+      assigneeEmail: issue.assignee?.email ?? undefined,
+      labels: issue.labels.map((l) => l.name),
+      url: issue.html_url,
+      provider: 'github',
+      externalProjectId,
+      updatedAt: issue.updated_at,
+    };
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

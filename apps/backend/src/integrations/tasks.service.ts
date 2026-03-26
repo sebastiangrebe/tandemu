@@ -99,6 +99,37 @@ export class TasksService {
     });
   }
 
+  async createTask(
+    orgId: string,
+    params: { teamId: string; title: string; description?: string; assigneeEmail?: string; priority?: string; labels?: string[] },
+  ): Promise<Task> {
+    const integrations = await this.integrationsService.findAll(orgId);
+    if (integrations.length === 0) {
+      throw new NotFoundException('No integrations configured for this organization');
+    }
+
+    for (const integration of integrations) {
+      const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
+      const mappings = await this.integrationsService.getMappings(rawIntegration.id);
+      const mapping = mappings.find((m) => m.teamId === params.teamId);
+      if (!mapping) continue;
+
+      const provider = getProvider(integration.provider);
+      return provider.createTask({
+        accessToken: rawIntegration.access_token,
+        externalProjectId: mapping.externalProjectId,
+        title: params.title,
+        description: params.description,
+        assigneeEmail: params.assigneeEmail,
+        priority: params.priority,
+        labels: params.labels,
+        config: { ...rawIntegration.config, ...mapping.config },
+      });
+    }
+
+    throw new NotFoundException('No project mapping found for this team');
+  }
+
   async getProjects(orgId: string, providerName: IntegrationProvider): Promise<ExternalProject[]> {
     const integration = await this.integrationsService.findOne(orgId, providerName);
     const provider = getProvider(providerName);
