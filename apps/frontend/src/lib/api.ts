@@ -213,8 +213,8 @@ export interface ToolUsageStat {
   successRate: number;
 }
 
-export async function getToolUsage(): Promise<ToolUsageStat[]> {
-  return fetchApi<ToolUsageStat[]>('/api/telemetry/tool-usage');
+export async function getToolUsage(filter?: TelemetryFilter): Promise<ToolUsageStat[]> {
+  return fetchApi<ToolUsageStat[]>(`/api/telemetry/tool-usage${buildParams(filter)}`);
 }
 
 export interface DeveloperStat {

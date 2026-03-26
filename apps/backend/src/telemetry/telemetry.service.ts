@@ -418,8 +418,19 @@ export class TelemetryService implements OnModuleDestroy {
    * Tool usage stats from Claude Code's native tool_result events.
    * Shows which tools the team uses, success rates, and avg duration.
    */
-  async getToolUsageStats(organizationId: string): Promise<ToolUsageStat[]> {
+  async getToolUsageStats(organizationId: string, startDate?: string, endDate?: string): Promise<ToolUsageStat[]> {
     try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) {
+        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        params.endDate = endDate;
+      }
+
       const resultSet = await this.client.query({
         query: `
           SELECT
@@ -432,10 +443,11 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND LogAttributes['event.name'] = 'tool_result'
             AND LogAttributes['tool_name'] != ''
+            ${dateFilter}
           GROUP BY toolName
           ORDER BY totalCalls DESC
         `,
-        query_params: { organizationId },
+        query_params: params,
         format: 'JSONEachRow',
       });
 

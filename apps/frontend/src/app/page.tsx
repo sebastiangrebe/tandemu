@@ -41,7 +41,7 @@ export default function DashboardPage() {
       try {
         const f = { startDate, endDate };
         const [ai, timesheets, tools, devs, velocity] = await Promise.allSettled([
-          getAIRatio(f), getTimesheets(f), getToolUsage(), getDeveloperStats(f), getTaskVelocity(f),
+          getAIRatio(f), getTimesheets(f), getToolUsage(f), getDeveloperStats(f), getTaskVelocity(f),
         ]);
         if (cancelled) return;
         if (ai.status === 'fulfilled') setAiData(ai.value);
@@ -156,7 +156,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Session Duration</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Cycle Time</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

@@ -44,8 +44,10 @@ export class TelemetryController {
   @Get('tool-usage')
   async getToolUsage(
     @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ): Promise<ToolUsageStat[]> {
-    return this.telemetryService.getToolUsageStats(user.organizationId);
+    return this.telemetryService.getToolUsageStats(user.organizationId, startDate, endDate);
   }
 
   @Get('session-quality')
