@@ -103,11 +103,15 @@ interface LinearTeamsResponse {
 
 export class LinearProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone, config } = params;
     const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
 
     // externalProjectId is the Linear team ID
     const filters: string[] = [`team: { id: { eq: "${externalProjectId}" } }`];
+    const subProjectId = config?.subProjectId as string | undefined;
+    if (subProjectId) {
+      filters.push(`project: { id: { eq: "${subProjectId}" } }`);
+    }
     if (emails.length === 1) {
       filters.push(`assignee: { email: { eq: "${emails[0]}" } }`);
     } else if (emails.length > 1) {
@@ -224,7 +228,8 @@ export class LinearProvider implements TaskProvider {
     if (assigneeEmail) {
       const userData = await linearFetch<{ users: { nodes: Array<{ id: string }> } }>(
         accessToken,
-        `query { users(filter: { email: { eq: "${assigneeEmail}" } }) { nodes { id } } }`,
+        `query ($email: String!) { users(filter: { email: { eq: $email } }) { nodes { id } } }`,
+        { email: assigneeEmail },
       );
       const userId = userData.users.nodes[0]?.id;
       if (userId) input.assigneeId = userId;
@@ -232,35 +237,40 @@ export class LinearProvider implements TaskProvider {
 
     if (Object.keys(input).length === 0) return;
 
-    const inputStr = Object.entries(input)
-      .map(([k, v]) => `${k}: "${v}"`)
-      .join(', ');
-
     await linearFetch<{ issueUpdate: { success: boolean } }>(
       accessToken,
-      `mutation { issueUpdate(id: "${issue.id}", input: { ${inputStr} }) { success } }`,
+      `mutation ($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`,
+      { id: issue.id, input },
     );
   }
 
   async createTask(params: TaskProviderCreateParams): Promise<Task> {
-    const { accessToken, externalProjectId, title, description, assigneeEmail, priority } = params;
+    const { accessToken, externalProjectId, title, description, assigneeEmail, priority, config } = params;
 
-    const input: string[] = [`teamId: "${externalProjectId}"`, `title: "${title.replace(/"/g, '\\"')}"`];
-    if (description) input.push(`description: "${description.replace(/"/g, '\\"')}"`);
+    const inputObj: Record<string, unknown> = {
+      teamId: externalProjectId,
+      title,
+    };
+    if (description) inputObj.description = description;
+
+    // If the mapping config has a sub-project ID (Linear project), assign the issue to it
+    const subProjectId = config?.subProjectId as string | undefined;
+    if (subProjectId) inputObj.projectId = subProjectId;
 
     if (assigneeEmail) {
       const userData = await linearFetch<{ users: { nodes: Array<{ id: string }> } }>(
         accessToken,
-        `query { users(filter: { email: { eq: "${assigneeEmail}" } }) { nodes { id } } }`,
+        `query ($email: String!) { users(filter: { email: { eq: $email } }) { nodes { id } } }`,
+        { email: assigneeEmail },
       );
       const userId = userData.users.nodes[0]?.id;
-      if (userId) input.push(`assigneeId: "${userId}"`);
+      if (userId) inputObj.assigneeId = userId;
     }
 
     if (priority) {
       const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4, none: 0 };
       const prioNum = prioMap[priority.toLowerCase()];
-      if (prioNum !== undefined) input.push(`priority: ${prioNum}`);
+      if (prioNum !== undefined) inputObj.priority = prioNum;
     }
 
     const data = await linearFetch<{
@@ -280,7 +290,8 @@ export class LinearProvider implements TaskProvider {
       };
     }>(
       accessToken,
-      `mutation { issueCreate(input: { ${input.join(', ')} }) { success issue { identifier title description state { name } priority assignee { name email } labels { nodes { name } } url updatedAt } } }`,
+      `mutation ($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { identifier title description state { name } priority assignee { name email } labels { nodes { name } } url updatedAt } } }`,
+      { input: inputObj },
     );
 
     const issue = data.issueCreate.issue;
@@ -321,6 +332,21 @@ export class LinearProvider implements TaskProvider {
       id: team.id,
       name: team.name,
       key: team.key,
+    }));
+  }
+
+  async fetchSubProjects(accessToken: string, teamId: string): Promise<ExternalProject[]> {
+    const data = await linearFetch<{
+      team: { projects: { nodes: Array<{ id: string; name: string }> } };
+    }>(
+      accessToken,
+      `query ($teamId: String!) { team(id: $teamId) { projects(first: 50) { nodes { id name } } } }`,
+      { teamId },
+    );
+
+    return data.team.projects.nodes.map((p) => ({
+      id: p.id,
+      name: p.name,
     }));
   }
 }

@@ -453,9 +453,18 @@ export async function getProjectMappings(
   );
 }
 
+export async function getSubProjects(
+  provider: string,
+  projectId: string,
+): Promise<Array<{ id: string; name: string }>> {
+  return fetchApi<Array<{ id: string; name: string }>>(
+    `/api/integrations/${provider}/projects/${projectId}/sub-projects`
+  );
+}
+
 export async function createProjectMapping(
   provider: string,
-  data: { teamId: string; externalProjectId: string; externalProjectName?: string }
+  data: { teamId: string; externalProjectId: string; externalProjectName?: string; config?: Record<string, unknown> }
 ): Promise<IntegrationProjectMapping> {
   return fetchApi<IntegrationProjectMapping>(
     `/api/integrations/${provider}/mappings`,

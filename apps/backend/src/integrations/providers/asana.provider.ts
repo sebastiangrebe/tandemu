@@ -122,14 +122,15 @@ const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assign
 
 export class AsanaProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone, config } = params;
     const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
+    const sectionGid = config?.subProjectId as string | undefined;
 
-    // Fetch incomplete tasks
-    let tasks = await asanaFetch<AsanaTask[]>(
-      `/projects/${externalProjectId}/tasks?opt_fields=${TASK_OPT_FIELDS}&completed_since=now&limit=100`,
-      accessToken,
-    );
+    // Fetch incomplete tasks — from specific section if configured, otherwise whole project
+    const basePath = sectionGid
+      ? `/sections/${sectionGid}/tasks?opt_fields=${TASK_OPT_FIELDS}&completed_since=now&limit=100`
+      : `/projects/${externalProjectId}/tasks?opt_fields=${TASK_OPT_FIELDS}&completed_since=now&limit=100`;
+    let tasks = await asanaFetch<AsanaTask[]>(basePath, accessToken);
 
     // Also fetch recently completed tasks (for standup etc.) unless excludeDone is set
     if (!excludeDone) {
@@ -225,7 +226,8 @@ export class AsanaProvider implements TaskProvider {
   }
 
   async createTask(params: TaskProviderCreateParams): Promise<Task> {
-    const { accessToken, externalProjectId, title, description, assigneeEmail } = params;
+    const { accessToken, externalProjectId, title, description, assigneeEmail, config } = params;
+    const sectionGid = config?.subProjectId as string | undefined;
 
     const data: Record<string, unknown> = {
       projects: [externalProjectId],
@@ -249,6 +251,8 @@ export class AsanaProvider implements TaskProvider {
         if (user) data.assignee = user.gid;
       }
     }
+
+    if (sectionGid) data.memberships = [{ project: externalProjectId, section: sectionGid }];
 
     const created = await asanaFetch<{ data: AsanaTask }>(
       '/tasks',
@@ -288,5 +292,20 @@ export class AsanaProvider implements TaskProvider {
       id: p.gid,
       name: p.name,
     }));
+  }
+
+  async fetchSubProjects(accessToken: string, projectGid: string): Promise<ExternalProject[]> {
+    try {
+      const sections = await asanaFetch<Array<{ gid: string; name: string }>>(
+        `/projects/${projectGid}/sections?opt_fields=gid,name`,
+        accessToken,
+      );
+      return sections.map((s) => ({
+        id: s.gid,
+        name: s.name,
+      }));
+    } catch {
+      return [];
+    }
   }
 }

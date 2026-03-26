@@ -8,10 +8,12 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service.js';
 import { TasksService } from './tasks.service.js';
+import { getProvider } from './providers/index.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
@@ -107,5 +109,22 @@ export class IntegrationsController {
     @Param('provider') provider: IntegrationProvider,
   ) {
     return this.tasksService.getProjects(user.organizationId, provider);
+  }
+
+  // Fetch sub-projects within an external project (e.g. Linear projects in a team, ClickUp lists in a folder)
+  @Get(':provider/projects/:projectId/sub-projects')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  async getSubProjects(
+    @CurrentUser() user: RequestUser,
+    @Param('provider') provider: IntegrationProvider,
+    @Param('projectId') projectId: string,
+  ) {
+    const integration = await this.integrationsService.findOne(user.organizationId, provider);
+    const providerImpl = getProvider(provider);
+    if (!providerImpl.fetchSubProjects) return [];
+    return providerImpl.fetchSubProjects(integration.access_token, projectId, {
+      externalWorkspaceId: integration.external_workspace_id,
+      ...integration.config,
+    });
   }
 }

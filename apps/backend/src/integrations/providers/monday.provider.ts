@@ -81,7 +81,7 @@ interface MondayItem {
   id: string;
   name: string;
   column_values: MondayColumnValue[];
-  group: { title: string };
+  group: { id: string; title: string };
   updated_at: string;
   url: string;
 }
@@ -137,7 +137,8 @@ function getStatusColumnId(item: MondayItem): string {
 
 export class MondayProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail } = params;
+    const { accessToken, externalProjectId, assigneeEmail, config } = params;
+    const groupId = config?.subProjectId as string | undefined;
 
     // Fetch items from the board
     const data = await mondayQuery<{
@@ -159,7 +160,7 @@ export class MondayProvider implements TaskProvider {
                 type
                 value
               }
-              group { title }
+              group { id title }
               updated_at
               url
             }
@@ -173,6 +174,11 @@ export class MondayProvider implements TaskProvider {
     if (!board) return [];
 
     let items = board.items_page.items;
+
+    // Filter by group if a sub-project (group) was selected
+    if (groupId) {
+      items = items.filter((item) => item.group?.id === groupId);
+    }
 
     // If filtering by email, we need to resolve user IDs to emails
     if (assigneeEmail) {
@@ -343,14 +349,19 @@ export class MondayProvider implements TaskProvider {
   }
 
   async createTask(params: TaskProviderCreateParams): Promise<Task> {
-    const { accessToken, externalProjectId, title } = params;
+    const { accessToken, externalProjectId, title, config } = params;
+    const groupId = config?.subProjectId as string | undefined;
+
+    const variables: Record<string, unknown> = { boardId: externalProjectId, itemName: title };
+    let mutation = `mutation ($boardId: ID!, $itemName: String!) { create_item(board_id: $boardId, item_name: $itemName) { id name board { id } column_values { id text type title } } }`;
+    if (groupId) {
+      variables.groupId = groupId;
+      mutation = `mutation ($boardId: ID!, $itemName: String!, $groupId: String!) { create_item(board_id: $boardId, group_id: $groupId, item_name: $itemName) { id name board { id } column_values { id text type title } } }`;
+    }
 
     const data = await mondayQuery<{
       create_item: { id: string; name: string; board: { id: string }; column_values: Array<{ id: string; text: string; type: string; title: string }> };
-    }>(
-      accessToken,
-      `mutation { create_item(board_id: ${externalProjectId}, item_name: "${title.replace(/"/g, '\\"')}") { id name board { id } column_values { id text type title } } }`,
-    );
+    }>(accessToken, mutation, variables);
 
     const item = data.create_item;
     return {
@@ -380,5 +391,25 @@ export class MondayProvider implements TaskProvider {
       id: b.id,
       name: b.name,
     }));
+  }
+
+  async fetchSubProjects(accessToken: string, boardId: string): Promise<ExternalProject[]> {
+    try {
+      const data = await mondayQuery<{
+        boards: Array<{ groups: Array<{ id: string; title: string }> }>;
+      }>(
+        accessToken,
+        `query ($boardId: [ID!]!) { boards(ids: $boardId) { groups { id title } } }`,
+        { boardId: [boardId] },
+      );
+      const board = data.boards[0];
+      if (!board) return [];
+      return board.groups.map((g) => ({
+        id: g.id,
+        name: g.title,
+      }));
+    } catch {
+      return [];
+    }
   }
 }
