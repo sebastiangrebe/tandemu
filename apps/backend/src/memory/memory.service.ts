@@ -22,7 +22,7 @@ export class MemoryService {
 
   getUpstreamSseUrl(userId: string): string {
     if (this.isMem0Cloud) {
-      return `https://mcp.mem0.ai/sse`;
+      return `https://mcp.mem0.ai/mcp`;
     }
     return `http://${this.openmemoryHost}:${this.openmemoryPort}/mcp/tandemu/sse/${userId}`;
   }

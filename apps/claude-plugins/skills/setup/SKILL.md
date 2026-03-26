@@ -155,6 +155,7 @@ Fetch all configuration in a single call:
 ```bash
 SETUP_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/setup/config")
 OTEL_ENDPOINT=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['endpoint'])" 2>/dev/null)
+MEM_TYPE=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['type'])" 2>/dev/null)
 MEM_URL=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['url'])" 2>/dev/null)
 ```
 
@@ -225,13 +226,15 @@ except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
 token = os.environ.get("TOKEN", "")
-servers["tandemu-memory"] = {
-    "type": "sse",
+mem_type = os.environ.get("MEM_TYPE", "sse")
+server_config = {
+    "type": mem_type,
     "url": mem_url,
     "headers": {
         "Authorization": f"Bearer {token}"
     }
 }
+servers["tandemu-memory"] = server_config
 config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
     json.dump(config, f, indent=2)

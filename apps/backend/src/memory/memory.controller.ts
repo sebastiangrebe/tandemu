@@ -28,10 +28,81 @@ export class MemoryController {
     const proto = req.headers['x-forwarded-proto'] ?? req.protocol;
     const host = req.headers['x-forwarded-host'] ?? req.get('host');
     const baseUrl = `${proto}://${host}`;
+
+    if (this.memoryService.isMem0Cloud) {
+      // Mem0 Cloud uses HTTP streamable transport
+      return {
+        type: 'http',
+        url: `${baseUrl}/api/memory/mcp`,
+      };
+    }
+    // OSS OpenMemory uses SSE transport
     return {
-      type: 'proxy',
+      type: 'sse',
       url: `${baseUrl}/api/memory/sse`,
     };
+  }
+
+  @Post('mcp')
+  async proxyMcp(
+    @CurrentUser() user: RequestUser,
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
+    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
+
+    let upstreamResponse: globalThis.Response;
+    try {
+      upstreamResponse = await fetch(upstreamUrl, {
+        method: 'POST',
+        headers: {
+          ...upstreamHeaders,
+          'Accept': 'text/event-stream, application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      this.logger.error(`Failed to connect to upstream MCP: ${err}`);
+      res.status(502).json({ error: 'Failed to connect to memory server' });
+      return;
+    }
+
+    if (!upstreamResponse.ok) {
+      const text = await upstreamResponse.text().catch(() => '');
+      this.logger.error(`Upstream MCP returned ${upstreamResponse.status}: ${text}`);
+      res.status(upstreamResponse.status).json({ error: `Memory server returned ${upstreamResponse.status}` });
+      return;
+    }
+
+    const contentType = upstreamResponse.headers.get('content-type') ?? '';
+
+    if (contentType.includes('text/event-stream') && upstreamResponse.body) {
+      // Streaming response — pipe SSE back to client
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const reader = upstreamResponse.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value, { stream: true }));
+        }
+      } catch {
+        // Client disconnected
+      } finally {
+        res.end();
+      }
+    } else {
+      // JSON response — forward directly
+      const json = await upstreamResponse.json().catch(() => ({}));
+      res.status(upstreamResponse.status).json(json);
+    }
   }
 
   @Get('sse')
