@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Activity, Brain, GitPullRequest, Users, Rocket, Clock, Code2, Timer, CheckCircle2, Wrench } from "lucide-react";
-import { getAIRatio, getDORAMetrics, getTimesheets, getToolUsage, getDeveloperStats, getTaskVelocity } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, Brain, Users, Code2, Timer, Wrench } from "lucide-react";
+import { getAIRatio, getTimesheets, getToolUsage, getDeveloperStats, getTaskVelocity } from '@/lib/api';
 import type { TimesheetEntry, ToolUsageStat, DeveloperStat, TaskVelocityEntry } from '@/lib/api';
-import type { AIvsManualRatio, DORAMetrics } from '@tandemu/types';
+import type { AIvsManualRatio } from '@tandemu/types';
 import { InstallBanner } from '@/components/install-banner';
 import { BillingBanner } from '@/components/billing-banner';
 import { ActivityChart } from '@/components/charts/activity-chart';
@@ -24,41 +23,9 @@ function formatDuration(minutes: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function formatHours(hours: number): string {
-  if (hours === 0) return '—';
-  if (hours < 0.1) return '<6m';
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  return `${hours.toFixed(1)}h`;
-}
-
-function classifyDORA(metric: string, value: number): { level: string; color: string } {
-  const levels: Record<string, Array<[number, string, string]>> = {
-    deploymentFrequency: [[1, 'Elite', 'emerald'], [0.14, 'High', 'blue'], [0.03, 'Medium', 'yellow']],
-    leadTimeForChanges: [[1, 'Elite', 'emerald'], [24, 'High', 'blue'], [168, 'Medium', 'yellow']],
-    changeFailureRate: [[5, 'Elite', 'emerald'], [10, 'High', 'blue'], [15, 'Medium', 'yellow']],
-  };
-  const thresholds = levels[metric];
-  if (!thresholds) return { level: 'Low', color: 'red' };
-  const isLowerBetter = metric === 'leadTimeForChanges' || metric === 'changeFailureRate';
-  for (const [threshold, level, color] of thresholds) {
-    if (isLowerBetter ? value <= threshold : value >= threshold) return { level, color };
-  }
-  return { level: 'Low', color: 'red' };
-}
-
-const badgeColor = (color: string) => {
-  const map: Record<string, string> = {
-    emerald: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    red: 'bg-red-500/20 text-red-400 border-red-500/30',
-  };
-  return map[color] ?? map.red;
-};
 
 export default function DashboardPage() {
   const [aiData, setAiData] = useState<AIvsManualRatio[]>([]);
-  const [doraData, setDoraData] = useState<DORAMetrics | null>(null);
   const [timesheetData, setTimesheetData] = useState<TimesheetEntry[]>([]);
   const [toolData, setToolData] = useState<ToolUsageStat[]>([]);
   const [devStats, setDevStats] = useState<DeveloperStat[]>([]);
@@ -73,12 +40,11 @@ export default function DashboardPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate };
-        const [ai, dora, timesheets, tools, devs, velocity] = await Promise.allSettled([
-          getAIRatio(f), getDORAMetrics(f), getTimesheets(f), getToolUsage(), getDeveloperStats(f), getTaskVelocity(f),
+        const [ai, timesheets, tools, devs, velocity] = await Promise.allSettled([
+          getAIRatio(f), getTimesheets(f), getToolUsage(), getDeveloperStats(f), getTaskVelocity(f),
         ]);
         if (cancelled) return;
         if (ai.status === 'fulfilled') setAiData(ai.value);
-        if (dora.status === 'fulfilled') setDoraData(dora.value);
         if (timesheets.status === 'fulfilled') setTimesheetData(timesheets.value);
         if (tools.status === 'fulfilled') setToolData(tools.value);
         if (devs.status === 'fulfilled') setDevStats(devs.value);
@@ -127,18 +93,12 @@ export default function DashboardPage() {
   const totalManual = aiData.reduce((s, r) => s + r.manualLines, 0);
   const totalLines = totalAi + totalManual;
   const aiRatio = totalLines > 0 ? Math.round((totalAi / totalLines) * 1000) / 10 : 0;
-  const avgCycleTime = doraData?.leadTimeForChanges ?? 0;
   const avgSessionDuration = totalSessions > 0 ? Math.round(totalMinutes / totalSessions) : 0;
-  const tasksCompleted = doraData?.deploymentFrequency ?? 0;
-  const overallToolSuccess = toolData.length > 0
-    ? Math.round(toolData.reduce((s, t) => s + t.successCount, 0) / Math.max(toolData.reduce((s, t) => s + t.totalCalls, 0), 1) * 100)
+  const totalToolCalls = toolData.reduce((s, t) => s + t.totalCalls, 0);
+  const overallToolSuccess = totalToolCalls > 0
+    ? Math.round(toolData.reduce((s, t) => s + t.successCount, 0) / totalToolCalls * 100)
     : 0;
-  const hasData = totalSessions > 0 || totalLines > 0 || avgCycleTime > 0;
-
-  const doraMetrics = doraData && (doraData.deploymentFrequency > 0) ? [
-    { title: 'Deploy Frequency', value: doraData.deploymentFrequency.toFixed(1), unit: '/day', icon: Rocket, ...classifyDORA('deploymentFrequency', doraData.deploymentFrequency) },
-    { title: 'Lead Time', value: formatHours(doraData.leadTimeForChanges), unit: '', icon: Clock, ...classifyDORA('leadTimeForChanges', doraData.leadTimeForChanges) },
-  ] : [];
+  const hasData = totalSessions > 0 || totalLines > 0;
 
   return (
     <div className="space-y-6">
@@ -153,7 +113,7 @@ export default function DashboardPage() {
       <BillingBanner />
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Sessions</CardTitle>
@@ -171,17 +131,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{aiRatio}%</div>
-            <p className="text-xs text-muted-foreground mt-1">{totalAi.toLocaleString()} AI / {totalManual.toLocaleString()} manual</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Cycle Time</CardTitle>
-            <GitPullRequest className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatHours(avgCycleTime)}</div>
-            <p className="text-xs text-muted-foreground mt-1">task start to finish</p>
+            <p className="text-xs text-muted-foreground mt-1">{totalAi.toLocaleString()} AI / {totalManual.toLocaleString()} manual lines</p>
           </CardContent>
         </Card>
         <Card>
@@ -192,6 +142,36 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{developerIds.size}</div>
             <p className="text-xs text-muted-foreground mt-1">with recorded sessions</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Lines of Code</CardTitle>
+            <Code2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalLines.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">across all sessions</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Session Duration</CardTitle>
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatDuration(avgSessionDuration)}</div>
+            <p className="text-xs text-muted-foreground mt-1">per task completion</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Tool Success Rate</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalToolCalls > 0 ? `${overallToolSuccess}%` : '—'}</div>
+            <p className="text-xs text-muted-foreground mt-1">{totalToolCalls.toLocaleString()} total tool calls</p>
           </CardContent>
         </Card>
       </div>
@@ -213,50 +193,6 @@ export default function DashboardPage() {
 
       {hasData && (
         <>
-          {/* KPI Row 2 */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Lines of Code</CardTitle>
-                <Code2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalLines.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground mt-1">{totalAi.toLocaleString()} AI + {totalManual.toLocaleString()} manual</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Avg Session Duration</CardTitle>
-                <Timer className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatDuration(avgSessionDuration)}</div>
-                <p className="text-xs text-muted-foreground mt-1">per task completion</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Tasks Completed</CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{Math.round(tasksCompleted)}</div>
-                <p className="text-xs text-muted-foreground mt-1">in selected period</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Tool Success Rate</CardTitle>
-                <Wrench className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{toolData.length > 0 ? `${overallToolSuccess}%` : '—'}</div>
-                <p className="text-xs text-muted-foreground mt-1">{toolData.reduce((s, t) => s + t.totalCalls, 0).toLocaleString()} total tool calls</p>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-2">
             <ActivityChart data={timesheetData} startDate={startDate} endDate={endDate} />
@@ -269,35 +205,8 @@ export default function DashboardPage() {
             <DeveloperLeaderboard data={devStats} />
           </div>
 
-          {/* Velocity + DORA Row */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <VelocityChart data={velocityData} />
-            {doraMetrics.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Delivery Performance</CardTitle>
-                <CardDescription>DORA metrics from task completions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {doraMetrics.map((m) => (
-                    <div key={m.title} className="rounded-lg border border-[var(--border-subtle)] p-3">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium text-muted-foreground">{m.title}</span>
-                        <m.icon className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-lg font-bold">{m.value}</span>
-                        {m.unit && <span className="text-xs text-muted-foreground">{m.unit}</span>}
-                      </div>
-                      <Badge variant="outline" className={`mt-1.5 text-xs ${badgeColor(m.color)}`}>{m.level}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            )}
-          </div>
+          {/* Velocity */}
+          <VelocityChart data={velocityData} />
         </>
       )}
     </div>
