@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -239,6 +240,64 @@ export class LinearProvider implements TaskProvider {
       accessToken,
       `mutation { issueUpdate(id: "${issue.id}", input: { ${inputStr} }) { success } }`,
     );
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title, description, assigneeEmail, priority } = params;
+
+    const input: string[] = [`teamId: "${externalProjectId}"`, `title: "${title.replace(/"/g, '\\"')}"`];
+    if (description) input.push(`description: "${description.replace(/"/g, '\\"')}"`);
+
+    if (assigneeEmail) {
+      const userData = await linearFetch<{ users: { nodes: Array<{ id: string }> } }>(
+        accessToken,
+        `query { users(filter: { email: { eq: "${assigneeEmail}" } }) { nodes { id } } }`,
+      );
+      const userId = userData.users.nodes[0]?.id;
+      if (userId) input.push(`assigneeId: "${userId}"`);
+    }
+
+    if (priority) {
+      const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4, none: 0 };
+      const prioNum = prioMap[priority.toLowerCase()];
+      if (prioNum !== undefined) input.push(`priority: ${prioNum}`);
+    }
+
+    const data = await linearFetch<{
+      issueCreate: {
+        success: boolean;
+        issue: {
+          identifier: string;
+          title: string;
+          description: string | null;
+          state: { name: string };
+          priority: number;
+          assignee: { name: string; email: string } | null;
+          labels: { nodes: Array<{ name: string }> };
+          url: string;
+          updatedAt: string;
+        };
+      };
+    }>(
+      accessToken,
+      `mutation { issueCreate(input: { ${input.join(', ')} }) { success issue { identifier title description state { name } priority assignee { name email } labels { nodes { name } } url updatedAt } } }`,
+    );
+
+    const issue = data.issueCreate.issue;
+    return {
+      id: issue.identifier,
+      title: issue.title,
+      description: issue.description ?? undefined,
+      status: mapStatus(issue.state.name),
+      priority: mapPriority(issue.priority),
+      assigneeName: issue.assignee?.name,
+      assigneeEmail: issue.assignee?.email,
+      labels: issue.labels.nodes.map((l) => l.name),
+      url: issue.url,
+      provider: 'linear',
+      externalProjectId,
+      updatedAt: issue.updatedAt,
+    };
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -193,6 +194,38 @@ export class ClickUpProvider implements TaskProvider {
       const text = await response.text();
       throw new BadGatewayException(`ClickUp task update failed (${response.status}): ${text}`);
     }
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title, description, priority } = params;
+
+    // For ClickUp, externalProjectId can be a folder or list. Create on the first list if it's a folder.
+    let listId = externalProjectId;
+    try {
+      const folder = await clickupFetch<ClickUpFolder>(`${CLICKUP_API}/folder/${externalProjectId}`, accessToken);
+      if (folder.lists.length > 0) listId = folder.lists[0]!.id;
+    } catch {
+      // Not a folder — use as list ID directly
+    }
+
+    const body: Record<string, unknown> = { name: title };
+    if (description) body.description = description;
+    if (priority) {
+      const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4 };
+      if (prioMap[priority.toLowerCase()]) body.priority = prioMap[priority.toLowerCase()];
+    }
+
+    const res = await fetch(`${CLICKUP_API}/list/${listId}/task`, {
+      method: 'POST',
+      headers: { Authorization: accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new BadGatewayException(`ClickUp create task failed (${res.status}): ${text}`);
+    }
+    const task = (await res.json()) as ClickUpTask;
+    return mapTask(task, externalProjectId);
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

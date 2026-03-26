@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -199,6 +200,58 @@ export class JiraProvider implements TaskProvider {
         }
       }
     }
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title, description, assigneeEmail, config } = params;
+    const siteId = config.siteId as string | undefined;
+    if (!siteId) throw new BadGatewayException('Jira integration requires a siteId in config');
+
+    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+    const authHeader = `Basic ${Buffer.from(`${accessToken}`).toString('base64')}`;
+
+    const fields: Record<string, unknown> = {
+      project: { key: externalProjectId },
+      summary: title,
+      issuetype: { name: 'Task' },
+    };
+    if (description) {
+      fields.description = { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: description }] }] };
+    }
+    if (assigneeEmail) {
+      const searchRes = await fetch(`${baseUrl}/user/search?query=${encodeURIComponent(assigneeEmail)}`, {
+        headers: { Authorization: authHeader, Accept: 'application/json' },
+      });
+      if (searchRes.ok) {
+        const users = (await searchRes.json()) as Array<{ accountId: string }>;
+        if (users[0]) fields.assignee = { accountId: users[0].accountId };
+      }
+    }
+
+    const res = await fetch(`${baseUrl}/issue`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new BadGatewayException(`Jira create failed (${res.status}): ${text}`);
+    }
+    const created = (await res.json()) as { key: string; self: string };
+
+    return {
+      id: created.key,
+      title,
+      description,
+      status: 'todo',
+      priority: 'none',
+      assigneeEmail,
+      labels: [],
+      url: `https://${siteId}.atlassian.net/browse/${created.key}`,
+      provider: 'jira',
+      externalProjectId,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

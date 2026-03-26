@@ -35,9 +35,21 @@ export interface ProviderStatus {
   type?: string;  // provider-specific category (e.g., ClickUp: "open"/"done"/"closed", Linear: workflow state type)
 }
 
+export interface TaskProviderCreateParams {
+  accessToken: string;
+  externalProjectId: string;
+  title: string;
+  description?: string;
+  assigneeEmail?: string;
+  priority?: string;
+  labels?: string[];
+  config: Record<string, unknown>;
+}
+
 export interface TaskProvider {
   fetchTasks(params: TaskProviderFetchParams): Promise<Task[]>;
   fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]>;
   getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]>;
   updateTask(params: TaskProviderUpdateParams): Promise<void>;
+  createTask(params: TaskProviderCreateParams): Promise<Task>;
 }

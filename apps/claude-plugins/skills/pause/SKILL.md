@@ -136,5 +136,5 @@ Task paused: <title>
 Duration: <elapsed time>
 Progress: <additions> additions, <deletions> deletions across <N> repo(s)
 
-Run /morning to pick a new task or resume this one later.
+Run /morning to pick a new task, /create to log a new one, or resume this one later.
 ```

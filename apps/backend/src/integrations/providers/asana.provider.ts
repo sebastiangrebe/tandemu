@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -221,6 +222,55 @@ export class AsanaProvider implements TaskProvider {
         }
       }
     }
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title, description, assigneeEmail } = params;
+
+    const data: Record<string, unknown> = {
+      projects: [externalProjectId],
+      name: title,
+    };
+    if (description) data.notes = description;
+
+    if (assigneeEmail) {
+      // Look up user by email
+      const task = await asanaFetch<{ data: { gid: string; workspace: { gid: string } } }>(
+        `/projects/${externalProjectId}`,
+        accessToken,
+      );
+      if (task?.data?.workspace?.gid) {
+        const usersRes = await asanaFetch<{ data: Array<{ gid: string; email: string }> }>(
+          `/workspaces/${task.data.workspace.gid}/users?opt_fields=email`,
+          accessToken,
+          'GET',
+        );
+        const user = usersRes?.data?.find((u) => u.email === assigneeEmail);
+        if (user) data.assignee = user.gid;
+      }
+    }
+
+    const created = await asanaFetch<{ data: AsanaTask }>(
+      '/tasks',
+      accessToken,
+      'POST',
+      { data },
+    );
+
+    return {
+      id: created.data.gid,
+      title: created.data.name,
+      description: created.data.notes ?? undefined,
+      status: 'todo',
+      priority: 'none',
+      assigneeName: created.data.assignee?.name,
+      assigneeEmail: created.data.assignee?.email,
+      labels: [],
+      url: created.data.permalink_url,
+      provider: 'asana',
+      externalProjectId,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

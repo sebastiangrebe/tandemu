@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -129,5 +130,21 @@ export class TasksController {
       { statusName: body.statusName, assigneeEmail: body.assigneeEmail },
     );
     return { success: true };
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async createTask(
+    @CurrentUser() user: RequestUser,
+    @Body() body: {
+      teamId: string;
+      title: string;
+      description?: string;
+      assigneeEmail?: string;
+      priority?: string;
+      labels?: string[];
+    },
+  ): Promise<Task> {
+    return this.tasksService.createTask(user.organizationId, body);
   }
 }
