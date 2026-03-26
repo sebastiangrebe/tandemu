@@ -1,4 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { TelemetryService, TimesheetEntry, ToolUsageStat, SessionQualityEntry } from './telemetry.service.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
@@ -13,7 +14,9 @@ export class TelemetryController {
   constructor(
     private readonly telemetryService: TelemetryService,
     private readonly db: DatabaseService,
+    private readonly configService: ConfigService,
   ) {}
+
 
   @Get('ai-ratio')
   async getAIRatio(

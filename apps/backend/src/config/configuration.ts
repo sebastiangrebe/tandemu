@@ -16,6 +16,9 @@ export interface AppConfig {
   jwt: {
     secret: string;
   };
+  otel: {
+    endpoint: string;
+  };
   memory: {
     mem0ApiKey: string;
     openmemoryHost: string;
@@ -60,6 +63,9 @@ export default (): AppConfig => {
     },
     jwt: {
       secret: process.env['JWT_SECRET'] ?? 'change-me-in-production',
+    },
+    otel: {
+      endpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://localhost:4318',
     },
     memory: {
       mem0ApiKey: process.env['MEM0_API_KEY'] ?? '',

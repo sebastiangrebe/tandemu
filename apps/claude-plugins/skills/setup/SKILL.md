@@ -148,15 +148,18 @@ cat > ~/.claude/tandemu.json << EOF
 EOF
 ```
 
-#### 5b. settings.json (telemetry + permissions)
+#### 5b. Fetch setup config from API
 
-Derive OTEL host from API URL (strip protocol and port):
+Fetch all configuration in a single call:
+
 ```bash
-OTEL_HOST=$(echo "$API_URL" | sed 's|https://||;s|http://||' | sed 's|:.*||')
-OTEL_ENDPOINT="http://${OTEL_HOST}:4318"
+SETUP_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/setup/config")
+OTEL_ENDPOINT=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['endpoint'])" 2>/dev/null)
+MEM_URL=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['url'])" 2>/dev/null)
 ```
 
-Merge into existing settings.json (don't overwrite other settings):
+#### 5c. settings.json (telemetry + permissions)
+
 ```bash
 python3 << 'PYEOF'
 import json, os
@@ -167,13 +170,16 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     settings = {}
 
+otel_endpoint = os.environ.get("OTEL_ENDPOINT", "http://localhost:4318")
+api_url = os.environ.get("API_URL", "http://localhost:3001")
+
 env = settings.get("env", {})
 env.update({
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
     "OTEL_METRICS_EXPORTER": "otlp",
     "OTEL_LOGS_EXPORTER": "otlp",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
-    "OTEL_EXPORTER_OTLP_ENDPOINT": os.environ.get("OTEL_ENDPOINT", "http://localhost:4318"),
+    "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
     "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}"
 })
@@ -181,15 +187,14 @@ settings["env"] = env
 
 perms = settings.get("permissions", {})
 allow = perms.get("allow", [])
-api_host = os.environ.get("OTEL_HOST", "localhost")
 tandemu_perms = [
     "Edit(~/.claude/tandemu*)",
     "Write(~/.claude/tandemu*)",
     "Bash(cat > ~/.claude/tandemu*)",
     "Bash(rm ~/.claude/tandemu*)",
     "Bash(rm -f ~/.claude/tandemu*)",
-    f"Bash(curl*{api_host}:3001*)",
-    f"Bash(curl*{api_host}:4318*)",
+    f"Bash(curl*{api_url}*)",
+    f"Bash(curl*{otel_endpoint}*)",
 ]
 for p in tandemu_perms:
     if p not in allow:
@@ -203,23 +208,12 @@ print("OK")
 PYEOF
 ```
 
-#### 5c. MCP memory config (~/.mcp.json)
-
-Fetch the memory config from the API (returns the correct URL for both self-hosted OpenMemory and Mem0 Cloud):
-
-```bash
-MEM_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/memory/config")
-MEM_TYPE=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
-MEM_URL=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
-```
-
-If the API returns a config, write it to `~/.mcp.json`:
+#### 5d. MCP memory config (~/.mcp.json)
 
 ```bash
 python3 << 'PYEOF'
 import json, os
 mcp_file = os.path.expanduser("~/.mcp.json")
-mem_type = os.environ.get("MEM_TYPE", "")
 mem_url = os.environ.get("MEM_URL", "")
 if not mem_url:
     print("SKIP: no memory config from API")
@@ -240,8 +234,6 @@ with open(mcp_file, "w") as f:
 print("OK")
 PYEOF
 ```
-
-If the API doesn't return a memory config, skip this step and tell the developer that memory is not configured for this instance.
 
 Also migrate legacy config if it exists:
 ```bash
