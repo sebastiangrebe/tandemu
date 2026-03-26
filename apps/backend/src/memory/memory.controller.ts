@@ -263,12 +263,14 @@ export class MemoryController {
       const params = rpc.params as Record<string, unknown>;
       if (params.arguments && typeof params.arguments === 'object') {
         const args = params.arguments as Record<string, unknown>;
-        // Only set user_id if not already provided
+        // Set user_id on the arguments directly
         if (!args.user_id) {
           args.user_id = userId;
         }
-        // Also inject into filters for search operations
-        if (args.filters && typeof args.filters === 'object') {
+        // Also ensure filters include user_id for search/get operations
+        if (!args.filters) {
+          args.filters = { user_id: userId };
+        } else if (typeof args.filters === 'object') {
           const filters = args.filters as Record<string, unknown>;
           if (!filters.user_id) {
             filters.user_id = userId;
