@@ -73,3 +73,32 @@ export interface TaskVelocityEntry {
   readonly avgDurationHours: number;
   readonly taskCount: number;
 }
+
+export interface HotFile {
+  readonly filePath: string;
+  readonly changeCount: number;
+  readonly taskCount: number;
+  readonly developerCount: number;
+}
+
+export interface InvestmentAllocation {
+  readonly category: string;
+  readonly taskCount: number;
+  readonly totalHours: number;
+}
+
+export interface AIEffectivenessEntry {
+  readonly filePath: string;
+  readonly aiTouchCount: number;
+}
+
+export interface CostEntry {
+  readonly date: string;
+  readonly totalCost: number;
+}
+
+export interface TokenUsageEntry {
+  readonly tokenType: string;
+  readonly model: string;
+  readonly totalTokens: number;
+}

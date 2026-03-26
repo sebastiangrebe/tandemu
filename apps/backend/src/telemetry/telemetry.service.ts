@@ -414,6 +414,202 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  async getHotFiles(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Array<{ filePath: string; changeCount: number; taskCount: number; developerCount: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            arrayJoin(splitByChar(',', SpanAttributes['changed_files'])) AS file_path,
+            count(*) AS change_count,
+            uniq(SpanAttributes['task_id']) AS task_count,
+            uniq(SpanAttributes['user_id']) AS developer_count
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            AND SpanAttributes['changed_files'] != ''
+            ${dateFilter}
+          GROUP BY file_path
+          ORDER BY change_count DESC
+          LIMIT 20
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ file_path: string; change_count: number; task_count: number; developer_count: number }>();
+      return rows.map((r) => ({
+        filePath: r.file_path,
+        changeCount: Number(r.change_count),
+        taskCount: Number(r.task_count),
+        developerCount: Number(r.developer_count),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getInvestmentAllocation(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Array<{ category: string; taskCount: number; totalHours: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            SpanAttributes['task_category'] AS category,
+            count(*) AS task_count,
+            sum(toFloat64OrZero(SpanAttributes['duration_seconds'])) / 3600 AS total_hours
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            AND SpanAttributes['task_category'] != ''
+            ${dateFilter}
+          GROUP BY category
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ category: string; task_count: number; total_hours: number }>();
+      return rows.map((r) => ({
+        category: r.category,
+        taskCount: Number(r.task_count),
+        totalHours: Math.round(Number(r.total_hours) * 10) / 10,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getAIEffectiveness(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Array<{ filePath: string; aiTouchCount: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            arrayJoin(splitByChar(',', SpanAttributes['ai_files'])) AS file_path,
+            count(*) AS ai_touch_count
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            AND SpanAttributes['ai_files'] != ''
+            ${dateFilter}
+          GROUP BY file_path
+          ORDER BY ai_touch_count DESC
+          LIMIT 20
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ file_path: string; ai_touch_count: number }>();
+      return rows.map((r) => ({
+        filePath: r.file_path,
+        aiTouchCount: Number(r.ai_touch_count),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getCostMetrics(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Array<{ date: string; totalCost: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            toDate(TimeUnix) AS date,
+            sum(Value) AS total_cost
+          FROM otel_metrics_sum
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND MetricName = 'claude_code.cost.usage'
+            ${dateFilter}
+          GROUP BY date
+          ORDER BY date ASC
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ date: string; total_cost: number }>();
+      return rows.map((r) => ({
+        date: r.date,
+        totalCost: Math.round(Number(r.total_cost) * 100) / 100,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getTokenUsage(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Array<{ tokenType: string; model: string; totalTokens: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            Attributes['type'] AS token_type,
+            Attributes['model'] AS model,
+            sum(Value) AS total_tokens
+          FROM otel_metrics_sum
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND MetricName = 'claude_code.token.usage'
+            ${dateFilter}
+          GROUP BY token_type, model
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ token_type: string; model: string; total_tokens: number }>();
+      return rows.map((r) => ({
+        tokenType: r.token_type,
+        model: r.model,
+        totalTokens: Number(r.total_tokens),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Tool usage stats from Claude Code's native tool_result events.
    * Shows which tools the team uses, success rates, and avg duration.

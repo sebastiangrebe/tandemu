@@ -240,6 +240,55 @@ export async function getTaskVelocity(filter?: TelemetryFilter): Promise<TaskVel
   return fetchApi<TaskVelocityEntry[]>(`/api/telemetry/task-velocity${buildParams(filter)}`);
 }
 
+export interface HotFile {
+  filePath: string;
+  changeCount: number;
+  taskCount: number;
+  developerCount: number;
+}
+
+export async function getHotFiles(filter?: TelemetryFilter): Promise<HotFile[]> {
+  return fetchApi<HotFile[]>(`/api/telemetry/hot-files${buildParams(filter)}`);
+}
+
+export interface InvestmentAllocation {
+  category: string;
+  taskCount: number;
+  totalHours: number;
+}
+
+export async function getInvestmentAllocation(filter?: TelemetryFilter): Promise<InvestmentAllocation[]> {
+  return fetchApi<InvestmentAllocation[]>(`/api/telemetry/investment-allocation${buildParams(filter)}`);
+}
+
+export interface AIEffectivenessEntry {
+  filePath: string;
+  aiTouchCount: number;
+}
+
+export async function getAIEffectiveness(filter?: TelemetryFilter): Promise<AIEffectivenessEntry[]> {
+  return fetchApi<AIEffectivenessEntry[]>(`/api/telemetry/ai-effectiveness${buildParams(filter)}`);
+}
+
+export interface CostEntry {
+  date: string;
+  totalCost: number;
+}
+
+export async function getCostMetrics(filter?: TelemetryFilter): Promise<CostEntry[]> {
+  return fetchApi<CostEntry[]>(`/api/telemetry/cost-metrics${buildParams(filter)}`);
+}
+
+export interface TokenUsageEntry {
+  tokenType: string;
+  model: string;
+  totalTokens: number;
+}
+
+export async function getTokenUsage(filter?: TelemetryFilter): Promise<TokenUsageEntry[]> {
+  return fetchApi<TokenUsageEntry[]>(`/api/telemetry/token-usage${buildParams(filter)}`);
+}
+
 // ---- Organizations (mutations) ----
 
 export async function createOrganization(data: { name: string; slug: string }): Promise<Organization> {

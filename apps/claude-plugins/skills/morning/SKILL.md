@@ -155,7 +155,12 @@ git pull origin "$DEFAULT_BRANCH" 2>/dev/null || true
 git checkout -b feat/<task.id>-<short-kebab-description>
 ```
 
-- Write the active task file:
+- Write the active task file. Infer the task category from labels:
+  - Labels containing "bug", "fix", "hotfix" → `bugfix`
+  - Labels containing "feature", "enhancement" → `feature`
+  - Labels containing "debt", "refactor", "chore" → `tech_debt`
+  - Labels containing "maintenance", "ops", "infra" → `maintenance`
+  - Default → `other`
 
 ```bash
 REPO_PATH=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -167,7 +172,9 @@ cat > ~/.claude/tandemu-active-task.json << EOF
   "startedAt": "$NOW",
   "repos": ["$REPO_PATH"],
   "provider": "<task.provider>",
-  "url": "<task.url>"
+  "url": "<task.url>",
+  "category": "<inferred category>",
+  "labels": [<task.labels as JSON array>]
 }
 EOF
 ```
