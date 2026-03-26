@@ -224,9 +224,13 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
+token = os.environ.get("TOKEN", "")
 servers["tandemu-memory"] = {
     "type": "sse",
-    "url": mem_url
+    "url": mem_url,
+    "headers": {
+        "Authorization": f"Bearer {token}"
+    }
 }
 config["mcpServers"] = servers
 with open(mcp_file, "w") as f:
