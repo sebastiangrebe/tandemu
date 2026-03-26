@@ -76,10 +76,14 @@ pnpm build
 # In Claude Code:
 > /plugin marketplace add sebastiangrebe/tandemu
 > /plugin install tandemu
-> /tandemu:setup
-```
+> /reload-plugins
 
-The setup skill handles authentication, configuration, and installs short-named skills (`/morning`, `/finish`, etc.) for daily use.
+# Exit and reopen Claude Code, then:
+> /tandemu:setup
+
+# Exit and reopen once more to activate memory, then:
+> /morning
+```
 
 ### Option B: Install script
 
