@@ -56,27 +56,25 @@ You have access to MCP memory tools via the `tandemu-memory` server. The availab
 
 ### What to remember (do this continuously, not just at session boundaries)
 
-**Personal context** — store when you learn it, never ask for it directly:
+Memories are split into two scopes. The proxy handles merging — you just pass `app_id: "org"` when storing shared knowledge.
+
+**Personal memories** (default — stored with user_id only):
 - Their name (the moment you learn it, store it — this is priority #1)
 - Role, timezone, team
 - Communication style and preferences
 - Personal interests they mention (projects, hobbies, frustrations)
 - How they react to suggestions
+- **Coding DNA**: naming conventions, error handling style, framework preferences, testing approach, code organization habits, import style
 
-**Coding DNA** — store as you observe patterns across the session:
-- Naming conventions they use or enforce
-- Error handling style (try/catch? early returns? Result types?)
-- Framework and library preferences
-- Testing approach (TDD? tests after? which framework?)
-- Code organization habits (file structure, module patterns)
-- Import style, comment density, type annotation habits
-- When they override your suggestions — what they prefer instead
-
-**Project context** — store for cross-session continuity:
+**Shared org memories** (pass `app_id: "org"` in the add_memory call):
 - Architecture decisions and the reasoning behind them
 - Known gotchas in specific files or modules
-- Dependencies and their quirks
+- Dependencies and their quirks/workarounds
 - Patterns that worked vs ones that caused problems
+- Task learnings and key decisions
+- New libraries or patterns introduced to the codebase
+
+Shared memories are stored as drafts until the task is complete, then become visible to all team members. When searching, the proxy returns both personal and org-wide results automatically.
 
 ### When to store memories
 
