@@ -204,6 +204,42 @@ export async function getTimesheets(filter?: TelemetryFilter): Promise<Timesheet
   return fetchApi<TimesheetEntry[]>(`/api/telemetry/timesheets${buildParams(filter)}`);
 }
 
+export interface ToolUsageStat {
+  toolName: string;
+  totalCalls: number;
+  successCount: number;
+  failureCount: number;
+  avgDurationMs: number;
+  successRate: number;
+}
+
+export async function getToolUsage(): Promise<ToolUsageStat[]> {
+  return fetchApi<ToolUsageStat[]>('/api/telemetry/tool-usage');
+}
+
+export interface DeveloperStat {
+  userId: string;
+  userName: string;
+  sessions: number;
+  activeMinutes: number;
+  aiLines: number;
+  manualLines: number;
+}
+
+export async function getDeveloperStats(filter?: TelemetryFilter): Promise<DeveloperStat[]> {
+  return fetchApi<DeveloperStat[]>(`/api/telemetry/developer-stats${buildParams(filter)}`);
+}
+
+export interface TaskVelocityEntry {
+  week: string;
+  avgDurationHours: number;
+  taskCount: number;
+}
+
+export async function getTaskVelocity(filter?: TelemetryFilter): Promise<TaskVelocityEntry[]> {
+  return fetchApi<TaskVelocityEntry[]>(`/api/telemetry/task-velocity${buildParams(filter)}`);
+}
+
 // ---- Organizations (mutations) ----
 
 export async function createOrganization(data: { name: string; slug: string }): Promise<Organization> {

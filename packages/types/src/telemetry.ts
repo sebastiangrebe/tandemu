@@ -58,3 +58,18 @@ export interface DORAMetrics {
   readonly periodStart: string;
   readonly periodEnd: string;
 }
+
+export interface DeveloperStat {
+  readonly userId: string;
+  readonly userName: string;
+  readonly sessions: number;
+  readonly activeMinutes: number;
+  readonly aiLines: number;
+  readonly manualLines: number;
+}
+
+export interface TaskVelocityEntry {
+  readonly week: string;
+  readonly avgDurationHours: number;
+  readonly taskCount: number;
+}

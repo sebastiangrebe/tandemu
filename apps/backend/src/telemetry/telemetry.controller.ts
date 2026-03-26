@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DORAMetrics, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
 
 @Controller('telemetry')
@@ -53,6 +53,40 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
   ): Promise<SessionQualityEntry[]> {
     return this.telemetryService.getSessionQuality(user.organizationId);
+  }
+
+  @Get('developer-stats')
+  async getDeveloperStats(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<DeveloperStat[]> {
+    const stats = await this.telemetryService.getDeveloperStats(user.organizationId, startDate, endDate);
+
+    // Resolve user IDs to names from Postgres
+    const userIds = [...new Set(stats.map((s) => s.userId))];
+    if (userIds.length > 0) {
+      const result = await this.db.query<{ id: string; name: string }>(
+        `SELECT id, name FROM users WHERE id = ANY($1)`,
+        [userIds],
+      );
+      const nameMap = new Map(result.rows.map((r) => [r.id, r.name]));
+      return stats.map((s) => ({
+        ...s,
+        userName: nameMap.get(s.userId) ?? s.userId.slice(0, 8),
+      }));
+    }
+
+    return stats;
+  }
+
+  @Get('task-velocity')
+  async getTaskVelocity(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<TaskVelocityEntry[]> {
+    return this.telemetryService.getTaskVelocity(user.organizationId, startDate, endDate);
   }
 
   @Get('dora-metrics')
