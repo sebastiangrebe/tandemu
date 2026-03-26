@@ -184,7 +184,7 @@ export class AsanaProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority } = params;
 
     if (statusName) {
       const statuses = await this.getTaskStatuses({ accessToken, taskId, config: {} });
@@ -221,6 +221,27 @@ export class AsanaProvider implements TaskProvider {
         if (user) {
           await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { assignee: user.gid });
         }
+      }
+    }
+
+    if (priority) {
+      try {
+        // Fetch the task to find the priority custom field and its enum options
+        const taskData = await asanaFetch<{ gid: string; custom_fields: Array<{ gid: string; name: string; enum_options?: Array<{ gid: string; name: string }> }> }>(
+          `/tasks/${taskId}?opt_fields=custom_fields,custom_fields.name,custom_fields.enum_options,custom_fields.enum_options.name`,
+          accessToken,
+        );
+        const prioField = taskData.custom_fields?.find((f) => f.name.toLowerCase() === 'priority');
+        if (prioField?.enum_options) {
+          const target = prioField.enum_options.find((o) => o.name.toLowerCase().includes(priority.toLowerCase()));
+          if (target) {
+            await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', {
+              custom_fields: { [prioField.gid]: target.gid },
+            });
+          }
+        }
+      } catch {
+        // Priority field may not exist — silently skip
       }
     }
   }

@@ -179,10 +179,15 @@ export class ClickUpProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority } = params;
 
     const body: Record<string, unknown> = {};
     if (statusName) body.status = statusName;
+    if (priority) {
+      const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4 };
+      const prioNum = prioMap[priority.toLowerCase()];
+      if (prioNum) body.priority = prioNum;
+    }
     // ClickUp uses user IDs for assignees — look up by email via team members
     // For now, assignment requires the ClickUp user ID which we don't have from email alone
     // Status update works directly

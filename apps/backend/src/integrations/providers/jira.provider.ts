@@ -164,7 +164,7 @@ export class JiraProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, config } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, config } = params;
     const siteId = config.siteId as string | undefined;
     if (!siteId) return;
 
@@ -202,6 +202,18 @@ export class JiraProvider implements TaskProvider {
             body: JSON.stringify({ accountId: users[0].accountId }),
           });
         }
+      }
+    }
+
+    if (priority) {
+      const prioMap: Record<string, string> = { urgent: 'Highest', high: 'High', medium: 'Medium', low: 'Low', none: 'Lowest' };
+      const jiraPriority = prioMap[priority.toLowerCase()];
+      if (jiraPriority) {
+        await fetch(`${baseUrl}/issue/${taskId}`, {
+          method: 'PUT',
+          headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: { priority: { name: jiraPriority } } }),
+        });
       }
     }
   }

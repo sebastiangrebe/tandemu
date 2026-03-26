@@ -293,11 +293,9 @@ export class MondayProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName } = params;
-    // Monday.com assignment by email is not straightforward (requires people column + user lookup)
-    // Status update is supported
+    const { accessToken, taskId, statusName, priority } = params;
 
-    if (!statusName) return;
+    if (!statusName && !priority) return;
 
     const itemData = await mondayQuery<{
       items: Array<{
@@ -324,28 +322,42 @@ export class MondayProvider implements TaskProvider {
       throw new BadGatewayException('Monday.com item not found');
     }
 
-    const statusCol = item.column_values.find(
-      (c) => c.type === 'status' || (c.type === 'color' && c.title.toLowerCase() === 'status'),
-    );
-    const columnId = statusCol?.id ?? 'status';
+    const boardId = item.board.id;
 
-    await mondayQuery(
-      accessToken,
-      `mutation ($boardId: ID!, $itemId: ID!, $columnId: String!, $value: JSON!) {
-        change_simple_column_value(
-          board_id: $boardId,
-          item_id: $itemId,
-          column_id: $columnId,
-          value: $value
-        ) { id }
-      }`,
-      {
-        boardId: item.board.id,
-        itemId: taskId,
-        columnId,
-        value: statusName,
-      },
-    );
+    if (statusName) {
+      const statusCol = item.column_values.find(
+        (c) => c.type === 'status' || (c.type === 'color' && c.title.toLowerCase() === 'status'),
+      );
+      if (statusCol) {
+        await mondayQuery(
+          accessToken,
+          `mutation ($boardId: ID!, $itemId: ID!, $columnId: String!, $value: JSON!) {
+            change_simple_column_value(board_id: $boardId, item_id: $itemId, column_id: $columnId, value: $value) { id }
+          }`,
+          { boardId, itemId: taskId, columnId: statusCol.id, value: statusName },
+        );
+      }
+    }
+
+    if (priority) {
+      const prioCol = item.column_values.find(
+        (c) => c.title.toLowerCase() === 'priority',
+      );
+      if (prioCol) {
+        // Monday priority labels: "Critical", "High", "Medium", "Low"
+        const prioMap: Record<string, string> = { urgent: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+        const mondayPriority = prioMap[priority.toLowerCase()];
+        if (mondayPriority) {
+          await mondayQuery(
+            accessToken,
+            `mutation ($boardId: ID!, $itemId: ID!, $columnId: String!, $value: JSON!) {
+              change_simple_column_value(board_id: $boardId, item_id: $itemId, column_id: $columnId, value: $value) { id }
+            }`,
+            { boardId, itemId: taskId, columnId: prioCol.id, value: mondayPriority },
+          );
+        }
+      }
+    }
   }
 
   async createTask(params: TaskProviderCreateParams): Promise<Task> {
