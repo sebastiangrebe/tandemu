@@ -7,5 +7,6 @@ import { AuthModule } from '../auth/auth.module.js';
   imports: [AuthModule],
   controllers: [MemoryController],
   providers: [MemoryService],
+  exports: [MemoryService],
 })
 export class MemoryModule {}
