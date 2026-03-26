@@ -127,15 +127,18 @@ export class GitHubProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, config } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, config } = params;
     const repo = config.repo as string | undefined;
     if (!repo) return;
 
     const body: Record<string, unknown> = {};
     if (statusName) body.state = statusName.toLowerCase();
     if (assigneeEmail) {
-      // GitHub uses usernames, not emails — extract username portion as best effort
       body.assignees = [assigneeEmail.split('@')[0]];
+    }
+    if (priority) {
+      // GitHub uses labels for priority — add a priority label
+      body.labels = [`priority:${priority.toLowerCase()}`];
     }
 
     if (Object.keys(body).length === 0) return;
