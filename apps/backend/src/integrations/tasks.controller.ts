@@ -93,11 +93,14 @@ export class TasksController {
     filtered.sort((a, b) => {
       let cmp: number;
       if (sortField === 'priority') {
+        // Lower weight = higher priority (urgent=0, none=4)
+        // "desc" should mean highest priority first, so keep natural order
         cmp = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
+        return sortOrder === 'desc' ? cmp : -cmp;
       } else {
         cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+        return sortOrder === 'asc' ? cmp : -cmp;
       }
-      return sortOrder === 'asc' ? cmp : -cmp;
     });
 
     return filtered;
