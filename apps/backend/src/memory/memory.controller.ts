@@ -408,16 +408,17 @@ export class MemoryController {
 
       // Merge and deduplicate by ID
       const seen = new Set<string>();
-      const merged = [];
+      const merged: Array<Record<string, unknown>> = [];
       for (const mem of [...personalMemories, ...filteredOrgMemories]) {
-        if (!seen.has(mem.id)) {
-          seen.add(mem.id);
+        const id = mem.id as string;
+        if (id && !seen.has(id)) {
+          seen.add(id);
           merged.push(mem);
         }
       }
 
       // Sort by score descending
-      merged.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      merged.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
 
       // Reconstruct the MCP response
       const responseBody = personalResult ?? orgResult;
@@ -560,26 +561,4 @@ export class MemoryController {
     }
   }
 
-  /**
-   * Rewrite the endpoint URL in an SSE endpoint event to point to our proxy.
-   */
-  private rewriteEndpointEvent(message: string, backendBaseUrl: string): string {
-    const lines = message.split('\n');
-    const rewritten = lines.map((line) => {
-      if (line.startsWith('data:')) {
-        const url = line.slice(5).trim();
-        try {
-          const parsed = new URL(url);
-          const sessionId = parsed.searchParams.get('sessionId') ?? '';
-          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
-        } catch {
-          const sessionMatch = url.match(/sessionId=([^&\s]+)/);
-          const sessionId = sessionMatch?.[1] ?? '';
-          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
-        }
-      }
-      return line;
-    });
-    return rewritten.join('\n');
-  }
 }

@@ -9,6 +9,7 @@ import type {
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
+  TaskProviderCreateParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -339,6 +340,30 @@ export class MondayProvider implements TaskProvider {
         value: statusName,
       },
     );
+  }
+
+  async createTask(params: TaskProviderCreateParams): Promise<Task> {
+    const { accessToken, externalProjectId, title } = params;
+
+    const data = await mondayQuery<{
+      create_item: { id: string; name: string; board: { id: string }; column_values: Array<{ id: string; text: string; type: string; title: string }> };
+    }>(
+      accessToken,
+      `mutation { create_item(board_id: ${externalProjectId}, item_name: "${title.replace(/"/g, '\\"')}") { id name board { id } column_values { id text type title } } }`,
+    );
+
+    const item = data.create_item;
+    return {
+      id: item.id,
+      title: item.name,
+      status: 'todo',
+      priority: 'none',
+      labels: [],
+      url: `https://monday.com/boards/${externalProjectId}/pulses/${item.id}`,
+      provider: 'monday',
+      externalProjectId,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {
