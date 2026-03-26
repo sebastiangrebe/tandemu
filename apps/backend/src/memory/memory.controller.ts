@@ -53,6 +53,9 @@ export class MemoryController {
     const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
     const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
 
+    // Inject user_id into MCP tool call arguments so memories are scoped per user
+    const enrichedBody = this.injectUserId(body, user.userId);
+
     let upstreamResponse: globalThis.Response;
     try {
       upstreamResponse = await fetch(upstreamUrl, {
@@ -61,7 +64,7 @@ export class MemoryController {
           ...upstreamHeaders,
           'Accept': 'text/event-stream, application/json',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(enrichedBody),
       });
     } catch (err) {
       this.logger.error(`Failed to connect to upstream MCP: ${err}`);
@@ -246,5 +249,34 @@ export class MemoryController {
       return line;
     });
     return rewritten.join('\n');
+  }
+
+  /**
+   * Inject user_id into MCP tool call arguments so memories are scoped per user.
+   * MCP JSON-RPC tool calls have: { method: "tools/call", params: { name: "...", arguments: { ... } } }
+   */
+  private injectUserId(body: unknown, userId: string): unknown {
+    if (!body || typeof body !== 'object') return body;
+    const rpc = body as Record<string, unknown>;
+
+    if (rpc.method === 'tools/call' && rpc.params && typeof rpc.params === 'object') {
+      const params = rpc.params as Record<string, unknown>;
+      if (params.arguments && typeof params.arguments === 'object') {
+        const args = params.arguments as Record<string, unknown>;
+        // Only set user_id if not already provided
+        if (!args.user_id) {
+          args.user_id = userId;
+        }
+        // Also inject into filters for search operations
+        if (args.filters && typeof args.filters === 'object') {
+          const filters = args.filters as Record<string, unknown>;
+          if (!filters.user_id) {
+            filters.user_id = userId;
+          }
+        }
+      }
+    }
+
+    return body;
   }
 }
