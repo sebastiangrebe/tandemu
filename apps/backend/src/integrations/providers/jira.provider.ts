@@ -94,7 +94,11 @@ export class JiraProvider implements TaskProvider {
 
     const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
 
+    const componentId = config?.subProjectId as string | undefined;
     let jql = `project = "${externalProjectId}"`;
+    if (componentId) {
+      jql += ` AND component = "${componentId}"`;
+    }
     if (emails.length === 1) {
       jql += ` AND assignee = "${emails[0]}"`;
     } else if (emails.length > 1) {
@@ -218,6 +222,10 @@ export class JiraProvider implements TaskProvider {
     if (description) {
       fields.description = { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: description }] }] };
     }
+    const componentId = config?.subProjectId as string | undefined;
+    if (componentId) {
+      fields.components = [{ id: componentId }];
+    }
     if (assigneeEmail) {
       const searchRes = await fetch(`${baseUrl}/user/search?query=${encodeURIComponent(assigneeEmail)}`, {
         headers: { Authorization: authHeader, Accept: 'application/json' },
@@ -268,5 +276,23 @@ export class JiraProvider implements TaskProvider {
       name: p.name,
       key: p.key,
     }));
+  }
+
+  async fetchSubProjects(accessToken: string, projectKey: string, config?: Record<string, unknown>): Promise<ExternalProject[]> {
+    const siteId = config?.externalWorkspaceId as string | undefined;
+    if (!siteId) return [];
+
+    try {
+      const components = await jiraFetch<Array<{ id: string; name: string }>>(
+        `https://${siteId}.atlassian.net/rest/api/3/project/${projectKey}/component?maxResults=50`,
+        accessToken,
+      );
+      return components.map((c) => ({
+        id: c.id,
+        name: c.name,
+      }));
+    } catch {
+      return [];
+    }
   }
 }

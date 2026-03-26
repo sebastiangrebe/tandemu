@@ -52,4 +52,6 @@ export interface TaskProvider {
   getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]>;
   updateTask(params: TaskProviderUpdateParams): Promise<void>;
   createTask(params: TaskProviderCreateParams): Promise<Task>;
+  /** Optional: fetch sub-projects within a project (e.g. Linear projects in a team, ClickUp lists in a folder) */
+  fetchSubProjects?(accessToken: string, projectId: string, config?: Record<string, unknown>): Promise<ExternalProject[]>;
 }

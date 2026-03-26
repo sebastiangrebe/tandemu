@@ -111,35 +111,43 @@ function mapTask(task: ClickUpTask, externalProjectId: string): Task {
 
 export class ClickUpProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
-    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone } = params;
+    const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone, config } = params;
     const emails = assigneeEmails ?? (assigneeEmail ? [assigneeEmail] : []);
 
-    // externalProjectId can be a folder ID (preferred) or a list ID.
-    // Try as folder first — fetch all lists in the folder and aggregate tasks.
-    // If that fails (404), fall back to treating it as a list ID.
     let allTasks: ClickUpTask[] = [];
     const includeClosed = excludeDone ? 'false' : 'true';
+    const subProjectId = config?.subProjectId as string | undefined;
 
-    try {
-      const folderData = await clickupFetch<ClickUpFolder>(
-        `${CLICKUP_API}/folder/${externalProjectId}`,
-        accessToken,
-      );
-      // It's a folder — fetch tasks from every list in it
-      for (const list of folderData.lists) {
-        const listData = await clickupFetch<ClickUpTasksResponse>(
-          `${CLICKUP_API}/list/${list.id}/task?include_closed=${includeClosed}&subtasks=true`,
-          accessToken,
-        );
-        allTasks.push(...listData.tasks);
-      }
-    } catch (err) {
-      // Not a folder — try as a list ID
+    if (subProjectId) {
+      // A specific list was selected — fetch only from that list
       const listData = await clickupFetch<ClickUpTasksResponse>(
-        `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=${includeClosed}&subtasks=true`,
+        `${CLICKUP_API}/list/${subProjectId}/task?include_closed=${includeClosed}&subtasks=true`,
         accessToken,
       );
       allTasks = listData.tasks;
+    } else {
+      // externalProjectId can be a folder ID (preferred) or a list ID.
+      // Try as folder first — fetch all lists in the folder and aggregate tasks.
+      // If that fails (404), fall back to treating it as a list ID.
+      try {
+        const folderData = await clickupFetch<ClickUpFolder>(
+          `${CLICKUP_API}/folder/${externalProjectId}`,
+          accessToken,
+        );
+        for (const list of folderData.lists) {
+          const listData = await clickupFetch<ClickUpTasksResponse>(
+            `${CLICKUP_API}/list/${list.id}/task?include_closed=${includeClosed}&subtasks=true`,
+            accessToken,
+          );
+          allTasks.push(...listData.tasks);
+        }
+      } catch {
+        const listData = await clickupFetch<ClickUpTasksResponse>(
+          `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=${includeClosed}&subtasks=true`,
+          accessToken,
+        );
+        allTasks = listData.tasks;
+      }
     }
 
     if (emails.length > 0) {
@@ -197,15 +205,18 @@ export class ClickUpProvider implements TaskProvider {
   }
 
   async createTask(params: TaskProviderCreateParams): Promise<Task> {
-    const { accessToken, externalProjectId, title, description, priority } = params;
+    const { accessToken, externalProjectId, title, description, priority, config } = params;
 
-    // For ClickUp, externalProjectId can be a folder or list. Create on the first list if it's a folder.
-    let listId = externalProjectId;
-    try {
-      const folder = await clickupFetch<ClickUpFolder>(`${CLICKUP_API}/folder/${externalProjectId}`, accessToken);
-      if (folder.lists.length > 0) listId = folder.lists[0]!.id;
-    } catch {
-      // Not a folder — use as list ID directly
+    // If a specific list was selected as sub-project, use it directly.
+    // Otherwise, resolve: folder → first list, or use as list ID directly.
+    let listId = (config?.subProjectId as string) || externalProjectId;
+    if (!config?.subProjectId) {
+      try {
+        const folder = await clickupFetch<ClickUpFolder>(`${CLICKUP_API}/folder/${externalProjectId}`, accessToken);
+        if (folder.lists.length > 0) listId = folder.lists[0]!.id;
+      } catch {
+        // Not a folder — use as list ID directly
+      }
     }
 
     const body: Record<string, unknown> = { name: title };
@@ -282,5 +293,20 @@ export class ClickUpProvider implements TaskProvider {
     }
 
     return projects;
+  }
+
+  async fetchSubProjects(accessToken: string, folderId: string): Promise<ExternalProject[]> {
+    try {
+      const folder = await clickupFetch<ClickUpFolder>(
+        `${CLICKUP_API}/folder/${folderId}`,
+        accessToken,
+      );
+      return folder.lists.map((list) => ({
+        id: list.id,
+        name: list.name,
+      }));
+    } catch {
+      return [];
+    }
   }
 }

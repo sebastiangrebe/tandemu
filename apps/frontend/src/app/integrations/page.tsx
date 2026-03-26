@@ -46,6 +46,7 @@ import {
   createProjectMapping,
   deleteProjectMapping,
   getTeams,
+  getSubProjects,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Integration, IntegrationProjectMapping } from '@/lib/api';
@@ -164,6 +165,9 @@ export default function IntegrationsPage() {
   const [selectedExternalProject, setSelectedExternalProject] = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [savingMapping, setSavingMapping] = useState(false);
+  const [subProjects, setSubProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedSubProject, setSelectedSubProject] = useState('');
+  const [loadingSubProjects, setLoadingSubProjects] = useState(false);
 
   const [connectError, setConnectError] = useState('');
 
@@ -254,11 +258,33 @@ export default function IntegrationsPage() {
     }
   };
 
+  // When external project changes, fetch sub-projects (e.g. Linear projects within a team, ClickUp lists in a folder)
+  const handleExternalProjectChange = async (value: string) => {
+    setSelectedExternalProject(value);
+    setSelectedSubProject('');
+    setSubProjects([]);
+
+    if (addMappingProvider && value) {
+      setLoadingSubProjects(true);
+      try {
+        const projects = await getSubProjects(addMappingProvider, value);
+        setSubProjects(projects);
+        if (projects.length === 1) setSelectedSubProject(projects[0].id);
+      } catch {
+        setSubProjects([]);
+      } finally {
+        setLoadingSubProjects(false);
+      }
+    }
+  };
+
   // Open add mapping dialog
   const handleOpenAddMapping = async (provider: string) => {
     setAddMappingProvider(provider);
     setSelectedExternalProject('');
     setSelectedTeamId('');
+    setSubProjects([]);
+    setSelectedSubProject('');
     setLoadingProjects(true);
     try {
       const projects = await getExternalProjects(provider);
@@ -278,10 +304,13 @@ export default function IntegrationsPage() {
     setError('');
     try {
       const project = externalProjects.find((p) => p.id === selectedExternalProject);
+      const config: Record<string, unknown> = {};
+      if (selectedSubProject) config.subProjectId = selectedSubProject;
       await createProjectMapping(addMappingProvider, {
         teamId: selectedTeamId,
         externalProjectId: selectedExternalProject,
         externalProjectName: project?.name,
+        config: Object.keys(config).length > 0 ? config : undefined,
       });
       // Refresh mappings
       const mappings = await getProjectMappings(addMappingProvider);
@@ -708,7 +737,7 @@ export default function IntegrationsPage() {
                       No projects found. Verify your token has the right permissions.
                     </p>
                   ) : (
-                    <Select value={selectedExternalProject} onValueChange={setSelectedExternalProject}>
+                    <Select value={selectedExternalProject} onValueChange={handleExternalProjectChange}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a project..." />
                       </SelectTrigger>
@@ -724,6 +753,39 @@ export default function IntegrationsPage() {
                     </Select>
                   )}
                 </div>
+
+                {loadingSubProjects && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    Loading projects...
+                  </div>
+                )}
+
+                {subProjects.length > 1 && !loadingSubProjects && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">
+                      {addMappingProvider === 'clickup' ? 'List' :
+                       addMappingProvider === 'monday' ? 'Group' :
+                       addMappingProvider === 'asana' ? 'Section' :
+                       addMappingProvider === 'jira' ? 'Board' : 'Project'}{' '}
+                      <span className="text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <Select value={selectedSubProject} onValueChange={setSelectedSubProject}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a project..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {subProjects.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium">Tandemu Team</label>
