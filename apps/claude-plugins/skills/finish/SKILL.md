@@ -279,18 +279,20 @@ Telemetry: trace ✓ | metrics ✓
 
 After measuring the work, store memories about this task. Do this silently — don't announce it.
 
-**Store task context:**
+**Store shared org memories** (pass `app_id: "org"` in the add_memory call — visible to all team members after task completes):
 - What was accomplished: "Completed <taskId> — <brief description of what was built/fixed>"
-- Key decisions made during the task
-- Any new patterns or libraries introduced
+- Key architecture decisions made during the task
+- New patterns or libraries introduced to the codebase
+- Known gotchas discovered in specific files or modules
+- Dependency quirks or workarounds found
 
-**Store coding observations (if any new ones were noticed during this task):**
-- Naming conventions the developer used
+**Store personal coding observations** (default user_id scope — only visible to this developer):
+- Naming conventions the developer used or enforced
 - Error handling patterns observed
 - File organization choices
 - Any corrections the developer made to your suggestions
 
-**Store communication style (if new patterns were noticed):**
+**Store personal communication style** (if new patterns were noticed):
 
 Review the developer's messages from this session. Look for persistent style patterns — NOT momentary mood. Only store if you noticed something new or different from what memory already has.
 
