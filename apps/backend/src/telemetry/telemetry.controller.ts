@@ -41,6 +41,51 @@ export class TelemetryController {
     return [...custom, ...native];
   }
 
+  @Get('hot-files')
+  async getHotFiles(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.telemetryService.getHotFiles(user.organizationId, startDate, endDate);
+  }
+
+  @Get('investment-allocation')
+  async getInvestmentAllocation(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.telemetryService.getInvestmentAllocation(user.organizationId, startDate, endDate);
+  }
+
+  @Get('ai-effectiveness')
+  async getAIEffectiveness(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.telemetryService.getAIEffectiveness(user.organizationId, startDate, endDate);
+  }
+
+  @Get('cost-metrics')
+  async getCostMetrics(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.telemetryService.getCostMetrics(user.organizationId, startDate, endDate);
+  }
+
+  @Get('token-usage')
+  async getTokenUsage(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.telemetryService.getTokenUsage(user.organizationId, startDate, endDate);
+  }
+
   @Get('tool-usage')
   async getToolUsage(
     @CurrentUser() user: RequestUser,

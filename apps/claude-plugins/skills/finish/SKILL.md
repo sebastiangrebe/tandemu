@@ -133,11 +133,35 @@ For AI vs Manual attribution:
 - All other line additions are `manual_lines`.
 - If no commits have the Claude co-author tag, attribute all lines as `manual_lines`.
 
+Additionally, collect file-level data for each repo:
+
+```bash
+# Changed file paths
+git -C <repo> diff $DEFAULT_BRANCH...HEAD --name-only 2>/dev/null
+
+# Files touched by AI-attributed commits only
+for hash in <AI_COMMIT_HASHES>; do
+  git -C <repo> diff $hash^..$hash --name-only 2>/dev/null
+done | sort -u
+```
+
+Aggregate across all repos into comma-separated strings:
+- `changed_files`: all unique file paths changed on the branch
+- `file_count`: number of unique files changed
+- `ai_files`: file paths touched by AI-attributed commits only
+
+Also read `category` and `labels` from the active task file (set by `/morning`).
+
 Calculate:
 - `duration_seconds`: `startedAt` to now
 - `total_commits`: total commits across all repos
 - `ai_lines`: total additions from Claude-attributed commits
 - `manual_lines`: total additions minus `ai_lines`
+- `changed_files`: comma-separated file paths
+- `file_count`: number of unique files
+- `ai_files`: comma-separated file paths from AI commits
+- `task_category`: from active task file (feature/bugfix/tech_debt/maintenance/other)
+- `task_labels`: from active task file (comma-separated label names)
 
 #### 4b. Send telemetry
 
@@ -188,6 +212,11 @@ TRACE_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/
             {"key": "manual_lines", "value": {"stringValue": "<manual_lines>"}},
             {"key": "duration_seconds", "value": {"stringValue": "'"$DURATION_S"'"}},
             {"key": "commits", "value": {"stringValue": "<total_commits>"}},
+            {"key": "changed_files", "value": {"stringValue": "<changed_files>"}},
+            {"key": "file_count", "value": {"stringValue": "<file_count>"}},
+            {"key": "ai_files", "value": {"stringValue": "<ai_files>"}},
+            {"key": "task_category", "value": {"stringValue": "<task_category>"}},
+            {"key": "task_labels", "value": {"stringValue": "<task_labels>"}},
             {"key": "deployment", "value": {"stringValue": "true"}}
           ],
           "status": {}
