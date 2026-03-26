@@ -83,10 +83,10 @@ If no active task was found, proceed to Step 3.
 Fetch tasks assigned to the current developer (use the config values from setup):
 
 ```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&mine=true"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&mine=true&sort=priority&order=desc"
 ```
 
-The response is `{ success, data: Task[] }` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`.
+The response is `{ success, data: Task[] }` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is.
 
 Filter to tasks that are `todo` or `in_progress` status.
 
@@ -95,7 +95,7 @@ If the developer has assigned tasks, proceed to Step 4 with those.
 If no tasks are assigned to the developer, fetch **unassigned todo tasks** that they could pick up:
 
 ```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&status=todo&unassigned=true"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&status=todo&unassigned=true&sort=priority&order=desc"
 ```
 
 Tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
@@ -107,12 +107,12 @@ If both calls return empty, tell the developer: "No tasks found. Your team may n
 Use AskUserQuestion to present the tasks as a selectable list:
 - Question: "What would you like to work on?"
 - Header: "Tasks"
-- Options: build dynamically from the fetched tasks (max 4, prioritized by: urgent > high > medium > low). Each option:
+- Options: take the **first 4 tasks** from the API response (already sorted by priority). Each option:
   - Label: the task title (truncated to fit)
   - Description: `<task.id> · <priority> · <provider>` (e.g., "TAND-42 · high · jira")
 - The user can select "Other" to describe a new task not in the list
 
-If there are more than 4 tasks, show the top 4 by priority and mention how many more exist.
+If there are more than 4 tasks, show the top 4 and mention how many more exist.
 
 ### 5. Set up the chosen task
 
