@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DORAMetrics, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
 
 export interface TimesheetEntry {
   readonly userId: string;
@@ -300,6 +300,114 @@ export class TelemetryService implements OnModuleDestroy {
         date: row.date,
         activeMinutes: Math.round(Number(row.activeMinutes)),
         sessions: Number(row.sessions),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getDeveloperStats(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<DeveloperStat[]> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) {
+        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        params.endDate = endDate;
+      }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            SpanAttributes['user_id'] AS userId,
+            count(*) AS sessions,
+            sum(toFloat64OrZero(SpanAttributes['duration_seconds'])) / 60 AS activeMinutes,
+            sum(toFloat64OrZero(SpanAttributes['ai_lines'])) AS aiLines,
+            sum(toFloat64OrZero(SpanAttributes['manual_lines'])) AS manualLines
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            ${dateFilter}
+          GROUP BY userId
+          ORDER BY sessions DESC
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{
+        userId: string;
+        sessions: number;
+        activeMinutes: number;
+        aiLines: number;
+        manualLines: number;
+      }>();
+
+      return rows.map((row) => ({
+        userId: row.userId,
+        userName: row.userId,
+        sessions: Number(row.sessions),
+        activeMinutes: Math.round(Number(row.activeMinutes)),
+        aiLines: Number(row.aiLines),
+        manualLines: Number(row.manualLines),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getTaskVelocity(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<TaskVelocityEntry[]> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) {
+        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        params.endDate = endDate;
+      }
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            toStartOfWeek(Timestamp) AS week,
+            avg(toFloat64OrZero(SpanAttributes['duration_seconds']) / 3600) AS avgDurationHours,
+            count(*) AS taskCount
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            AND SpanAttributes['status'] = 'completed'
+            ${dateFilter}
+          GROUP BY week
+          ORDER BY week ASC
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{
+        week: string;
+        avgDurationHours: number;
+        taskCount: number;
+      }>();
+
+      return rows.map((row) => ({
+        week: row.week,
+        avgDurationHours: Math.round(Number(row.avgDurationHours) * 10) / 10,
+        taskCount: Number(row.taskCount),
       }));
     } catch {
       return [];

@@ -187,6 +187,7 @@ TRACE_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/
             {"key": "ai_lines", "value": {"stringValue": "<ai_lines>"}},
             {"key": "manual_lines", "value": {"stringValue": "<manual_lines>"}},
             {"key": "duration_seconds", "value": {"stringValue": "'"$DURATION_S"'"}},
+            {"key": "commits", "value": {"stringValue": "<total_commits>"}},
             {"key": "deployment", "value": {"stringValue": "true"}}
           ],
           "status": {}
@@ -226,9 +227,17 @@ METRICS_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v
             "name": "tandemu.lines_of_code",
             "sum": {
               "dataPoints": [
-                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <ai_lines>, "attributes": [{"key": "type", "value": {"stringValue": "ai"}}]},
-                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <manual_lines>, "attributes": [{"key": "type", "value": {"stringValue": "manual"}}]}
+                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <ai_lines>, "attributes": [{"key": "type", "value": {"stringValue": "ai"}}, {"key": "task_id", "value": {"stringValue": "<taskId>"}}]},
+                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <manual_lines>, "attributes": [{"key": "type", "value": {"stringValue": "manual"}}, {"key": "task_id", "value": {"stringValue": "<taskId>"}}]}
               ],
+              "aggregationTemporality": 2,
+              "isMonotonic": true
+            }
+          },
+          {
+            "name": "tandemu.commits",
+            "sum": {
+              "dataPoints": [{"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <total_commits>, "attributes": [{"key": "task_id", "value": {"stringValue": "<taskId>"}}]}],
               "aggregationTemporality": 2,
               "isMonotonic": true
             }
