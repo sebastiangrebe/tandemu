@@ -1,6 +1,22 @@
 # Telemetry Architecture
 
-Tandemu collects engineering telemetry from two sources. Understanding which data comes from where is critical for multi-tool expansion.
+Tandemu collects engineering telemetry from two sources. All telemetry flows through the authenticated backend — the OTEL collector is never exposed publicly.
+
+## Security
+
+The OTEL collector is internal-only (no public ports). All telemetry is proxied through the backend:
+
+```
+Claude Code native OTEL → POST /api/telemetry/ingest/v1/{traces,metrics,logs}
+                           ↓ (validates per-org ingestion key, overrides org ID)
+                           → internal OTEL collector → ClickHouse
+
+/finish skill            → POST /api/telemetry/tasks/:taskId/finish
+                           ↓ (validates JWT, processes AI attribution)
+                           → internal OTEL collector → ClickHouse
+```
+
+Each organization has a unique `ingestionKey` (UUID). Claude Code sends it via `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <key>`. The backend validates the key and overrides `organization_id` in all resource attributes (defense in depth — client claims are not trusted).
 
 ## Source 1: `/finish` skill (tool-agnostic)
 

@@ -45,9 +45,8 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.114.0
-    ports:
-      - "4317:4317"
-      - "4318:4318"
+    # No public ports — only reachable via Docker internal network
+    # Backend proxies all external telemetry through /api/telemetry/ingest
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:

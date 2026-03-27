@@ -155,6 +155,7 @@ Fetch all configuration in a single call:
 ```bash
 SETUP_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/setup/config")
 OTEL_ENDPOINT=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['endpoint'])" 2>/dev/null)
+OTEL_INGESTION_KEY=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['ingestionKey'])" 2>/dev/null)
 MEM_TYPE=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['type'])" 2>/dev/null)
 MEM_URL=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['url'])" 2>/dev/null)
 ```
@@ -172,6 +173,7 @@ except (FileNotFoundError, json.JSONDecodeError):
     settings = {}
 
 otel_endpoint = os.environ.get("OTEL_ENDPOINT", "http://localhost:4318")
+otel_key = os.environ.get("OTEL_INGESTION_KEY", "")
 api_url = os.environ.get("API_URL", "http://localhost:3001")
 
 env = settings.get("env", {})
@@ -181,9 +183,13 @@ env.update({
     "OTEL_LOGS_EXPORTER": "otlp",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
     "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
+    "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Bearer {otel_key}" if otel_key else "",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
     "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}"
 })
+# Remove empty headers entry if no key
+if not otel_key:
+    env.pop("OTEL_EXPORTER_OTLP_HEADERS", None)
 settings["env"] = env
 
 perms = settings.get("permissions", {})
@@ -195,7 +201,6 @@ tandemu_perms = [
     "Bash(rm ~/.claude/tandemu*)",
     "Bash(rm -f ~/.claude/tandemu*)",
     f"Bash(curl*{api_url}*)",
-    f"Bash(curl*{otel_endpoint}*)",
 ]
 for p in tandemu_perms:
     if p not in allow:
