@@ -18,6 +18,7 @@ import {
   BadgeCheck,
   Search,
   Layers,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -61,6 +62,7 @@ import {
 const overviewItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: Clock },
+  { href: "/memory", label: "AI Memory", icon: Brain },
 ];
 
 const analyticsItems = [

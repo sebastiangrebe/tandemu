@@ -19,12 +19,34 @@ export interface SearchMemoriesRequest {
   readonly limit?: number;
 }
 
+export interface MemoryMetadata {
+  status?: 'draft' | 'published';
+  author_id?: string;
+  taskId?: string;
+  repo?: string;
+  files?: string[];
+  category?: string;
+  [key: string]: unknown;
+}
+
 export interface MemoryEntry {
   readonly id: string;
   readonly content: string;
   readonly scope: MemoryScope;
-  readonly metadata: Record<string, unknown>;
+  readonly metadata: MemoryMetadata;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly score?: number;
+}
+
+export interface MemoryListResponse {
+  memories: MemoryEntry[];
+  total: number;
+}
+
+export interface MemoryStatsResponse {
+  personal: number;
+  org: number;
+  total: number;
+  categories: Record<string, number>;
 }
