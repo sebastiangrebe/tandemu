@@ -2,7 +2,6 @@ import { createClient, type ClickHouseClient, type ClickHouseClientConfigOptions
 import type {
   AIvsManualRatio,
   FrictionEvent,
-  DORAMetrics,
 } from "@tandemu/types";
 
 export interface ClickHouseConfig {
@@ -124,54 +123,6 @@ export async function queryFrictionHeatmap(
     promptLoopCount: row.event_count,
     errorCount: row.event_count,
     timestamp: row.hour,
-  }));
-}
-
-export async function queryDORAMetrics(
-  tenantId: string,
-  startDate: string,
-  endDate: string,
-): Promise<DORAMetrics[]> {
-  const client = getClickHouseClient();
-
-  const result = await client.query({
-    query: `
-      SELECT
-        countIf(operation_name = 'deployment') AS deployment_count,
-        avgIf(duration_ns, operation_name = 'lead_time_for_change') AS avg_lead_time_ns,
-        countIf(operation_name = 'deployment' AND status_code = 2)
-          / greatest(countIf(operation_name = 'deployment'), 1) AS change_failure_rate,
-        avgIf(duration_ns, operation_name = 'incident_resolution') AS avg_time_to_restore_ns,
-        min(start_time) AS period_start,
-        max(start_time) AS period_end,
-        dateDiff('day', toDate({startDate:String}), toDate({endDate:String})) AS days_in_range
-      FROM otel_traces
-      WHERE tenant_id = {tenantId:String}
-        AND start_time >= toDateTime({startDate:String})
-        AND start_time <= toDateTime({endDate:String})
-        AND operation_name IN ('deployment', 'lead_time_for_change', 'incident_resolution')
-    `,
-    query_params: { tenantId, startDate, endDate },
-    format: "JSONEachRow",
-  });
-
-  const rows = await result.json<{
-    deployment_count: number;
-    avg_lead_time_ns: number;
-    change_failure_rate: number;
-    avg_time_to_restore_ns: number;
-    period_start: string;
-    period_end: string;
-    days_in_range: number;
-  }>();
-
-  return rows.map((row) => ({
-    deploymentFrequency: row.days_in_range > 0 ? row.deployment_count / row.days_in_range : 0,
-    leadTimeForChanges: (row.avg_lead_time_ns ?? 0) / 1_000_000_000,
-    changeFailureRate: row.change_failure_rate,
-    timeToRestore: (row.avg_time_to_restore_ns ?? 0) / 1_000_000_000,
-    periodStart: startDate,
-    periodEnd: endDate,
   }));
 }
 

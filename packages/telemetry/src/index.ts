@@ -27,7 +27,6 @@ export {
   getClickHouseClient,
   queryAIvsManualRatio,
   queryFrictionHeatmap,
-  queryDORAMetrics,
   querySessionTimesheets,
 } from "./clickhouse/client.js";
 
