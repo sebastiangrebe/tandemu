@@ -1,8 +1,9 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
+import { randomBytes } from 'crypto';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
 
 export interface TimesheetEntry {
   readonly userId: string;
@@ -21,16 +22,6 @@ export interface ToolUsageStat {
   readonly successRate: number;
 }
 
-export interface SessionQualityEntry {
-  readonly sessionId: string;
-  readonly userId: string;
-  readonly date: string;
-  readonly totalToolCalls: number;
-  readonly successCount: number;
-  readonly failureCount: number;
-  readonly successRate: number;
-}
-
 export interface TimesheetQuery {
   readonly organizationId: string;
   readonly startDate: string;
@@ -38,9 +29,37 @@ export interface TimesheetQuery {
   readonly userId?: string;
 }
 
+export interface FinishTaskInput {
+  readonly provider: string;
+  readonly startedAt: string;
+  readonly commits: Array<{
+    hash: string;
+    author: string;
+    subject: string;
+    hasCoAuthorClaude: boolean;
+  }>;
+  readonly files: Array<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }>;
+  readonly changedFilesList: string[];
+  readonly category?: string;
+  readonly labels?: string[];
+}
+
+export interface FinishTaskResult {
+  readonly aiLines: number;
+  readonly manualLines: number;
+  readonly totalCommits: number;
+  readonly durationSeconds: number;
+  readonly filesChanged: number;
+}
+
 @Injectable()
 export class TelemetryService implements OnModuleDestroy {
   private readonly client: ClickHouseClient;
+  private readonly logger = new Logger(TelemetryService.name);
 
   constructor(private readonly configService: ConfigService) {
     const clickhouseUrl = this.configService.get<string>('clickhouse.url', 'http://localhost:8123');
@@ -52,6 +71,236 @@ export class TelemetryService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.client.close();
+  }
+
+  /**
+   * Process a task completion: calculate AI attribution, send OTLP telemetry.
+   * Called by POST /api/tasks/:taskId/finish
+   */
+  async finishTask(
+    organizationId: string,
+    userId: string,
+    taskId: string,
+    input: FinishTaskInput,
+  ): Promise<FinishTaskResult> {
+    const now = new Date();
+    const startedAt = new Date(input.startedAt);
+    const durationSeconds = Math.round((now.getTime() - startedAt.getTime()) / 1000);
+    const totalAdditions = input.files.reduce((s, f) => s + f.additions, 0);
+
+    // Step 1: Try native OTEL for accurate AI attribution
+    let aiLines = 0;
+    let manualLines = 0;
+    let usedNativeAttribution = false;
+
+    try {
+      const nativeResult = await this.getNativeAIAttribution(
+        organizationId,
+        input.startedAt,
+        now.toISOString(),
+      );
+
+      if (nativeResult.aiFilePaths.length > 0) {
+        usedNativeAttribution = true;
+        const nativeAiLines = nativeResult.totalNativeAiLines;
+
+        // Per the plan: if native AI lines >= total additions, 100% AI
+        // Otherwise split proportionally
+        if (nativeAiLines >= totalAdditions) {
+          aiLines = totalAdditions;
+          manualLines = 0;
+        } else {
+          aiLines = nativeAiLines;
+          manualLines = totalAdditions - nativeAiLines;
+        }
+      }
+    } catch (err) {
+      this.logger.warn('Failed to query native OTEL for AI attribution, falling back to Co-Authored-By', err);
+    }
+
+    // Step 2: Fallback to Co-Authored-By commit analysis
+    if (!usedNativeAttribution) {
+      const aiCommitFiles = new Set<string>();
+      for (const commit of input.commits) {
+        if (commit.hasCoAuthorClaude) {
+          // Find files changed in this commit from the input files
+          // (all files are from the branch diff, not per-commit, so we attribute all)
+          aiCommitFiles.add(commit.hash);
+        }
+      }
+
+      if (aiCommitFiles.size > 0 && aiCommitFiles.size === input.commits.length) {
+        // All commits are AI — all lines are AI
+        aiLines = totalAdditions;
+        manualLines = 0;
+      } else if (aiCommitFiles.size > 0) {
+        // Mixed — attribute proportionally by commit count
+        const aiRatio = aiCommitFiles.size / input.commits.length;
+        aiLines = Math.round(totalAdditions * aiRatio);
+        manualLines = totalAdditions - aiLines;
+      } else {
+        aiLines = 0;
+        manualLines = totalAdditions;
+      }
+    }
+
+    // Step 3: Send OTLP telemetry
+    const otelEndpoint = this.configService.get<string>('otel.endpoint', 'http://localhost:4318');
+    const traceId = randomBytes(16).toString('hex');
+    const spanId = randomBytes(8).toString('hex');
+    const startNs = BigInt(startedAt.getTime()) * 1_000_000n;
+    const endNs = BigInt(now.getTime()) * 1_000_000n;
+
+    const changedFiles = input.changedFilesList.join(',');
+    const aiFilesList = usedNativeAttribution
+      ? (await this.getNativeAIAttribution(organizationId, input.startedAt, now.toISOString()).catch(() => ({ aiFilePaths: [] as string[], totalNativeAiLines: 0 }))).aiFilePaths.join(',')
+      : '';
+
+    // Send trace span
+    try {
+      const traceRes = await fetch(`${otelEndpoint}/v1/traces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resourceSpans: [{
+            resource: {
+              attributes: [
+                { key: 'service.name', value: { stringValue: 'claude-code' } },
+                { key: 'organization_id', value: { stringValue: organizationId } },
+              ],
+            },
+            scopeSpans: [{
+              scope: { name: 'tandemu' },
+              spans: [{
+                traceId, spanId, name: 'task_session', kind: 1,
+                startTimeUnixNano: startNs.toString(),
+                endTimeUnixNano: endNs.toString(),
+                attributes: [
+                  { key: 'user_id', value: { stringValue: userId } },
+                  { key: 'task_id', value: { stringValue: taskId } },
+                  { key: 'status', value: { stringValue: 'completed' } },
+                  { key: 'ai_lines', value: { stringValue: String(aiLines) } },
+                  { key: 'manual_lines', value: { stringValue: String(manualLines) } },
+                  { key: 'duration_seconds', value: { stringValue: String(durationSeconds) } },
+                  { key: 'commits', value: { stringValue: String(input.commits.length) } },
+                  { key: 'changed_files', value: { stringValue: changedFiles } },
+                  { key: 'file_count', value: { stringValue: String(input.changedFilesList.length) } },
+                  { key: 'ai_files', value: { stringValue: aiFilesList } },
+                  { key: 'task_category', value: { stringValue: input.category ?? 'other' } },
+                  { key: 'task_labels', value: { stringValue: (input.labels ?? []).join(',') } },
+                  { key: 'deployment', value: { stringValue: 'true' } },
+                ],
+                status: {},
+              }],
+            }],
+          }],
+        }),
+      });
+      if (!traceRes.ok) {
+        this.logger.error(`OTLP trace failed: ${traceRes.status}`);
+      }
+    } catch (err) {
+      this.logger.error('Failed to send OTLP trace', err);
+    }
+
+    // Send metrics
+    try {
+      const metricsRes = await fetch(`${otelEndpoint}/v1/metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resourceMetrics: [{
+            resource: {
+              attributes: [
+                { key: 'service.name', value: { stringValue: 'claude-code' } },
+                { key: 'organization_id', value: { stringValue: organizationId } },
+              ],
+            },
+            scopeMetrics: [{
+              scope: { name: 'tandemu' },
+              metrics: [{
+                name: 'tandemu.lines_of_code',
+                sum: {
+                  dataPoints: [
+                    { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: aiLines, attributes: [{ key: 'type', value: { stringValue: 'ai' } }, { key: 'task_id', value: { stringValue: taskId } }] },
+                    { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: manualLines, attributes: [{ key: 'type', value: { stringValue: 'manual' } }, { key: 'task_id', value: { stringValue: taskId } }] },
+                  ],
+                  aggregationTemporality: 2,
+                  isMonotonic: true,
+                },
+              }],
+            }],
+          }],
+        }),
+      });
+      if (!metricsRes.ok) {
+        this.logger.error(`OTLP metrics failed: ${metricsRes.status}`);
+      }
+    } catch (err) {
+      this.logger.error('Failed to send OTLP metrics', err);
+    }
+
+    return {
+      aiLines,
+      manualLines,
+      totalCommits: input.commits.length,
+      durationSeconds,
+      filesChanged: input.changedFilesList.length,
+    };
+  }
+
+  /**
+   * Query native Claude Code OTEL data for AI file attribution.
+   * Claude Code-specific — will need normalization for Codex/Cursor.
+   */
+  private async getNativeAIAttribution(
+    organizationId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{ aiFilePaths: string[]; totalNativeAiLines: number }> {
+    // Get files Claude touched via Edit/Write tools
+    const fileResult = await this.client.query({
+      query: `
+        SELECT DISTINCT
+          JSONExtractString(LogAttributes['tool_parameters'], 'file_path') AS file_path
+        FROM otel_logs
+        WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+          AND LogAttributes['event.name'] = 'tool_result'
+          AND LogAttributes['tool_name'] IN ('Edit', 'Write', 'NotebookEdit')
+          AND LogAttributes['success'] = 'true'
+          AND JSONExtractString(LogAttributes['tool_parameters'], 'file_path') != ''
+          AND Timestamp >= parseDateTimeBestEffort({startDate: String})
+          AND Timestamp <= parseDateTimeBestEffort({endDate: String})
+      `,
+      query_params: { organizationId, startDate, endDate },
+      format: 'JSONEachRow',
+    });
+    const fileRows = await fileResult.json<{ file_path: string }>();
+    const aiFilePaths = fileRows.map((r) => r.file_path);
+
+    // Get total native AI lines in the window
+    let totalNativeAiLines = 0;
+    try {
+      const lineResult = await this.client.query({
+        query: `
+          SELECT sum(Value) AS total
+          FROM otel_metrics_sum
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND MetricName = 'claude_code.lines_of_code.count'
+            AND Attributes['type'] = 'added'
+            AND TimeUnix >= parseDateTimeBestEffort({startDate: String})
+            AND TimeUnix <= parseDateTimeBestEffort({endDate: String})
+        `,
+        query_params: { organizationId, startDate, endDate },
+        format: 'JSONEachRow',
+      });
+      const lineRows = await lineResult.json<{ total: number }>();
+      totalNativeAiLines = Number(lineRows[0]?.total ?? 0);
+    } catch {
+      // Native line metric may not exist — OK, we still have file paths
+    }
+
+    return { aiFilePaths, totalNativeAiLines };
   }
 
   async getAIvsManualRatio(
@@ -175,80 +424,6 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
-  async getDORAMetrics(
-    organizationId: string,
-    periodStart?: string,
-    periodEnd?: string,
-  ): Promise<DORAMetrics> {
-    const defaultStart = periodStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const defaultEnd = periodEnd ?? new Date().toISOString();
-
-    try {
-      // Query task_session spans — completed tasks are "deployments" in Tandemu's model
-      // Use duration_seconds attribute (set by /finish skill) instead of ClickHouse Duration
-      // to avoid nanosecond timestamp precision issues
-      const resultSet = await this.client.query({
-        query: `
-          SELECT
-            countIf(SpanAttributes['status'] = 'completed') AS deployments,
-            avgIf(
-              toFloat64OrZero(SpanAttributes['duration_seconds']) / 3600,
-              SpanAttributes['status'] = 'completed'
-            ) AS avgLeadTimeHours,
-            0 AS changeFailureRate,
-            0 AS avgRestoreTime
-          FROM otel_traces
-          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
-            AND SpanName = 'task_session'
-            AND Timestamp >= parseDateTimeBestEffort({periodStart: String})
-            AND Timestamp <= parseDateTimeBestEffort({periodEnd: String})
-        `,
-        query_params: {
-          organizationId,
-          periodStart: defaultStart,
-          periodEnd: defaultEnd,
-        },
-        format: 'JSONEachRow',
-      });
-
-      const rows = await resultSet.json<{
-        deployments: number;
-        avgLeadTimeHours: number;
-        changeFailureRate: number;
-        avgRestoreTime: number;
-      }>();
-
-      if (rows.length === 0 || !rows[0]) {
-        return {
-          deploymentFrequency: 0,
-          leadTimeForChanges: 0,
-          changeFailureRate: 0,
-          timeToRestore: 0,
-          periodStart: defaultStart,
-          periodEnd: defaultEnd,
-        };
-      }
-
-      const row = rows[0];
-      return {
-        deploymentFrequency: Number(row.deployments),
-        leadTimeForChanges: Number(row.avgLeadTimeHours) || 0,
-        changeFailureRate: 0,
-        timeToRestore: 0,
-        periodStart: defaultStart,
-        periodEnd: defaultEnd,
-      };
-    } catch {
-      return {
-        deploymentFrequency: 0,
-        leadTimeForChanges: 0,
-        changeFailureRate: 0,
-        timeToRestore: 0,
-        periodStart: defaultStart,
-        periodEnd: defaultEnd,
-      };
-    }
-  }
 
   async getTimesheets(query: TimesheetQuery): Promise<TimesheetEntry[]> {
     try {
@@ -673,61 +848,8 @@ export class TelemetryService implements OnModuleDestroy {
   }
 
   /**
-   * Session quality — success/failure ratio per session.
-   * High failure rate sessions indicate friction.
-   */
-  async getSessionQuality(organizationId: string): Promise<SessionQualityEntry[]> {
-    try {
-      const resultSet = await this.client.query({
-        query: `
-          SELECT
-            LogAttributes['session.id'] AS sessionId,
-            any(LogAttributes['user.account_uuid']) AS userId,
-            toDate(Timestamp) AS date,
-            count(*) AS totalToolCalls,
-            countIf(LogAttributes['success'] = 'true') AS successCount,
-            countIf(LogAttributes['success'] = 'false') AS failureCount
-          FROM otel_logs
-          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
-            AND LogAttributes['event.name'] = 'tool_result'
-          GROUP BY sessionId, date
-          HAVING totalToolCalls > 5
-          ORDER BY date DESC
-          LIMIT 100
-        `,
-        query_params: { organizationId },
-        format: 'JSONEachRow',
-      });
-
-      const rows = await resultSet.json<{
-        sessionId: string;
-        userId: string;
-        date: string;
-        totalToolCalls: number;
-        successCount: number;
-        failureCount: number;
-      }>();
-
-      return rows.map((row) => {
-        const total = Number(row.totalToolCalls);
-        const success = Number(row.successCount);
-        return {
-          sessionId: row.sessionId,
-          userId: row.userId,
-          date: row.date,
-          totalToolCalls: total,
-          successCount: success,
-          failureCount: Number(row.failureCount),
-          successRate: total > 0 ? Math.round((success / total) * 100) : 0,
-        };
-      });
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Friction detection from native Claude Code tool_result events.
+   * Claude Code-specific — queries native tool_result events for friction.
+   * Will need normalization layer for Codex (codex.tool.call) and Cursor (REST API).
    * Failed tool calls grouped by file path — augments custom friction logs.
    */
   async getNativeFriction(organizationId: string): Promise<FrictionEvent[]> {

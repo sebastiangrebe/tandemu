@@ -1,7 +1,6 @@
 import type {
   AIvsManualRatio,
   FrictionEvent,
-  DORAMetrics,
   Organization,
   Membership,
   Team,
@@ -182,14 +181,6 @@ export async function getAIRatio(filter?: TelemetryFilter): Promise<AIvsManualRa
 
 export async function getFrictionHeatmap(filter?: TelemetryFilter): Promise<FrictionEvent[]> {
   return fetchApi<FrictionEvent[]>(`/api/telemetry/friction-heatmap${buildParams(filter)}`);
-}
-
-export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {
-  const p = new URLSearchParams();
-  if (filter?.startDate) p.set('periodStart', filter.startDate);
-  if (filter?.endDate) p.set('periodEnd', filter.endDate);
-  const s = p.toString();
-  return fetchApi<DORAMetrics>(`/api/telemetry/dora-metrics${s ? `?${s}` : ''}`);
 }
 
 export interface TimesheetEntry {

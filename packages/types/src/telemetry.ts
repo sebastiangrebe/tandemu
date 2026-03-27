@@ -50,15 +50,6 @@ export interface FrictionEvent {
   readonly timestamp: string;
 }
 
-export interface DORAMetrics {
-  readonly deploymentFrequency: number;
-  readonly leadTimeForChanges: number;
-  readonly changeFailureRate: number;
-  readonly timeToRestore: number;
-  readonly periodStart: string;
-  readonly periodEnd: string;
-}
-
 export interface DeveloperStat {
   readonly userId: string;
   readonly userName: string;

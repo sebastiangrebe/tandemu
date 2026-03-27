@@ -1,11 +1,11 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { TelemetryService, TimesheetEntry, ToolUsageStat, SessionQualityEntry } from './telemetry.service.js';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { TelemetryService, TimesheetEntry, ToolUsageStat } from './telemetry.service.js';
+import type { FinishTaskInput, FinishTaskResult } from './telemetry.service.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { AIvsManualRatio, FrictionEvent, DORAMetrics, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
 
 @Controller('telemetry')
@@ -14,9 +14,7 @@ export class TelemetryController {
   constructor(
     private readonly telemetryService: TelemetryService,
     private readonly db: DatabaseService,
-    private readonly configService: ConfigService,
   ) {}
-
 
   @Get('ai-ratio')
   async getAIRatio(
@@ -86,6 +84,7 @@ export class TelemetryController {
     return this.telemetryService.getTokenUsage(user.organizationId, startDate, endDate);
   }
 
+  /** Claude Code-specific — will need normalization for Codex/Cursor */
   @Get('tool-usage')
   async getToolUsage(
     @CurrentUser() user: RequestUser,
@@ -93,13 +92,6 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
   ): Promise<ToolUsageStat[]> {
     return this.telemetryService.getToolUsageStats(user.organizationId, startDate, endDate);
-  }
-
-  @Get('session-quality')
-  async getSessionQuality(
-    @CurrentUser() user: RequestUser,
-  ): Promise<SessionQualityEntry[]> {
-    return this.telemetryService.getSessionQuality(user.organizationId);
   }
 
   @Get('developer-stats')
@@ -110,7 +102,6 @@ export class TelemetryController {
   ): Promise<DeveloperStat[]> {
     const stats = await this.telemetryService.getDeveloperStats(user.organizationId, startDate, endDate);
 
-    // Resolve user IDs to names from Postgres
     const userIds = [...new Set(stats.map((s) => s.userId))];
     if (userIds.length > 0) {
       const result = await this.db.query<{ id: string; name: string }>(
@@ -136,19 +127,6 @@ export class TelemetryController {
     return this.telemetryService.getTaskVelocity(user.organizationId, startDate, endDate);
   }
 
-  @Get('dora-metrics')
-  async getDORAMetrics(
-    @CurrentUser() user: RequestUser,
-    @Query('periodStart') periodStart?: string,
-    @Query('periodEnd') periodEnd?: string,
-  ): Promise<DORAMetrics> {
-    return this.telemetryService.getDORAMetrics(
-      user.organizationId,
-      periodStart,
-      periodEnd,
-    );
-  }
-
   @Get('timesheets')
   async getTimesheets(
     @CurrentUser() user: RequestUser,
@@ -163,7 +141,6 @@ export class TelemetryController {
       userId,
     });
 
-    // Resolve user IDs to names from Postgres
     const userIds = [...new Set(entries.map((e) => e.userId))];
     if (userIds.length > 0) {
       const result = await this.db.query<{ id: string; name: string }>(
@@ -178,5 +155,24 @@ export class TelemetryController {
     }
 
     return entries;
+  }
+
+  /**
+   * Process task completion — accepts raw git data, calculates AI attribution,
+   * sends OTLP telemetry, returns summary.
+   */
+  @Post('tasks/:taskId/finish')
+  @HttpCode(HttpStatus.OK)
+  async finishTask(
+    @CurrentUser() user: RequestUser,
+    @Param('taskId') taskId: string,
+    @Body() body: FinishTaskInput,
+  ): Promise<FinishTaskResult> {
+    return this.telemetryService.finishTask(
+      user.organizationId,
+      user.userId,
+      taskId,
+      body,
+    );
   }
 }
