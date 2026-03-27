@@ -37,6 +37,11 @@ import {
   FileCode,
   TrendingUp,
   TrendingDown,
+  Sparkles,
+  Activity,
+  GitBranch,
+  Zap,
+  Code2,
 } from 'lucide-react';
 import {
   getMemoryList,
@@ -58,6 +63,8 @@ import { InstallBanner } from '@/components/install-banner';
 import { EditMemoryDialog } from '@/components/memory/edit-memory-dialog';
 import { DeleteMemoryDialog } from '@/components/memory/delete-memory-dialog';
 import { FileTree } from '@/components/memory/file-tree';
+import { MemoryCategoryChart } from '@/components/charts/memory-category-chart';
+import { MemoryHealthChart } from '@/components/charts/memory-health-chart';
 import {
   Dialog,
   DialogContent,
@@ -79,8 +86,23 @@ const CATEGORY_COLORS: Record<string, string> = {
   uncategorized: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
 };
 
+const CATEGORY_ACCENT: Record<string, string> = {
+  architecture: 'border-l-blue-500',
+  pattern: 'border-l-purple-500',
+  gotcha: 'border-l-red-500',
+  preference: 'border-l-emerald-500',
+  style: 'border-l-cyan-500',
+  dependency: 'border-l-orange-500',
+  decision: 'border-l-yellow-500',
+  uncategorized: 'border-l-zinc-500',
+};
+
 function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.uncategorized;
+}
+
+function getCategoryAccent(category: string): string {
+  return CATEGORY_ACCENT[category] ?? CATEGORY_ACCENT.uncategorized;
 }
 
 function relativeTime(dateStr: string): string {
@@ -295,7 +317,7 @@ export default function MemoryPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI Memory</h1>
-          <p className="text-muted-foreground">Browse and manage your AI teammate&apos;s knowledge base.</p>
+          <p className="text-muted-foreground">Your AI teammate&apos;s persistent knowledge base.</p>
         </div>
         <MemorySkeleton />
       </div>
@@ -308,7 +330,7 @@ export default function MemoryPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI Memory</h1>
-          <p className="text-muted-foreground">Browse and manage your AI teammate&apos;s knowledge base.</p>
+          <p className="text-muted-foreground">Your AI teammate&apos;s persistent knowledge base.</p>
         </div>
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
       </div>
@@ -324,150 +346,196 @@ export default function MemoryPage() {
     setExpandedRepos(allRepos);
   }
 
+  const accessedCount = stats ? stats.total - (usageInsights?.neverAccessedCount ?? 0) : 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">AI Memory</h1>
-        <p className="text-muted-foreground">Browse and manage your AI teammate&apos;s knowledge base.</p>
+        <p className="text-muted-foreground">Your AI teammate&apos;s persistent knowledge base.</p>
       </div>
 
-      {/* Stats cards */}
+      {/* KPI Stats Row */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Brain className="h-4 w-4" />
-                Total Memories
-              </CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Memories</CardTitle>
+              <Brain className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
-              {Object.keys(stats.categories).length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {Object.entries(stats.categories)
-                    .sort(([, a], [, b]) => b - a)
-                    .slice(0, 5)
-                    .map(([cat, count]) => (
-                      <Badge key={cat} variant="outline" className={`text-xs ${getCategoryColor(cat)}`}>
-                        {cat}: {count}
-                      </Badge>
-                    ))}
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                across {Object.keys(stats.categories).length} categories
+              </p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Personal
-              </CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Personal</CardTitle>
+              <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.personal}</div>
-              <p className="text-xs text-muted-foreground mt-1">coding preferences, style, DNA</p>
+              <p className="text-xs text-muted-foreground mt-1">coding style, preferences, DNA</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Organization
-              </CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Organization</CardTitle>
+              <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.org}</div>
               <p className="text-xs text-muted-foreground mt-1">architecture, decisions, patterns</p>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Memory Health</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.total > 0
+                  ? `${Math.round((accessedCount / stats.total) * 100)}%`
+                  : '—'}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">actively used by AI</p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Insights row */}
-      {(gaps.length > 0 || (usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0))) && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* Knowledge Gaps */}
-          {gaps.length > 0 && (
-            <Card className="border-amber-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-400" />
-                  Knowledge Gaps
-                </CardTitle>
-                <CardDescription className="text-xs">Modules with frequent changes but no documented knowledge.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {gaps.slice(0, showAllGaps ? 10 : 3).map((gap) => (
-                    <div key={gap.filePath} className="flex items-center justify-between text-xs">
-                      <code className="font-mono text-muted-foreground truncate max-w-[65%]">{gap.filePath}</code>
-                      <span className="text-amber-400 shrink-0">{gap.changeCount} changes</span>
-                    </div>
-                  ))}
-                </div>
-                {gaps.length > 3 && (
-                  <button
-                    onClick={() => setShowAllGaps(!showAllGaps)}
-                    className="text-xs text-muted-foreground hover:text-foreground mt-2 transition-colors"
-                  >
-                    {showAllGaps ? 'Show less' : `View all ${gaps.length} gaps`}
-                  </button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Most Used */}
-          {usageInsights && usageInsights.topUsed.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
-                  Most Used
-                </CardTitle>
-                <CardDescription className="text-xs">Memories the AI teammate relies on most.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {usageInsights.topUsed.slice(0, 4).map((u) => (
-                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-xs">
-                      <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
-                      <Badge variant="secondary" className="shrink-0 text-[10px] h-4">{u.accessCount}x</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Cleanup Candidates */}
-          {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
-            <Card className="border-orange-500/20 cursor-pointer hover:border-orange-500/40 transition-colors" onClick={() => setShowCleanupDialog(true)}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-orange-400" />
-                  Cleanup
-                  {usageInsights.neverAccessedCount > 0 && (
-                    <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30">{usageInsights.neverAccessedCount} unused</Badge>
-                  )}
-                </CardTitle>
-                <CardDescription className="text-xs">Memories never accessed by the AI. Click to review.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
-                    <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
-                  ))}
-                  {usageInsights.neverAccessedCount > 3 && (
-                    <p className="text-xs text-orange-400">+{usageInsights.neverAccessedCount - 3} more</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+      {/* Charts Row */}
+      {stats && Object.keys(stats.categories).length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <MemoryCategoryChart categories={stats.categories} />
+          {usageInsights && (
+            <MemoryHealthChart
+              totalMemories={stats.total}
+              accessedCount={accessedCount}
+              neverAccessedCount={usageInsights.neverAccessedCount}
+            />
           )}
         </div>
+      )}
+
+      {/* Insights Section */}
+      {(gaps.length > 0 || (usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0))) && (
+        <>
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Insights</h2>
+            <p className="text-sm text-muted-foreground">Actionable intelligence from your memory data.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Knowledge Gaps */}
+            {gaps.length > 0 && (
+              <Card className="border-amber-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-400" />
+                    Knowledge Gaps
+                  </CardTitle>
+                  <CardDescription className="text-xs">Modules with frequent changes but no documented knowledge.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {gaps.slice(0, showAllGaps ? 10 : 3).map((gap) => (
+                      <div key={gap.filePath} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <code className="font-mono text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
+                          <span className="text-amber-400 shrink-0 tabular-nums">{gap.changeCount} changes</span>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-500/60 rounded-full"
+                            style={{ width: `${Math.min(100, (gap.changeCount / Math.max(...gaps.map(g => g.changeCount))) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {gaps.length > 3 && (
+                    <button
+                      onClick={() => setShowAllGaps(!showAllGaps)}
+                      className="text-xs text-muted-foreground hover:text-foreground mt-3 transition-colors"
+                    >
+                      {showAllGaps ? 'Show less' : `View all ${gaps.length} gaps`}
+                    </button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Most Used */}
+            {usageInsights && usageInsights.topUsed.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-emerald-400" />
+                    Most Referenced
+                  </CardTitle>
+                  <CardDescription className="text-xs">Knowledge your AI teammate relies on most.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2.5">
+                    {usageInsights.topUsed.slice(0, 4).map((u, i) => (
+                      <div key={u.memoryId} className="flex items-start gap-2.5">
+                        <span className="text-xs font-medium text-muted-foreground mt-0.5 w-4 shrink-0 tabular-nums">{i + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="line-clamp-1 text-xs">{u.content}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500/60 rounded-full"
+                                style={{ width: `${Math.min(100, (u.accessCount / Math.max(...usageInsights.topUsed.map(t => t.accessCount))) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{u.accessCount}x</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Cleanup Candidates */}
+            {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+              <Card
+                className="border-orange-500/20 cursor-pointer hover:border-orange-500/40 transition-colors"
+                onClick={() => setShowCleanupDialog(true)}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-orange-400" />
+                    Cleanup Candidates
+                  </CardTitle>
+                  <CardDescription className="text-xs">Memories never accessed by the AI. Click to review.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="text-3xl font-bold text-orange-400">{usageInsights.neverAccessedCount}</div>
+                    <p className="text-xs text-muted-foreground">
+                      memories have never been referenced in search results or context
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
+                      <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
+                    ))}
+                    {usageInsights.neverAccessedCount > 3 && (
+                      <p className="text-xs text-orange-400">+{usageInsights.neverAccessedCount - 3} more</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </>
       )}
 
       {/* Tabs + Search + Filters */}
@@ -591,11 +659,11 @@ export default function MemoryPage() {
             <CardDescription>{selectedMemoryIds.length} memories associated with this path</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {filteredMemories
                 .filter((m) => selectedMemoryIds.includes(m.id))
                 .map((mem) => (
-                  <MemoryRow
+                  <MemoryCard
                     key={mem.id}
                     memory={mem}
                     expanded={expandedIds.has(mem.id)}
@@ -614,94 +682,114 @@ export default function MemoryPage() {
       {viewMode === 'list' && !hasData ? (
         <>
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Brain className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No memories yet</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                Memories will appear as you use Claude Code with Tandemu.
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <div className="relative mb-6">
+                <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-muted/50">
+                  <Brain className="h-10 w-10 text-muted-foreground/50" />
+                </div>
+                <div className="absolute -top-1 -right-1 flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                  <Sparkles className="h-4 w-4 text-emerald-400" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold mb-1">Your AI teammate builds knowledge as you code</h3>
+              <p className="text-sm text-muted-foreground max-w-md text-center mb-6">
+                Memories are created automatically when you work with Claude Code — from coding patterns, architecture decisions, gotchas, and more.
               </p>
+              <div className="grid grid-cols-3 gap-6 text-center max-w-lg">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50 mx-auto">
+                    <Code2 className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Learns your coding style</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50 mx-auto">
+                    <GitBranch className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Captures decisions at /finish</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50 mx-auto">
+                    <Zap className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Gets smarter every session</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <InstallBanner />
         </>
       ) : viewMode === 'list' && debouncedQuery ? (
         /* Flat search results */
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Search Results</CardTitle>
-            </div>
-            <CardDescription>{filteredMemories.length} memories found</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {filteredMemories.map((mem) => (
-                <MemoryRow
-                  key={mem.id}
-                  memory={mem}
-                  expanded={expandedIds.has(mem.id)}
-                  onToggleExpand={() => toggleExpand(mem.id)}
-                  onEdit={() => setEditMemory(mem)}
-                  onDelete={() => setDeleteMemoryId(mem.id)}
-                  onApprove={isAdmin ? () => handleApprove(mem.id) : undefined}
-                  showScore
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">{filteredMemories.length} results for &ldquo;{debouncedQuery}&rdquo;</span>
+          </div>
+          <div className="space-y-3">
+            {filteredMemories.map((mem) => (
+              <MemoryCard
+                key={mem.id}
+                memory={mem}
+                expanded={expandedIds.has(mem.id)}
+                onToggleExpand={() => toggleExpand(mem.id)}
+                onEdit={() => setEditMemory(mem)}
+                onDelete={() => setDeleteMemoryId(mem.id)}
+                onApprove={isAdmin ? () => handleApprove(mem.id) : undefined}
+                showScore
+              />
+            ))}
+          </div>
+        </div>
       ) : viewMode === 'list' ? (
         /* Structured repo tree view */
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FolderTree className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Memories</CardTitle>
-            </div>
-            <CardDescription>
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <FolderTree className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
               {filteredMemories.length} memories
               {categoryFilter !== 'all' && ` in ${categoryFilter}`}
               {repoFilter !== 'all' && ` from ${repoFilter.split('/').pop()}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {repoGroups.map((group) => (
-                <div key={group.repo}>
-                  <button
-                    onClick={() => toggleRepo(group.repo)}
-                    className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
-                  >
-                    {expandedRepos.has(group.repo) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                    <span className="font-mono text-xs">{group.repo === 'Uncategorized' ? 'Uncategorized' : group.repo.split('/').slice(-2).join('/')}</span>
-                    <Badge variant="secondary" className="text-xs">{group.memories.length}</Badge>
-                  </button>
-
-                  {expandedRepos.has(group.repo) && (
-                    <div className="space-y-2 ml-6">
-                      {group.memories.map((mem) => (
-                        <MemoryRow
-                          key={mem.id}
-                          memory={mem}
-                          expanded={expandedIds.has(mem.id)}
-                          onToggleExpand={() => toggleExpand(mem.id)}
-                          onEdit={() => setEditMemory(mem)}
-                          onDelete={() => setDeleteMemoryId(mem.id)}
-                          onApprove={isAdmin && mem.metadata.status === 'draft' && mem.metadata.author_id !== undefined ? () => handleApprove(mem.id) : undefined}
-                        />
-                      ))}
-                    </div>
+            </span>
+          </div>
+          <div className="space-y-6">
+            {repoGroups.map((group) => (
+              <div key={group.repo}>
+                <button
+                  onClick={() => toggleRepo(group.repo)}
+                  className="flex items-center gap-2 text-sm font-medium hover:text-foreground transition-colors mb-3 group"
+                >
+                  {expandedRepos.has(group.repo) ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
                   )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                  <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-mono text-xs">
+                    {group.repo === 'Uncategorized' ? 'Uncategorized' : group.repo.split('/').slice(-2).join('/')}
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] h-5">{group.memories.length}</Badge>
+                </button>
+
+                {expandedRepos.has(group.repo) && (
+                  <div className="space-y-3 ml-6">
+                    {group.memories.map((mem) => (
+                      <MemoryCard
+                        key={mem.id}
+                        memory={mem}
+                        expanded={expandedIds.has(mem.id)}
+                        onToggleExpand={() => toggleExpand(mem.id)}
+                        onEdit={() => setEditMemory(mem)}
+                        onDelete={() => setDeleteMemoryId(mem.id)}
+                        onApprove={isAdmin && mem.metadata.status === 'draft' && mem.metadata.author_id !== undefined ? () => handleApprove(mem.id) : undefined}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
 
       {/* Load more */}
@@ -776,9 +864,9 @@ export default function MemoryPage() {
   );
 }
 
-// ---- Memory Row Component ----
+// ---- Memory Card Component ----
 
-interface MemoryRowProps {
+interface MemoryCardProps {
   memory: MemoryEntry;
   expanded: boolean;
   onToggleExpand: () => void;
@@ -788,24 +876,24 @@ interface MemoryRowProps {
   showScore?: boolean;
 }
 
-function MemoryRow({ memory, expanded, onToggleExpand, onEdit, onDelete, onApprove, showScore }: MemoryRowProps) {
+function MemoryCard({ memory, expanded, onToggleExpand, onEdit, onDelete, onApprove, showScore }: MemoryCardProps) {
   const category = memory.metadata.category ?? 'uncategorized';
   const stale = isStale(memory.updatedAt || memory.createdAt);
 
   return (
-    <div className="rounded-lg border p-3 hover:bg-muted/50 transition-colors">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {/* Badges */}
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Badge variant="outline" className={`text-xs ${getCategoryColor(category)}`}>
+    <div className={`rounded-lg border border-l-[3px] ${getCategoryAccent(category)} ${stale ? 'bg-muted/30' : ''} hover:bg-muted/50 transition-colors`}>
+      <div className="p-3">
+        {/* Header row: badges + actions */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <Badge variant="outline" className={`text-[10px] shrink-0 ${getCategoryColor(category)}`}>
               {category}
             </Badge>
             {memory.metadata.status === 'draft' && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
-                    <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30">
+                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">
                       Draft
                     </Badge>
                   </TooltipTrigger>
@@ -819,8 +907,8 @@ function MemoryRow({ memory, expanded, onToggleExpand, onEdit, onDelete, onAppro
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
-                    <Badge variant="outline" className="text-xs bg-zinc-500/10 text-zinc-400 border-zinc-500/30">
-                      <Clock className="h-3 w-3 mr-1" />
+                    <Badge variant="outline" className="text-[10px] bg-zinc-500/10 text-zinc-400 border-zinc-500/30">
+                      <Clock className="h-2.5 w-2.5 mr-0.5" />
                       Stale
                     </Badge>
                   </TooltipTrigger>
@@ -831,56 +919,51 @@ function MemoryRow({ memory, expanded, onToggleExpand, onEdit, onDelete, onAppro
               </TooltipProvider>
             )}
             {showScore && memory.score !== undefined && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 {Math.round(memory.score * 100)}% match
               </span>
             )}
-          </div>
-
-          {/* Content */}
-          <button
-            onClick={onToggleExpand}
-            className="text-left text-sm w-full"
-          >
-            <p className={expanded ? '' : 'line-clamp-2'}>
-              {memory.content}
-            </p>
-          </button>
-
-          {/* Meta */}
-          <div className="flex items-center gap-3 mt-1.5">
-            <span className="text-xs text-muted-foreground">
-              {relativeTime(memory.updatedAt || memory.createdAt)}
-            </span>
             {memory.metadata.files && memory.metadata.files.length > 0 && (
-              <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
-                {memory.metadata.files[0]}
+              <span className="text-[10px] text-muted-foreground font-mono truncate ml-auto">
+                {memory.metadata.files[0].split('/').pop()}
                 {memory.metadata.files.length > 1 && ` +${memory.metadata.files.length - 1}`}
               </span>
             )}
           </div>
+
+          <div className="flex items-center gap-0.5 shrink-0">
+            {onApprove && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onApprove}>
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Approve and publish</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1 shrink-0">
-          {onApprove && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onApprove}>
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Approve and publish</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        {/* Content */}
+        <button onClick={onToggleExpand} className="text-left text-sm w-full">
+          <p className={expanded ? '' : 'line-clamp-2'}>{memory.content}</p>
+        </button>
+
+        {/* Footer */}
+        <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+          <span>{relativeTime(memory.updatedAt || memory.createdAt)}</span>
+          {memory.metadata.taskId && (
+            <span className="font-mono">{memory.metadata.taskId}</span>
           )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
     </div>
