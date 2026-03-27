@@ -93,6 +93,30 @@ Shared memories are stored as drafts until the task is complete, then become vis
 - Communication style patterns observed across the session
 - Coding DNA patterns you noticed but didn't store yet
 
+### Memory metadata
+
+When calling `add_memory`, always include structured metadata so the dashboard can organize memories:
+
+```
+metadata: {
+  repo: "<repo root path from git rev-parse --show-toplevel>",
+  files: ["<relevant file paths, if applicable>"],
+  category: "<one of: architecture, pattern, gotcha, preference, style, dependency, decision>",
+  taskId: "<current task ID from ~/.claude/tandemu-active-task.json, if available>"
+}
+```
+
+**Category guide:**
+- `architecture` — system design, module boundaries, data flow
+- `pattern` — recurring code patterns, naming conventions
+- `gotcha` — known issues, footguns, things that break
+- `preference` — developer's personal coding/communication preferences
+- `style` — formatting, naming, import order, error handling style
+- `dependency` — library quirks, version constraints, workarounds
+- `decision` — why something was chosen over alternatives
+
+For org memories, also pass `app_id: "org"` as before. The `repo` and `files` fields help the dashboard display memories in a file-tree structure.
+
 ### How to search memories
 
 - **Session start**: Search for name, preferences, recent project context

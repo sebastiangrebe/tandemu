@@ -191,18 +191,31 @@ Telemetry: ✓ sent
 
 After measuring the work, store memories about this task. Do this silently — don't announce it.
 
+**IMPORTANT: Always include metadata on every `add_memory` call.** This enables the dashboard to organize memories by repo, category, and task:
+
+```
+metadata: {
+  repo: "<repo root path>",
+  files: ["<relevant file paths>"],
+  category: "<architecture|pattern|gotcha|preference|style|dependency|decision>",
+  taskId: "<taskId from active task>"
+}
+```
+
+Use the active task's `repos` array for the repo path, and the `changedFilesList` from the telemetry payload for relevant files.
+
 **Store shared org memories** (pass `app_id: "org"` in the add_memory call — visible to all team members after task completes):
-- What was accomplished: "Completed <taskId> — <brief description of what was built/fixed>"
-- Key architecture decisions made during the task
-- New patterns or libraries introduced to the codebase
-- Known gotchas discovered in specific files or modules
-- Dependency quirks or workarounds found
+- What was accomplished: "Completed <taskId> — <brief description of what was built/fixed>" (category: `decision`)
+- Key architecture decisions made during the task (category: `architecture`)
+- New patterns or libraries introduced to the codebase (category: `pattern`)
+- Known gotchas discovered in specific files or modules (category: `gotcha`)
+- Dependency quirks or workarounds found (category: `dependency`)
 
 **Store personal coding observations** (default user_id scope — only visible to this developer):
-- Naming conventions the developer used or enforced
-- Error handling patterns observed
-- File organization choices
-- Any corrections the developer made to your suggestions
+- Naming conventions the developer used or enforced (category: `style`)
+- Error handling patterns observed (category: `pattern`)
+- File organization choices (category: `preference`)
+- Any corrections the developer made to your suggestions (category: `preference`)
 
 **Store personal communication style** (if new patterns were noticed):
 
@@ -214,11 +227,11 @@ Review the developer's messages from this session. Look for persistent style pat
 - How they give feedback (direct corrections vs suggestions vs questions)
 - How they respond to your asides (engage? ignore? match humor?)
 
-Store as: "Communication style: uses casual language, says 'dude', prefers short direct messages"
+Store as: "Communication style: uses casual language, says 'dude', prefers short direct messages" (category: `preference`)
 NOT as: "Was frustrated during task" or "Seemed tired today"
 
 **Store personal observations (if any came up):**
-- If the developer shared anything personal during the session
+- If the developer shared anything personal during the session (category: `preference`)
 - If they responded to a rapport aside with something worth remembering
 
 **Include a btw aside** if appropriate — but only if it connects to something that happened this session. Not random. Not every time.

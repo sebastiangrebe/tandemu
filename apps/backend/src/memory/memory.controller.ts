@@ -2,23 +2,32 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
+  Param,
   Query,
   Req,
   Res,
   UseGuards,
   Logger,
   BadGatewayException,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
-import { CurrentUser } from '../auth/auth.decorator.js';
+import { RolesGuard } from '../auth/roles.guard.js';
+import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
+import { MembershipRole } from '@tandemu/types';
+import { MemoryScope } from '@tandemu/types';
+import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse } from '@tandemu/types';
 import { MemoryService } from './memory.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
 
 @Controller('memory')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class MemoryController {
   private readonly logger = new Logger(MemoryController.name);
   private readonly publishedTaskCache = new Map<string, boolean>();
@@ -415,7 +424,7 @@ export class MemoryController {
               filteredOrgMemories.push(mem);
             } else if (taskStatus === 'cancelled') {
               // Cancelled work — delete the draft, knowledge may be invalid
-              this.deleteMemory(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
+              this.deleteMemoryUpstream(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
               // Don't include in results
             }
             // 'pending' — skip, draft from unmerged work
@@ -592,7 +601,7 @@ export class MemoryController {
   /**
    * Delete a memory (e.g., from cancelled task — knowledge may be invalid).
    */
-  private async deleteMemory(
+  private async deleteMemoryUpstream(
     memoryId: string,
     upstreamUrl: string,
     upstreamHeaders: Record<string, string>,
@@ -614,6 +623,384 @@ export class MemoryController {
     } catch (err) {
       this.logger.warn(`Failed to delete memory ${memoryId}: ${err}`);
     }
+  }
+
+  // ---- Shared MCP helper ----
+
+  /**
+   * Call an MCP tool on the upstream Mem0 server and return the parsed result.
+   * Handles both Mem0 Cloud (direct POST) and OpenMemory OSS (SSE handshake → POST to /messages).
+   */
+  private async callMcpTool(
+    toolName: string,
+    args: Record<string, unknown>,
+    user: RequestUser,
+  ): Promise<unknown> {
+    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
+    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
+
+    const body = {
+      jsonrpc: '2.0',
+      id: `dashboard-${toolName}-${Date.now()}`,
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: args,
+      },
+    };
+
+    if (this.memoryService.isMem0Cloud) {
+      // Mem0 Cloud: direct POST to /mcp endpoint
+      const response = await fetch(upstreamUrl, {
+        method: 'POST',
+        headers: { ...upstreamHeaders, 'Accept': 'text/event-stream, application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
+      }
+
+      return this.parseUpstreamResponse(response);
+    }
+
+    // OpenMemory OSS: SSE handshake first, then POST to /messages
+    const messagesUrl = await this.getOpenMemoryMessagesUrl(upstreamUrl, upstreamHeaders);
+
+    const response = await fetch(messagesUrl, {
+      method: 'POST',
+      headers: upstreamHeaders,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
+    }
+
+    return this.parseUpstreamResponse(response);
+  }
+
+  /**
+   * Establish an SSE session with OpenMemory and extract the messages endpoint URL.
+   */
+  private async getOpenMemoryMessagesUrl(
+    sseUrl: string,
+    headers: Record<string, string>,
+  ): Promise<string> {
+    const controller = new AbortController();
+    // Timeout the SSE handshake after 10 seconds
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const fetchOpts: Record<string, unknown> = {
+        headers: { ...headers, 'Accept': 'text/event-stream' },
+        signal: controller.signal,
+      };
+      const response = await fetch(sseUrl, fetchOpts as RequestInit);
+
+      if (!response.ok || !response.body) {
+        throw new BadGatewayException(`OpenMemory SSE returned ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Read SSE events until we find the endpoint event
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Look for the endpoint event
+        if (buffer.includes('event: endpoint') || buffer.includes('event:endpoint')) {
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              const messagesUrl = line.slice(5).trim();
+              // Clean up: cancel the SSE stream
+              reader.cancel().catch(() => {});
+              return messagesUrl;
+            }
+          }
+        }
+      }
+
+      throw new BadGatewayException('OpenMemory SSE did not provide an endpoint event');
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Filter org memories by draft gating rules.
+   * - Published or no status: always included
+   * - Author's own drafts: included
+   * - Other users' drafts: promoted if task done, deleted if cancelled, hidden if pending
+   */
+  private async filterOrgDrafts(
+    memories: Array<Record<string, unknown>>,
+    user: RequestUser,
+  ): Promise<Array<Record<string, unknown>>> {
+    const filtered: Array<Record<string, unknown>> = [];
+
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      if (!metadata) { filtered.push(mem); continue; }
+
+      const status = metadata.status as string | undefined;
+      if (status === 'published' || !status) { filtered.push(mem); continue; }
+
+      if (status === 'draft') {
+        if (metadata.author_id === user.userId) { filtered.push(mem); continue; }
+
+        const taskId = metadata.taskId as string | undefined;
+        if (taskId) {
+          const taskStatus = await this.getTaskFinalStatus(taskId, user);
+          if (taskStatus === 'done') {
+            metadata.status = 'published';
+            this.callMcpTool('update_memory', {
+              memory_id: mem.id as string,
+              metadata: { status: 'published' },
+            }, user).catch(() => {});
+            filtered.push(mem);
+          } else if (taskStatus === 'cancelled') {
+            this.callMcpTool('delete_memory', {
+              memory_id: mem.id as string,
+            }, user).catch(() => {});
+          }
+          // 'pending' — skip
+        }
+      }
+    }
+
+    return filtered;
+  }
+
+  // ---- Dashboard REST endpoints ----
+
+  /**
+   * List memories by scope with server-side pagination.
+   */
+  @Get('list')
+  async listMemories(
+    @CurrentUser() user: RequestUser,
+    @Query('scope') scope: string = 'personal',
+    @Query('limit') limitStr: string = '50',
+    @Query('offset') offsetStr: string = '0',
+  ): Promise<MemoryListResponse> {
+    const limit = Math.min(parseInt(limitStr, 10) || 50, 200);
+    const offset = parseInt(offsetStr, 10) || 0;
+
+    const args: Record<string, unknown> = {};
+    if (scope === 'org') {
+      args.app_id = user.organizationId;
+      args.filters = { app_id: user.organizationId };
+    } else {
+      args.user_id = user.userId;
+      args.filters = { user_id: user.userId };
+    }
+
+    const result = await this.callMcpTool('get_memories', args, user);
+    let memories = this.extractMemories(result);
+
+    if (scope === 'org') {
+      memories = await this.filterOrgDrafts(memories, user);
+    }
+
+    const total = memories.length;
+    const sliced = memories.slice(offset, offset + limit);
+
+    return {
+      memories: sliced.map((m) => this.toMemoryEntry(m, scope === 'org' ? 'org' : 'personal')),
+      total,
+    };
+  }
+
+  /**
+   * Semantic search across memory scopes.
+   */
+  @Get('search')
+  async searchMemoriesRest(
+    @CurrentUser() user: RequestUser,
+    @Query('q') query: string,
+    @Query('scope') scope: string = 'all',
+    @Query('limit') limitStr: string = '20',
+  ): Promise<{ memories: MemoryEntry[] }> {
+    if (!query) throw new BadRequestException('Query parameter "q" is required');
+    const limit = Math.min(parseInt(limitStr, 10) || 20, 100);
+
+    if (scope === 'all') {
+      // Dual-scope search: personal + org
+      const [personalResult, orgResult] = await Promise.all([
+        this.callMcpTool('search_memories', {
+          query,
+          user_id: user.userId,
+          filters: { user_id: user.userId },
+          limit,
+        }, user),
+        this.callMcpTool('search_memories', {
+          query,
+          app_id: user.organizationId,
+          filters: { app_id: user.organizationId },
+          limit,
+        }, user),
+      ]);
+
+      const personalMemories = this.extractMemories(personalResult);
+      let orgMemories = this.extractMemories(orgResult);
+      orgMemories = await this.filterOrgDrafts(orgMemories, user);
+
+      // Merge, deduplicate, sort by score
+      const seen = new Set<string>();
+      const merged: Array<Record<string, unknown>> = [];
+      for (const mem of [...personalMemories, ...orgMemories]) {
+        const id = mem.id as string;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          merged.push(mem);
+        }
+      }
+      merged.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
+
+      return {
+        memories: merged.slice(0, limit).map((m) => {
+          // Determine scope from presence of app_id in the org results
+          const isOrg = orgMemories.some((o) => (o.id as string) === (m.id as string));
+          return this.toMemoryEntry(m, isOrg ? 'org' : 'personal');
+        }),
+      };
+    }
+
+    // Single-scope search
+    const args: Record<string, unknown> = { query, limit };
+    if (scope === 'org') {
+      args.app_id = user.organizationId;
+      args.filters = { app_id: user.organizationId };
+    } else {
+      args.user_id = user.userId;
+      args.filters = { user_id: user.userId };
+    }
+
+    const result = await this.callMcpTool('search_memories', args, user);
+    let memories = this.extractMemories(result);
+
+    if (scope === 'org') {
+      memories = await this.filterOrgDrafts(memories, user);
+    }
+
+    return {
+      memories: memories.map((m) => this.toMemoryEntry(m, scope === 'org' ? 'org' : 'personal')),
+    };
+  }
+
+  /**
+   * Get memory stats: counts by scope + category breakdown.
+   */
+  @Get('stats')
+  async getStats(
+    @CurrentUser() user: RequestUser,
+  ): Promise<MemoryStatsResponse> {
+    const [personalResult, orgResult] = await Promise.all([
+      this.callMcpTool('get_memories', {
+        user_id: user.userId,
+        filters: { user_id: user.userId },
+      }, user),
+      this.callMcpTool('get_memories', {
+        app_id: user.organizationId,
+        filters: { app_id: user.organizationId },
+      }, user),
+    ]);
+
+    const personalMemories = this.extractMemories(personalResult);
+    const orgMemories = await this.filterOrgDrafts(
+      this.extractMemories(orgResult),
+      user,
+    );
+
+    // Category breakdown from all memories
+    const categories: Record<string, number> = {};
+    for (const mem of [...personalMemories, ...orgMemories]) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      const category = (metadata?.category as string) ?? 'uncategorized';
+      categories[category] = (categories[category] ?? 0) + 1;
+    }
+
+    return {
+      personal: personalMemories.length,
+      org: orgMemories.length,
+      total: personalMemories.length + orgMemories.length,
+      categories,
+    };
+  }
+
+  /**
+   * Update a memory's content.
+   */
+  @Patch(':id')
+  async updateMemoryRest(
+    @CurrentUser() user: RequestUser,
+    @Param('id') memoryId: string,
+    @Body() body: { content?: string; metadata?: Record<string, unknown> },
+  ): Promise<{ success: boolean }> {
+    const args: Record<string, unknown> = { memory_id: memoryId };
+    if (body.content !== undefined) {
+      args.text = body.content;
+    }
+    if (body.metadata) {
+      args.metadata = body.metadata;
+    }
+
+    await this.callMcpTool('update_memory', args, user);
+    return { success: true };
+  }
+
+  /**
+   * Delete a memory by ID.
+   */
+  @Delete(':id')
+  async deleteMemoryRest(
+    @CurrentUser() user: RequestUser,
+    @Param('id') memoryId: string,
+  ): Promise<{ success: boolean }> {
+    await this.callMcpTool('delete_memory', { memory_id: memoryId }, user);
+    return { success: true };
+  }
+
+  /**
+   * Admin: approve (promote) a draft org memory to published.
+   */
+  @Post(':id/approve')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  async approveMemory(
+    @CurrentUser() user: RequestUser,
+    @Param('id') memoryId: string,
+  ): Promise<{ success: boolean }> {
+    await this.callMcpTool('update_memory', {
+      memory_id: memoryId,
+      metadata: { status: 'published' },
+    }, user);
+    return { success: true };
+  }
+
+  // ---- Helpers ----
+
+  /**
+   * Convert a raw Mem0 memory object to a typed MemoryEntry.
+   */
+  private toMemoryEntry(raw: Record<string, unknown>, scope: string): MemoryEntry {
+    return {
+      id: (raw.id as string) ?? '',
+      content: (raw.memory as string) ?? (raw.content as string) ?? '',
+      scope: scope === 'org' ? MemoryScope.AGENT : MemoryScope.USER,
+      metadata: (raw.metadata as Record<string, unknown>) ?? {},
+      createdAt: (raw.created_at as string) ?? (raw.createdAt as string) ?? '',
+      updatedAt: (raw.updated_at as string) ?? (raw.updatedAt as string) ?? '',
+      score: raw.score as number | undefined,
+    };
   }
 
 }

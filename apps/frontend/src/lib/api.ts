@@ -515,3 +515,71 @@ export async function createBillingPortal(data: {
     body: JSON.stringify(data),
   });
 }
+
+// ---- Memory ----
+
+export type MemoryScope = 'personal' | 'org';
+
+export interface MemoryMetadata {
+  status?: 'draft' | 'published';
+  author_id?: string;
+  taskId?: string;
+  repo?: string;
+  files?: string[];
+  category?: string;
+  [key: string]: unknown;
+}
+
+export interface MemoryEntry {
+  id: string;
+  content: string;
+  metadata: MemoryMetadata;
+  createdAt: string;
+  updatedAt: string;
+  score?: number;
+}
+
+export interface MemoryListResponse {
+  memories: MemoryEntry[];
+  total: number;
+}
+
+export interface MemoryStatsResponse {
+  personal: number;
+  org: number;
+  total: number;
+  categories: Record<string, number>;
+}
+
+export async function getMemoryList(scope: MemoryScope, limit = 50, offset = 0): Promise<MemoryListResponse> {
+  const params = new URLSearchParams({ scope, limit: String(limit), offset: String(offset) });
+  return fetchApi<MemoryListResponse>(`/api/memory/list?${params}`);
+}
+
+export async function searchMemories(query: string, scope: MemoryScope | 'all' = 'all', limit = 20): Promise<{ memories: MemoryEntry[] }> {
+  const params = new URLSearchParams({ q: query, scope, limit: String(limit) });
+  return fetchApi<{ memories: MemoryEntry[] }>(`/api/memory/search?${params}`);
+}
+
+export async function updateMemory(memoryId: string, body: { content?: string; metadata?: Record<string, unknown> }): Promise<void> {
+  return fetchApi<void>(`/api/memory/${memoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteMemory(memoryId: string): Promise<void> {
+  return fetchApi<void>(`/api/memory/${memoryId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getMemoryStats(): Promise<MemoryStatsResponse> {
+  return fetchApi<MemoryStatsResponse>("/api/memory/stats");
+}
+
+export async function approveMemory(memoryId: string): Promise<void> {
+  return fetchApi<void>(`/api/memory/${memoryId}/approve`, {
+    method: "POST",
+  });
+}
