@@ -161,30 +161,55 @@ export function Header() {
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col py-2">
-                {allNavItems
-                  .filter((item) => isAdmin || !(item as any).adminOnly)
-                  .map((item) => {
-                    const Icon = item.icon;
-                    const isActive =
-                      item.href === "/"
-                        ? pathname === "/" || pathname === "/activity" || pathname === "/friction-map" || pathname === "/memory"
-                        : pathname.startsWith(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                          isActive
-                            ? "bg-accent text-foreground font-medium"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
+                <p className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Dashboard</p>
+                {dashboardSubNav.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                        isActive
+                          ? "bg-accent text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+                {isAdmin && (
+                  <>
+                    <Separator className="my-2" />
+                    <p className="px-4 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Workspace</p>
+                    {[
+                      { href: "/teams", label: "Teams", icon: Layers },
+                      { href: "/integrations", label: "Integrations", icon: Plug },
+                      { href: "/settings", label: "Settings", icon: Settings },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      const isActive = pathname.startsWith(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                            isActive
+                              ? "bg-accent text-foreground font-medium"
+                              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
@@ -346,7 +371,7 @@ export function Header() {
 
         {/* Sub nav */}
         {subNav && (
-          <div className="border-t border-border/50 bg-muted/40">
+          <div className="hidden md:block border-t border-border/50 bg-muted/40">
             <div className="mx-auto max-w-7xl flex items-center gap-6 px-4 lg:px-6 h-10">
               {subNav.map((item) => {
                 const Icon = item.icon;
