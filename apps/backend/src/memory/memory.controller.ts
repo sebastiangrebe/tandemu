@@ -97,24 +97,41 @@ export class MemoryController {
     const contentType = upstreamResponse.headers.get('content-type') ?? '';
 
     if (contentType.includes('text/event-stream') && upstreamResponse.body) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-
+      // Mem0 Cloud returns SSE with JSON-RPC payloads in "data:" lines.
+      // Claude Code's HTTP MCP client expects plain JSON-RPC responses.
+      // Buffer the SSE, extract the JSON-RPC payload, and return as JSON.
       const reader = upstreamResponse.body.getReader();
       const decoder = new TextDecoder();
+      let fullText = '';
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+          fullText += decoder.decode(value, { stream: true });
         }
       } catch {
-        // Client disconnected
-      } finally {
-        res.end();
+        // Stream ended
       }
+
+      // Extract JSON-RPC payload from SSE "data:" lines
+      const dataLines = fullText.split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim());
+
+      if (dataLines.length > 0) {
+        try {
+          const jsonPayload = JSON.parse(dataLines[dataLines.length - 1]);
+          res.setHeader('Content-Type', 'application/json');
+          res.status(200).json(jsonPayload);
+          return;
+        } catch {
+          // Failed to parse — fall through to raw response
+        }
+      }
+
+      // Fallback: return raw text
+      res.setHeader('Content-Type', 'text/plain');
+      res.status(200).send(fullText);
     } else {
       const json = await upstreamResponse.json().catch(() => ({}));
       res.status(upstreamResponse.status).json(json);
@@ -358,7 +375,7 @@ export class MemoryController {
         body: JSON.stringify(reqBody),
       });
       if (!response.ok) return null;
-      return response.json().catch(() => null);
+      return this.parseUpstreamResponse(response);
     };
 
     try {
@@ -455,6 +472,44 @@ export class MemoryController {
   /**
    * Extract memory objects from an MCP tool response.
    */
+  /**
+   * Parse upstream response — handles both SSE (text/event-stream) and JSON.
+   * Mem0 Cloud returns SSE; we extract the JSON-RPC payload from "data:" lines.
+   */
+  private async parseUpstreamResponse(response: globalThis.Response): Promise<unknown> {
+    const contentType = response.headers.get('content-type') ?? '';
+
+    if (contentType.includes('text/event-stream') && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += decoder.decode(value, { stream: true });
+        }
+      } catch {
+        // Stream ended
+      }
+
+      const dataLines = fullText.split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim());
+
+      if (dataLines.length > 0) {
+        try {
+          return JSON.parse(dataLines[dataLines.length - 1]);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    return response.json().catch(() => null);
+  }
+
   private extractMemories(result: unknown): Array<Record<string, unknown>> {
     if (!result || typeof result !== 'object') return [];
     const rpc = result as Record<string, unknown>;
