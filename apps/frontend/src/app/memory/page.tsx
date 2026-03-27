@@ -195,6 +195,9 @@ export default function MemoryPage() {
   // Expanded content
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // Track initial page load across all data sources
+  const [initialLoading, setInitialLoading] = useState(true);
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -203,9 +206,11 @@ export default function MemoryPage() {
 
   // Load stats + gaps + usage insights
   useEffect(() => {
-    getMemoryStats().then(setStats).catch(() => {});
-    getMemoryGaps().then((r) => setGaps(r.gaps)).catch(() => {});
-    getMemoryUsageInsights('all', 30).then(setUsageInsights).catch(() => {});
+    Promise.allSettled([
+      getMemoryStats().then(setStats),
+      getMemoryGaps().then((r) => setGaps(r.gaps)),
+      getMemoryUsageInsights('all', 30).then(setUsageInsights),
+    ]).finally(() => setInitialLoading(false));
   }, []);
 
   // Load file tree when switching to files view or changing scope
@@ -311,8 +316,8 @@ export default function MemoryPage() {
     getMemoryStats().then(setStats).catch(() => {});
   };
 
-  // Loading
-  if (loading && memories.length === 0) {
+  // Loading — wait for ALL initial data (stats, gaps, insights, memories) before rendering
+  if (initialLoading || (loading && memories.length === 0)) {
     return (
       <div className="space-y-6">
         <div>
