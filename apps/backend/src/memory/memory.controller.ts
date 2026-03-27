@@ -629,6 +629,7 @@ export class MemoryController {
 
   /**
    * Call an MCP tool on the upstream Mem0 server and return the parsed result.
+   * Handles both Mem0 Cloud (direct POST) and OpenMemory OSS (SSE handshake → POST to /messages).
    */
   private async callMcpTool(
     toolName: string,
@@ -648,9 +649,28 @@ export class MemoryController {
       },
     };
 
-    const response = await fetch(upstreamUrl, {
+    if (this.memoryService.isMem0Cloud) {
+      // Mem0 Cloud: direct POST to /mcp endpoint
+      const response = await fetch(upstreamUrl, {
+        method: 'POST',
+        headers: { ...upstreamHeaders, 'Accept': 'text/event-stream, application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
+      }
+
+      return this.parseUpstreamResponse(response);
+    }
+
+    // OpenMemory OSS: SSE handshake first, then POST to /messages
+    const messagesUrl = await this.getOpenMemoryMessagesUrl(upstreamUrl, upstreamHeaders);
+
+    const response = await fetch(messagesUrl, {
       method: 'POST',
-      headers: { ...upstreamHeaders, 'Accept': 'text/event-stream, application/json' },
+      headers: upstreamHeaders,
       body: JSON.stringify(body),
     });
 
@@ -663,6 +683,59 @@ export class MemoryController {
   }
 
   /**
+   * Establish an SSE session with OpenMemory and extract the messages endpoint URL.
+   */
+  private async getOpenMemoryMessagesUrl(
+    sseUrl: string,
+    headers: Record<string, string>,
+  ): Promise<string> {
+    const controller = new AbortController();
+    // Timeout the SSE handshake after 10 seconds
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const fetchOpts: Record<string, unknown> = {
+        headers: { ...headers, 'Accept': 'text/event-stream' },
+        signal: controller.signal,
+      };
+      const response = await fetch(sseUrl, fetchOpts as RequestInit);
+
+      if (!response.ok || !response.body) {
+        throw new BadGatewayException(`OpenMemory SSE returned ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Read SSE events until we find the endpoint event
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Look for the endpoint event
+        if (buffer.includes('event: endpoint') || buffer.includes('event:endpoint')) {
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              const messagesUrl = line.slice(5).trim();
+              // Clean up: cancel the SSE stream
+              reader.cancel().catch(() => {});
+              return messagesUrl;
+            }
+          }
+        }
+      }
+
+      throw new BadGatewayException('OpenMemory SSE did not provide an endpoint event');
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /**
    * Filter org memories by draft gating rules.
    * - Published or no status: always included
    * - Author's own drafts: included
@@ -672,8 +745,6 @@ export class MemoryController {
     memories: Array<Record<string, unknown>>,
     user: RequestUser,
   ): Promise<Array<Record<string, unknown>>> {
-    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
-    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
     const filtered: Array<Record<string, unknown>> = [];
 
     for (const mem of memories) {
@@ -691,10 +762,15 @@ export class MemoryController {
           const taskStatus = await this.getTaskFinalStatus(taskId, user);
           if (taskStatus === 'done') {
             metadata.status = 'published';
-            this.promoteMemory(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
+            this.callMcpTool('update_memory', {
+              memory_id: mem.id as string,
+              metadata: { status: 'published' },
+            }, user).catch(() => {});
             filtered.push(mem);
           } else if (taskStatus === 'cancelled') {
-            this.deleteMemoryUpstream(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
+            this.callMcpTool('delete_memory', {
+              memory_id: mem.id as string,
+            }, user).catch(() => {});
           }
           // 'pending' — skip
         }
