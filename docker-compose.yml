@@ -66,6 +66,7 @@ services:
       DATABASE_URL: postgresql://tandemu:tandemu@postgres:5432/tandemu
       REDIS_URL: redis://redis:6379
       CLICKHOUSE_URL: http://clickhouse:8123
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       CORS_ORIGIN: http://localhost:3000
       JWT_SECRET: dev-secret-change-me
       APP_URL: http://localhost:3001

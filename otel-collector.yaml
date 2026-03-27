@@ -17,8 +17,10 @@ processors:
 
 exporters:
   clickhouse:
-    endpoint: tcp://clickhouse:9000?dial_timeout=10s&compress=lz4
-    database: otel
+    endpoint: ${CLICKHOUSE_ENDPOINT:-tcp://clickhouse:9000?dial_timeout=10s&compress=lz4}
+    database: ${CLICKHOUSE_DATABASE:-otel}
+    username: ${CLICKHOUSE_USERNAME:-default}
+    password: ${CLICKHOUSE_PASSWORD:-}
     ttl: 2160h
     create_schema: true
     retry_on_failure:

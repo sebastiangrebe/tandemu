@@ -73,6 +73,32 @@ export class TelemetryService implements OnModuleDestroy {
     await this.client.close();
   }
 
+  async healthCheck(): Promise<{ clickhouse: string; collector: string }> {
+    let clickhouse = 'error';
+    let collector = 'error';
+
+    try {
+      await this.client.query({ query: 'SELECT 1', format: 'JSONEachRow' });
+      clickhouse = 'ok';
+    } catch (err) {
+      this.logger.warn('ClickHouse health check failed', err);
+    }
+
+    try {
+      const otelEndpoint = this.configService.get<string>('otel.endpoint', 'http://localhost:4318');
+      const res = await fetch(`${otelEndpoint}/v1/traces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resourceSpans: [] }),
+      });
+      if (res.ok || res.status === 400) collector = 'ok'; // 400 = valid endpoint, empty payload rejected
+    } catch (err) {
+      this.logger.warn('OTEL collector health check failed', err);
+    }
+
+    return { clickhouse, collector };
+  }
+
   /**
    * Process a task completion: calculate AI attribution, send OTLP telemetry.
    * Called by POST /api/tasks/:taskId/finish

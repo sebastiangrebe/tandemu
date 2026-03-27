@@ -16,6 +16,11 @@ export class TelemetryController {
     private readonly db: DatabaseService,
   ) {}
 
+  @Get('health')
+  async healthCheck() {
+    return this.telemetryService.healthCheck();
+  }
+
   @Get('ai-ratio')
   async getAIRatio(
     @CurrentUser() user: RequestUser,
