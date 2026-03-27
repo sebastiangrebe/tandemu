@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Tabs removed — using custom segmented control instead
 import {
   Select,
   SelectContent,
@@ -424,25 +424,27 @@ export default function MemoryPage() {
 
       {/* Insights Section */}
       {(gaps.length > 0 || (usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0))) && (
-        <>
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Insights</h2>
-            <p className="text-sm text-muted-foreground">Actionable intelligence from your memory data.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* Knowledge Gaps */}
-            {gaps.length > 0 && (
-              <Card className="border-amber-500/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-muted-foreground" />
+              Insights
+            </CardTitle>
+            <CardDescription>Actionable intelligence from your memory data.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-3">
+              {/* Knowledge Gaps */}
+              {gaps.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle className="h-4 w-4 text-amber-400" />
-                    Knowledge Gaps
-                  </CardTitle>
-                  <CardDescription className="text-xs">Modules with frequent changes but no documented knowledge.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {gaps.slice(0, showAllGaps ? 10 : 3).map((gap) => (
+                    <h3 className="text-sm font-medium">Knowledge Gaps</h3>
+                    <Badge variant="outline" className="text-[10px] h-4 text-amber-400 border-amber-500/30 ml-auto">{gaps.length}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">Modules with frequent changes but no documented knowledge.</p>
+                  <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
+                    {gaps.map((gap) => (
                       <div key={gap.filePath} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
                           <code className="font-mono text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
@@ -457,29 +459,17 @@ export default function MemoryPage() {
                       </div>
                     ))}
                   </div>
-                  {gaps.length > 3 && (
-                    <button
-                      onClick={() => setShowAllGaps(!showAllGaps)}
-                      className="text-xs text-muted-foreground hover:text-foreground mt-3 transition-colors"
-                    >
-                      {showAllGaps ? 'Show less' : `View all ${gaps.length} gaps`}
-                    </button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              )}
 
-            {/* Most Used */}
-            {usageInsights && usageInsights.topUsed.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+              {/* Most Used */}
+              {usageInsights && usageInsights.topUsed.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
                     <TrendingUp className="h-4 w-4 text-emerald-400" />
-                    Most Referenced
-                  </CardTitle>
-                  <CardDescription className="text-xs">Knowledge your AI teammate relies on most.</CardDescription>
-                </CardHeader>
-                <CardContent>
+                    <h3 className="text-sm font-medium">Most Referenced</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">Knowledge your AI teammate relies on most.</p>
                   <div className="space-y-2.5">
                     {usageInsights.topUsed.slice(0, 4).map((u, i) => (
                       <div key={u.memoryId} className="flex items-start gap-2.5">
@@ -499,126 +489,148 @@ export default function MemoryPage() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              )}
 
-            {/* Cleanup Candidates */}
-            {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
-              <Card
-                className="border-orange-500/20 cursor-pointer hover:border-orange-500/40 transition-colors"
-                onClick={() => setShowCleanupDialog(true)}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+              {/* Cleanup Candidates */}
+              {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
                     <TrendingDown className="h-4 w-4 text-orange-400" />
-                    Cleanup Candidates
-                  </CardTitle>
-                  <CardDescription className="text-xs">Memories never accessed by the AI. Click to review.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="text-3xl font-bold text-orange-400">{usageInsights.neverAccessedCount}</div>
-                    <p className="text-xs text-muted-foreground">
-                      memories have never been referenced in search results or context
-                    </p>
+                    <h3 className="text-sm font-medium">Cleanup Candidates</h3>
+                    {usageInsights.neverAccessedCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30 ml-auto">{usageInsights.neverAccessedCount}</Badge>
+                    )}
                   </div>
-                  <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground mb-3">Memories never accessed by the AI.</p>
+                  <div className="space-y-1.5 mb-3">
                     {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
                       <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
                     ))}
                     {usageInsights.neverAccessedCount > 3 && (
-                      <p className="text-xs text-orange-400">+{usageInsights.neverAccessedCount - 3} more</p>
+                      <p className="text-xs text-muted-foreground">+{usageInsights.neverAccessedCount - 3} more</p>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => setShowCleanupDialog(true)}
+                  >
+                    Review unused memories
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Tabs + Search + Filters */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Tabs value={activeScope} onValueChange={(v) => setActiveScope(v as MemoryScope)}>
-            <TabsList>
-              <TabsTrigger value="personal">Personal</TabsTrigger>
-              <TabsTrigger value="org">Organization</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {/* View mode toggle */}
-          <div className="flex items-center gap-1 border rounded-md p-0.5">
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'files' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setViewMode('files')}
-            >
-              <FileCode className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search memories..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-8"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      {/* Browse Section */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Browse Memories</CardTitle>
+              <CardDescription>Explore your AI teammate&apos;s knowledge.</CardDescription>
+            </div>
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 border rounded-md p-0.5">
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode('list')}
               >
-                <X className="h-4 w-4" />
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'files' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode('files')}
+              >
+                <FileCode className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          {/* Scope toggle + search row */}
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            <div className="flex items-center rounded-lg border p-1 gap-0.5">
+              <button
+                onClick={() => setActiveScope('personal')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  activeScope === 'personal'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <User className="h-3.5 w-3.5" />
+                Personal
               </button>
+              <button
+                onClick={() => setActiveScope('org')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  activeScope === 'org'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Organization
+              </button>
+            </div>
+
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search memories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-8"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {uniqueCategories.length > 1 && (
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {uniqueCategories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            {uniqueRepos.length > 1 && (
+              <Select value={repoFilter} onValueChange={setRepoFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Repository" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All repositories</SelectItem>
+                  {uniqueRepos.map((repo) => (
+                    <SelectItem key={repo} value={repo}>
+                      {repo.split('/').pop() ?? repo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
-
-          {uniqueCategories.length > 1 && (
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {uniqueCategories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {uniqueRepos.length > 1 && (
-            <Select value={repoFilter} onValueChange={setRepoFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Repository" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All repositories</SelectItem>
-                {uniqueRepos.map((repo) => (
-                  <SelectItem key={repo} value={repo}>
-                    {repo.split('/').pop() ?? repo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
+        </CardHeader>
+      </Card>
 
       {/* File tree view */}
       {viewMode === 'files' && (
@@ -828,34 +840,50 @@ export default function MemoryPage() {
 
       {/* Cleanup review dialog */}
       <Dialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-orange-400" />
               Unused Memories
+              {usageInsights && usageInsights.neverAccessedCount > 0 && (
+                <Badge variant="outline" className="text-xs text-orange-400 border-orange-500/30">{usageInsights.neverAccessedCount}</Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
-              These memories have never been accessed by the AI. Review and delete any that are no longer relevant.
+              These memories have never been accessed by your AI teammate. Review and remove any that are no longer relevant to keep your knowledge base clean.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 mt-4">
-            {(usageInsights?.neverAccessed ?? []).map((u) => (
-              <div key={u.memoryId} className="flex items-start justify-between gap-3 rounded-lg border p-3">
-                <p className="text-sm text-muted-foreground flex-1">{u.content}</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                  onClick={() => {
-                    setDeleteMemoryId(u.memoryId);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ))}
+          <div className="space-y-2 mt-2 overflow-y-auto flex-1 pr-1">
+            {(usageInsights?.neverAccessed ?? []).map((u) => {
+              const cat = (u as unknown as { metadata?: { category?: string } }).metadata?.category ?? 'uncategorized';
+              return (
+                <div key={u.memoryId} className={`flex items-start gap-3 rounded-lg border border-l-[3px] ${getCategoryAccent(cat)} p-3`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Badge variant="outline" className={`text-[10px] ${getCategoryColor(cat)}`}>{cat}</Badge>
+                    </div>
+                    <p className="text-sm">{u.content}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 h-7 text-xs"
+                    onClick={() => {
+                      setDeleteMemoryId(u.memoryId);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              );
+            })}
             {(usageInsights?.neverAccessed ?? []).length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No unused memories found.</p>
+              <div className="flex flex-col items-center justify-center py-8">
+                <CheckCircle className="h-8 w-8 text-emerald-400 mb-2" />
+                <p className="text-sm font-medium">All clean!</p>
+                <p className="text-xs text-muted-foreground">No unused memories found.</p>
+              </div>
             )}
           </div>
         </DialogContent>
