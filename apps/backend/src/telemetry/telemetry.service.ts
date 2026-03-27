@@ -67,6 +67,23 @@ export class TelemetryService implements OnModuleDestroy {
       url: clickhouseUrl,
       database: 'otel',
     });
+
+    // Auto-create memory_access_log table if it doesn't exist
+    this.client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS memory_access_log (
+          memory_id String,
+          organization_id String,
+          user_id String,
+          access_type Enum8('search' = 1, 'list' = 2, 'mcp_proxy' = 3),
+          timestamp DateTime DEFAULT now()
+        ) ENGINE = MergeTree()
+        ORDER BY (organization_id, memory_id, timestamp)
+        TTL timestamp + INTERVAL 90 DAY
+      `,
+    }).catch((err) => {
+      this.logger.warn(`Failed to create memory_access_log table: ${err}`);
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
