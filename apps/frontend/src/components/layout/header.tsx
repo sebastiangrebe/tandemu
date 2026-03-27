@@ -10,6 +10,14 @@ import { getTeams, getMembers } from "@/lib/api";
 import type { Team, Membership } from "@tandemu/types";
 import { Button } from "@/components/ui/button";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -34,6 +42,7 @@ import {
   Clock,
   Flame,
   Brain,
+  Menu,
   Layers,
   Plug,
   Settings,
@@ -88,6 +97,7 @@ export function Header() {
   const { theme, toggleTheme } = useTheme();
 
   const [commandOpen, setCommandOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [members, setMembers] = useState<Membership[]>([]);
 
@@ -137,6 +147,48 @@ export function Header() {
       {/* Main header */}
       <header className="sticky top-0 z-50 border-b bg-background">
         <div className="mx-auto max-w-7xl flex h-14 items-center gap-4 px-4 lg:px-6">
+          {/* Mobile menu */}
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0">
+              <SheetHeader className="px-4 py-4 border-b">
+                <SheetTitle className="text-left text-sm font-semibold">
+                  {currentOrg?.name ?? "Tandemu"}
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col py-2">
+                {allNavItems
+                  .filter((item) => isAdmin || !(item as any).adminOnly)
+                  .map((item) => {
+                    const Icon = item.icon;
+                    const isActive =
+                      item.href === "/"
+                        ? pathname === "/" || pathname === "/activity" || pathname === "/friction-map" || pathname === "/memory"
+                        : pathname.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                          isActive
+                            ? "bg-accent text-foreground font-medium"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+              </nav>
+            </SheetContent>
+          </Sheet>
+
           {/* Logo + Org */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
