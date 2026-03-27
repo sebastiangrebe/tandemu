@@ -58,6 +58,13 @@ import { InstallBanner } from '@/components/install-banner';
 import { EditMemoryDialog } from '@/components/memory/edit-memory-dialog';
 import { DeleteMemoryDialog } from '@/components/memory/delete-memory-dialog';
 import { FileTree } from '@/components/memory/file-tree';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
 
@@ -156,6 +163,8 @@ export default function MemoryPage() {
 
   // Usage insights
   const [usageInsights, setUsageInsights] = useState<UsageInsightsResponse | null>(null);
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
+  const [showAllGaps, setShowAllGaps] = useState(false);
 
   // Dialogs
   const [editMemory, setEditMemory] = useState<MemoryEntry | null>(null);
@@ -387,16 +396,25 @@ export default function MemoryPage() {
                   <AlertTriangle className="h-4 w-4 text-amber-400" />
                   Knowledge Gaps
                 </CardTitle>
+                <CardDescription className="text-xs">Modules with frequent changes but no documented knowledge.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1.5">
-                  {gaps.slice(0, 4).map((gap) => (
+                  {gaps.slice(0, showAllGaps ? 10 : 3).map((gap) => (
                     <div key={gap.filePath} className="flex items-center justify-between text-xs">
                       <code className="font-mono text-muted-foreground truncate max-w-[65%]">{gap.filePath}</code>
                       <span className="text-amber-400 shrink-0">{gap.changeCount} changes</span>
                     </div>
                   ))}
                 </div>
+                {gaps.length > 3 && (
+                  <button
+                    onClick={() => setShowAllGaps(!showAllGaps)}
+                    className="text-xs text-muted-foreground hover:text-foreground mt-2 transition-colors"
+                  >
+                    {showAllGaps ? 'Show less' : `View all ${gaps.length} gaps`}
+                  </button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -409,6 +427,7 @@ export default function MemoryPage() {
                   <TrendingUp className="h-4 w-4 text-emerald-400" />
                   Most Used
                 </CardTitle>
+                <CardDescription className="text-xs">Memories the AI teammate relies on most.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-1.5">
@@ -425,7 +444,7 @@ export default function MemoryPage() {
 
           {/* Cleanup Candidates */}
           {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
-            <Card className="border-orange-500/20">
+            <Card className="border-orange-500/20 cursor-pointer hover:border-orange-500/40 transition-colors" onClick={() => setShowCleanupDialog(true)}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-orange-400" />
@@ -434,22 +453,17 @@ export default function MemoryPage() {
                     <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30">{usageInsights.neverAccessedCount} unused</Badge>
                   )}
                 </CardTitle>
+                <CardDescription className="text-xs">Memories never accessed by the AI. Click to review.</CardDescription>
               </CardHeader>
               <CardContent>
-                {usageInsights.leastUsed.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {usageInsights.leastUsed.slice(0, 4).map((u) => (
-                      <div key={u.memoryId} className="flex items-start justify-between gap-2 text-xs">
-                        <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
-                        <Badge variant="outline" className="shrink-0 text-[10px] h-4">{u.accessCount}x</Badge>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {usageInsights.neverAccessedCount} memories have never been accessed. Search or browse memories to build usage data.
-                  </p>
-                )}
+                <div className="space-y-1.5">
+                  {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
+                    <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
+                  ))}
+                  {usageInsights.neverAccessedCount > 3 && (
+                    <p className="text-xs text-orange-400">+{usageInsights.neverAccessedCount - 3} more</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -723,6 +737,41 @@ export default function MemoryPage() {
           onDeleted={refreshAfterChange}
         />
       )}
+
+      {/* Cleanup review dialog */}
+      <Dialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-orange-400" />
+              Unused Memories
+            </DialogTitle>
+            <DialogDescription>
+              These memories have never been accessed by the AI. Review and delete any that are no longer relevant.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-4">
+            {(usageInsights?.neverAccessed ?? []).map((u) => (
+              <div key={u.memoryId} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                <p className="text-sm text-muted-foreground flex-1">{u.content}</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                  onClick={() => {
+                    setDeleteMemoryId(u.memoryId);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            {(usageInsights?.neverAccessed ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No unused memories found.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

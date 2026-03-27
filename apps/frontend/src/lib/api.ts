@@ -612,6 +612,7 @@ export interface UsageInsightsResponse {
   topUsed: UsageEntry[];
   leastUsed: UsageEntry[];
   neverAccessedCount: number;
+  neverAccessed: UsageEntry[];
 }
 
 export async function getMemoryFileTree(scope: MemoryScope): Promise<{ tree: FileTreeNode[] }> {

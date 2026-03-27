@@ -1159,7 +1159,7 @@ export class MemoryController {
     @CurrentUser() user: RequestUser,
     @Query('scope') scope: string = 'all',
     @Query('days') daysStr: string = '30',
-  ): Promise<{ topUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; leastUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; neverAccessedCount: number }> {
+  ): Promise<{ topUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; leastUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; neverAccessedCount: number; neverAccessed: Array<{ memoryId: string; content: string; accessCount: number }> }> {
     const days = parseInt(daysStr, 10) || 30;
 
     // Get usage data from ClickHouse
@@ -1206,14 +1206,22 @@ export class MemoryController {
       lastAccessed: u.lastAccessed,
     })).filter((u) => u.content);
 
-    // Count never-accessed: all memory IDs minus those in the usage log
+    // Find never-accessed memories: all memory IDs minus those in the usage log
     const trackedIds = new Set([
       ...usage.topUsed.map((u) => u.memoryId),
       ...usage.leastUsed.map((u) => u.memoryId),
     ]);
-    const neverAccessedCount = [...allMemoryIds].filter((id) => !trackedIds.has(id)).length;
+    const neverAccessed = [...allMemoryIds]
+      .filter((id) => !trackedIds.has(id))
+      .map((id) => ({
+        memoryId: id,
+        content: memoryContentMap.get(id) ?? '',
+        accessCount: 0,
+      }))
+      .filter((u) => u.content)
+      .slice(0, 20);
 
-    return { topUsed, leastUsed, neverAccessedCount };
+    return { topUsed, leastUsed, neverAccessedCount: neverAccessed.length, neverAccessed };
   }
 
   // ---- Helpers ----
