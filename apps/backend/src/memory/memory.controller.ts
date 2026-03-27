@@ -1168,6 +1168,7 @@ export class MemoryController {
     // Fetch all memories to resolve content and find never-accessed
     const allMemoryIds = new Set<string>();
     const memoryContentMap = new Map<string, string>();
+    const memoryCreatedMap = new Map<string, string>();
 
     const fetchScope = async (s: 'personal' | 'org') => {
       const args: Record<string, unknown> = {};
@@ -1185,6 +1186,8 @@ export class MemoryController {
         const id = mem.id as string;
         allMemoryIds.add(id);
         memoryContentMap.set(id, (mem.memory as string) ?? (mem.content as string) ?? '');
+        const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
+        if (createdAt) memoryCreatedMap.set(id, createdAt);
       }
     };
 
@@ -1207,12 +1210,22 @@ export class MemoryController {
     })).filter((u) => u.content);
 
     // Find never-accessed memories: all memory IDs minus those in the usage log
+    // Exclude memories created in the last 7 days — they haven't had time to be accessed
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const trackedIds = new Set([
       ...usage.topUsed.map((u) => u.memoryId),
       ...usage.leastUsed.map((u) => u.memoryId),
     ]);
     const neverAccessed = [...allMemoryIds]
-      .filter((id) => !trackedIds.has(id))
+      .filter((id) => {
+        if (trackedIds.has(id)) return false;
+        const createdAt = memoryCreatedMap.get(id);
+        if (createdAt) {
+          const created = new Date(createdAt);
+          if (created > sevenDaysAgo) return false;
+        }
+        return true;
+      })
       .map((id) => ({
         memoryId: id,
         content: memoryContentMap.get(id) ?? '',
