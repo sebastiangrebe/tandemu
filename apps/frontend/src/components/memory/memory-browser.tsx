@@ -230,70 +230,66 @@ export function MemoryBrowser() {
 
   return (
     <>
-      {/* Browse header */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Browse Memories</CardTitle>
-              <CardDescription>Explore your AI teammate&apos;s knowledge.</CardDescription>
-            </div>
-            <div className="flex items-center gap-1 border rounded-md p-0.5">
-              <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setViewMode('list')}>
-                <List className="h-4 w-4" />
-              </Button>
-              <Button variant={viewMode === 'files' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setViewMode('files')}>
-                <FileCode className="h-4 w-4" />
-              </Button>
-            </div>
+      {/* Browse controls */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center rounded-lg border p-1 gap-0.5">
+            <button
+              onClick={() => setActiveScope('personal')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeScope === 'personal' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <User className="h-3.5 w-3.5" />
+              Personal
+            </button>
+            <button
+              onClick={() => setActiveScope('org')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeScope === 'org' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              Organization
+            </button>
           </div>
-          <div className="flex items-center gap-3 mt-3 flex-wrap">
-            <div className="flex items-center rounded-lg border p-1 gap-0.5">
-              <button
-                onClick={() => setActiveScope('personal')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeScope === 'personal' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <User className="h-3.5 w-3.5" />
-                Personal
+
+          <div className="flex items-center gap-1 border rounded-md p-0.5">
+            <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setViewMode('list')}>
+              <List className="h-4 w-4" />
+            </Button>
+            <Button variant={viewMode === 'files' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setViewMode('files')}>
+              <FileCode className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search memories..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8" />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setActiveScope('org')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeScope === 'org' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                Organization
-              </button>
-            </div>
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search memories..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-8" />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-            {uniqueCategories.length > 1 && (
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {uniqueCategories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
-            {uniqueRepos.length > 1 && (
-              <Select value={repoFilter} onValueChange={setRepoFilter}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Repository" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All repositories</SelectItem>
-                  {uniqueRepos.map((repo) => <SelectItem key={repo} value={repo}>{repo.split('/').pop() ?? repo}</SelectItem>)}
-                </SelectContent>
-              </Select>
             )}
           </div>
-        </CardHeader>
-      </Card>
+          {uniqueCategories.length > 1 && (
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {uniqueCategories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {uniqueRepos.length > 1 && (
+            <Select value={repoFilter} onValueChange={setRepoFilter}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Repository" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All repositories</SelectItem>
+                {uniqueRepos.map((repo) => <SelectItem key={repo} value={repo}>{repo.split('/').pop() ?? repo}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
 
       {/* File tree view */}
       {viewMode === 'files' && (

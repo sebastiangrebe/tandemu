@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, TrendingUp, TrendingDown, Sparkles, Trash2, CheckCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown, Trash2, CheckCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,26 @@ function getCategoryAccent(cat: string) {
   return CATEGORY_ACCENT[cat] ?? CATEGORY_ACCENT.uncategorized;
 }
 
+function InsightCardSkeleton() {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <Skeleton className="h-3 w-44 mt-1" />
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-1.5 w-full rounded-full" />
+        <Skeleton className="h-3 w-4/5" />
+        <Skeleton className="h-1.5 w-4/5 rounded-full" />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function MemoryInsights() {
   const [gaps, setGaps] = useState<GapEntry[]>([]);
   const [usageInsights, setUsageInsights] = useState<UsageInsightsResponse | null>(null);
@@ -67,28 +87,9 @@ export function MemoryInsights() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-5" />
-            <Skeleton className="h-5 w-20" />
-          </div>
-          <Skeleton className="h-3 w-56 mt-1" />
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-1.5 w-full rounded-full" />
-                <Skeleton className="h-3 w-4/5" />
-                <Skeleton className="h-1.5 w-4/5 rounded-full" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        {[1, 2, 3].map((i) => <InsightCardSkeleton key={i} />)}
+      </div>
     );
   }
 
@@ -100,106 +101,108 @@ export function MemoryInsights() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-muted-foreground" />
-            Insights
-          </CardTitle>
-          <CardDescription>Actionable intelligence from your memory data.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 md:grid-cols-3">
-            {/* Knowledge Gaps */}
-            {hasGaps && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="h-4 w-4 text-amber-400" />
-                  <h3 className="text-sm font-medium">Knowledge Gaps</h3>
-                  <Badge variant="outline" className="text-[10px] h-4 text-amber-400 border-amber-500/30 ml-auto">{gaps.length}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Modules with frequent changes but no documented knowledge.</p>
-                <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
-                  {gaps.map((gap) => (
-                    <div key={gap.filePath} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <code className="font-mono text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
-                        <span className="text-amber-400 shrink-0 tabular-nums">{gap.changeCount} changes</span>
-                      </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-amber-500/60 rounded-full"
-                          style={{ width: `${Math.min(100, (gap.changeCount / Math.max(...gaps.map(g => g.changeCount))) * 100)}%` }}
-                        />
-                      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Knowledge Gaps */}
+        {hasGaps && (
+          <Card className="border-amber-500/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                Knowledge Gaps
+                <Badge variant="outline" className="text-[10px] h-4 text-amber-400 border-amber-500/30 ml-auto">{gaps.length}</Badge>
+              </CardTitle>
+              <CardDescription className="text-xs">Modules with frequent changes but no documented knowledge.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
+                {gaps.map((gap) => (
+                  <div key={gap.filePath} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <code className="font-mono text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
+                      <span className="text-amber-400 shrink-0 tabular-nums">{gap.changeCount} changes</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500/60 rounded-full"
+                        style={{ width: `${Math.min(100, (gap.changeCount / Math.max(...gaps.map(g => g.changeCount))) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Most Used */}
-            {hasTopUsed && usageInsights && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-sm font-medium">Most Referenced</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Knowledge your AI teammate relies on most.</p>
-                <div className="space-y-2.5">
-                  {usageInsights.topUsed.slice(0, 4).map((u, i) => (
-                    <div key={u.memoryId} className="flex items-start gap-2.5">
-                      <span className="text-xs font-medium text-muted-foreground mt-0.5 w-4 shrink-0 tabular-nums">{i + 1}.</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="line-clamp-1 text-xs">{u.content}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-500/60 rounded-full"
-                              style={{ width: `${Math.min(100, (u.accessCount / Math.max(...usageInsights.topUsed.map(t => t.accessCount))) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{u.accessCount}x</span>
+        {/* Most Used */}
+        {hasTopUsed && usageInsights && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-400" />
+                Most Referenced
+              </CardTitle>
+              <CardDescription className="text-xs">Knowledge your AI teammate relies on most.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2.5">
+                {usageInsights.topUsed.slice(0, 4).map((u, i) => (
+                  <div key={u.memoryId} className="flex items-start gap-2.5">
+                    <span className="text-xs font-medium text-muted-foreground mt-0.5 w-4 shrink-0 tabular-nums">{i + 1}.</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="line-clamp-1 text-xs">{u.content}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500/60 rounded-full"
+                            style={{ width: `${Math.min(100, (u.accessCount / Math.max(...usageInsights.topUsed.map(t => t.accessCount))) * 100)}%` }}
+                          />
                         </div>
+                        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{u.accessCount}x</span>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Cleanup Candidates */}
-            {hasCleanup && usageInsights && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingDown className="h-4 w-4 text-orange-400" />
-                  <h3 className="text-sm font-medium">Cleanup Candidates</h3>
-                  {usageInsights.neverAccessedCount > 0 && (
-                    <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30 ml-auto">{usageInsights.neverAccessedCount}</Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">Memories never accessed by the AI.</p>
-                <div className="space-y-1.5 mb-3">
-                  {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
-                    <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
-                  ))}
-                  {usageInsights.neverAccessedCount > 3 && (
-                    <p className="text-xs text-muted-foreground">+{usageInsights.neverAccessedCount - 3} more</p>
-                  )}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7"
-                  onClick={() => setShowCleanupDialog(true)}
-                >
-                  Review unused memories
-                </Button>
+        {/* Cleanup Candidates */}
+        {hasCleanup && usageInsights && (
+          <Card
+            className="border-orange-500/20 cursor-pointer hover:border-orange-500/40 transition-colors"
+            onClick={() => setShowCleanupDialog(true)}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-orange-400" />
+                Cleanup Candidates
+                {usageInsights.neverAccessedCount > 0 && (
+                  <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30 ml-auto">{usageInsights.neverAccessedCount}</Badge>
+                )}
+              </CardTitle>
+              <CardDescription className="text-xs">Memories never accessed by the AI. Click to review.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="text-3xl font-bold text-orange-400">{usageInsights.neverAccessedCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  memories have never been referenced in search results or context
+                </p>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="space-y-1.5">
+                {(usageInsights.neverAccessed ?? usageInsights.leastUsed).slice(0, 3).map((u) => (
+                  <p key={u.memoryId} className="line-clamp-1 text-xs text-muted-foreground">{u.content}</p>
+                ))}
+                {usageInsights.neverAccessedCount > 3 && (
+                  <p className="text-xs text-orange-400">+{usageInsights.neverAccessedCount - 3} more</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Cleanup review dialog */}
       <Dialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
@@ -231,7 +234,10 @@ export function MemoryInsights() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 h-7 text-xs"
-                    onClick={() => setDeleteMemoryId(u.memoryId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteMemoryId(u.memoryId);
+                    }}
                   >
                     <Trash2 className="h-3 w-3 mr-1" />
                     Delete
