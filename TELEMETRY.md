@@ -1,6 +1,22 @@
 # Telemetry Architecture
 
-Tandemu collects engineering telemetry from two sources. Understanding which data comes from where is critical for multi-tool expansion.
+Tandemu collects engineering telemetry from two sources. All telemetry flows through the authenticated backend — the OTEL collector is never exposed publicly.
+
+## Security
+
+The OTEL collector is internal-only (no public ports). All telemetry is proxied through the backend:
+
+```
+Claude Code native OTEL → POST /api/telemetry/ingest/v1/{traces,metrics,logs}
+                           ↓ (validates per-org ingestion key, overrides org ID)
+                           → internal OTEL collector → ClickHouse
+
+/finish skill            → POST /api/telemetry/tasks/:taskId/finish
+                           ↓ (validates JWT, processes AI attribution)
+                           → internal OTEL collector → ClickHouse
+```
+
+Each organization has a unique `ingestionKey` (UUID). Claude Code sends it via `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <key>`. The backend validates the key and overrides `organization_id` in all resource attributes (defense in depth — client claims are not trusted).
 
 ## Source 1: `/finish` skill (tool-agnostic)
 
@@ -76,3 +92,59 @@ When adding Codex or Cursor support:
 2. The backend's `getNativeAIAttribution()` needs tool-specific adapters for each native OTEL schema
 3. Dashboard queries marked "Claude Code only" need a normalization layer mapping `codex.*` → common schema
 4. Cursor requires a separate polling adapter since it has no OTEL
+
+## Troubleshooting
+
+### Check pipeline health
+```bash
+curl -sf http://localhost:3001/api/telemetry/health
+# Returns: { "clickhouse": "ok", "collector": "ok" }
+```
+
+### Verify collector is receiving data
+```bash
+# Check collector logs (docker)
+docker compose logs otel-collector --tail 20
+
+# Send a test span
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d '{"resourceSpans":[]}'
+# Should return 200
+```
+
+### Verify ClickHouse has data
+```bash
+# Check trace count
+docker exec tandemu-clickhouse-1 clickhouse-client \
+  --database otel --query "SELECT count() FROM otel_traces"
+
+# Check recent spans
+docker exec tandemu-clickhouse-1 clickhouse-client \
+  --database otel --query "SELECT SpanName, count() FROM otel_traces GROUP BY SpanName"
+```
+
+### Common issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Dashboard shows no data | Backend can't reach collector | Check `OTEL_EXPORTER_OTLP_ENDPOINT` env var |
+| `/finish` telemetry fails | Wrong OTEL endpoint | Verify `otel.endpoint` in backend config |
+| ClickHouse empty | Collector can't reach ClickHouse | Check `CLICKHOUSE_ENDPOINT` in collector config |
+| Native Claude Code data missing | OTEL not enabled in Claude Code | Run `/tandemu:setup` to configure |
+
+### Environment variables
+
+**Backend:**
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — collector HTTP endpoint (default: `http://localhost:4318`)
+- `CLICKHOUSE_URL` — ClickHouse HTTP endpoint for queries (default: `http://localhost:8123`)
+
+**OTEL Collector:**
+- `CLICKHOUSE_ENDPOINT` — ClickHouse TCP endpoint for inserts (default: `tcp://clickhouse:9000`)
+- `CLICKHOUSE_DATABASE` — database name (default: `otel`)
+- `CLICKHOUSE_USERNAME` — (default: `default`)
+- `CLICKHOUSE_PASSWORD` — (default: empty)
+
+**Claude Code (in `~/.claude/settings.json`):**
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — where to send native telemetry
+- `CLAUDE_CODE_ENABLE_TELEMETRY` — must be `"1"` to enable
