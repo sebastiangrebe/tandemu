@@ -583,3 +583,49 @@ export async function approveMemory(memoryId: string): Promise<void> {
     method: "POST",
   });
 }
+
+// ---- Memory Intelligence ----
+
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  memoryCount: number;
+  children: FileTreeNode[];
+  memoryIds: string[];
+}
+
+export interface GapEntry {
+  filePath: string;
+  changeCount: number;
+  memoryCount: number;
+  gapScore: number;
+}
+
+export interface UsageEntry {
+  memoryId: string;
+  content: string;
+  accessCount: number;
+  lastAccessed?: string;
+}
+
+export interface UsageInsightsResponse {
+  topUsed: UsageEntry[];
+  leastUsed: UsageEntry[];
+  neverAccessedCount: number;
+}
+
+export async function getMemoryFileTree(scope: MemoryScope): Promise<{ tree: FileTreeNode[] }> {
+  return fetchApi<{ tree: FileTreeNode[] }>(`/api/memory/file-tree?scope=${scope}`);
+}
+
+export async function getMemoryGaps(params?: { startDate?: string; endDate?: string }): Promise<{ gaps: GapEntry[] }> {
+  const searchParams = new URLSearchParams();
+  if (params?.startDate) searchParams.set('startDate', params.startDate);
+  if (params?.endDate) searchParams.set('endDate', params.endDate);
+  const qs = searchParams.toString();
+  return fetchApi<{ gaps: GapEntry[] }>(`/api/memory/gaps${qs ? `?${qs}` : ''}`);
+}
+
+export async function getMemoryUsageInsights(scope: MemoryScope | 'all' = 'all', days = 30): Promise<UsageInsightsResponse> {
+  return fetchApi<UsageInsightsResponse>(`/api/memory/usage-insights?scope=${scope}&days=${days}`);
+}
