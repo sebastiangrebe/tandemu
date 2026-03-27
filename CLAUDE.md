@@ -80,11 +80,29 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 - Store observations after `/finish` (coding patterns, decisions, corrections)
 
 ### Dashboard pages
-- **Dashboard** (`/`) — KPI cards, activity chart, AI ratio pie, DORA metrics
+- **Dashboard** (`/`) — KPI cards (sessions, AI ratio, lines, cycle time, tool success), activity chart, AI ratio donut, tool usage bar, developer leaderboard, velocity chart, hot files, investment allocation, AI effectiveness, cost metrics
 - **Activity** (`/activity`) — Stats cards, activity chart (taller), session log table with developer names
 - **Friction Map** (`/friction-map`) — Severity cards, file-level friction list
-- All three have team + time range filters via URL params (`?range=30d&team=...`)
+- **AI Memory** (`/memory`) — Memory dashboard with 4 self-loading sections (see below)
+- All pages have team + time range filters via URL params (`?range=30d&team=...`)
 - Old pages (`/ai-insights`, `/dora-metrics`, `/timesheets`) redirect to `/`
+
+### AI Memory dashboard
+The `/memory` page is composed of 4 independent components, each managing its own data fetching and skeleton loading:
+- **MemoryStats** (`components/memory/memory-stats.tsx`) — 4 KPI cards: Total Memories, Personal, Organization, Memory Health (% actively used)
+- **MemoryCharts** (`components/memory/memory-charts.tsx`) — MemoryCategoryChart (horizontal bar, Recharts) + MemoryHealthChart (donut, Recharts)
+- **MemoryInsights** (`components/memory/memory-insights.tsx`) — Knowledge Gaps, Most Referenced, Cleanup Candidates (3 cards in grid). Cleanup opens a dialog to review/delete unused memories. Gaps are scrollable (max-h 200px)
+- **MemoryBrowser** (`components/memory/memory-browser.tsx`) — Segmented scope toggle (Personal/Organization with icons), search with 300ms debounce, category + repo filters, list view (repo-grouped, collapsible) or file tree view. Memory cards have colored left border by category
+
+Memory categories: `architecture`, `pattern`, `gotcha`, `preference`, `style`, `dependency`, `decision`, `uncategorized`
+
+Draft gating: org memories created during a task start as `draft` (visible only to author). Promoted to published when the task completes via `/finish`. Deleted if the task is cancelled.
+
+Knowledge gaps: cross-references git hot files (from ClickHouse telemetry) with memory coverage. Aggregated at folder level (2 segments deep, e.g., `apps/backend`). Surfaced in `/morning` skill and on the memory dashboard.
+
+Usage insights: tracks memory access in ClickHouse (`memory_access_log` table, auto-created in TelemetryService constructor). Surfaces most-referenced and never-accessed memories. Excludes memories created in the last 7 days from cleanup candidates.
+
+Memory metadata enriched during `/finish`: `{ repo, files[], category, taskId }`. Category taxonomy guides what Claude stores.
 
 ### ClickUp mapping at folder level
 ClickUp `fetchProjects` returns folders (not individual lists) as mappable entities. `fetchTasks` auto-detects whether the mapped ID is a folder or list — fetches all lists in a folder if it's a folder.
@@ -135,6 +153,17 @@ The test temporarily disables CLAUDE.md and MCP during skill runs to prevent ses
 - `GET /api/tasks/:taskId/statuses?provider=linear` — available statuses
 - `PATCH /api/tasks/:taskId` — update task `{statusName?, assigneeEmail?, provider}`
 
+### Memory
+- `GET /api/memory/list?scope=personal|org|all&limit=50&offset=0` — list memories (server-side paginated)
+- `GET /api/memory/search?query=&scope=personal|org` — semantic search
+- `GET /api/memory/stats` — counts by scope and category breakdown
+- `PATCH /api/memory/:id` — update content/metadata `{content?, metadata?}`
+- `DELETE /api/memory/:id` — delete memory
+- `POST /api/memory/:id/approve` — promote draft org memory (OWNER/ADMIN only)
+- `GET /api/memory/file-tree?scope=personal|org` — hierarchical tree from `metadata.files[]` paths
+- `GET /api/memory/gaps?startDate=&endDate=` — knowledge gaps (hot files vs memory coverage)
+- `GET /api/memory/usage-insights?scope=all|personal|org&days=30` — top used, least used, never accessed
+
 ### Telemetry
 - `GET /api/telemetry/ai-ratio?startDate=&endDate=` — AI vs manual lines
 - `GET /api/telemetry/friction-heatmap?startDate=&endDate=` — friction events
@@ -142,6 +171,12 @@ The test temporarily disables CLAUDE.md and MCP during skill runs to prevent ses
 - `GET /api/telemetry/timesheets?startDate=&endDate=` — session timesheets (resolves user names from Postgres)
 - `GET /api/telemetry/tool-usage` — Claude Code tool usage stats
 - `GET /api/telemetry/session-quality` — session success/failure ratios
+- `GET /api/telemetry/developer-stats?startDate=&endDate=` — per-developer session/line metrics
+- `GET /api/telemetry/task-velocity?startDate=&endDate=` — task duration trends by week
+- `GET /api/telemetry/hot-files?startDate=&endDate=` — most-changed files
+- `GET /api/telemetry/investment-allocation?startDate=&endDate=` — time by task category (feature/bugfix/debt)
+- `GET /api/telemetry/ai-effectiveness?startDate=&endDate=` — AI line survival by file
+- `GET /api/telemetry/cost-metrics?startDate=&endDate=` — engineering cost estimates
 
 ### Auth
 - `POST /api/auth/register` — register
