@@ -81,36 +81,6 @@ export class TasksService {
     });
   }
 
-  /**
-   * Prepare to start a task: returns statuses + task metadata in one call.
-   * The skill (Claude) picks the right status — we don't hardcode status logic
-   * because every team has custom statuses.
-   */
-  async prepareStartTask(
-    orgId: string,
-    taskId: string,
-    provider: IntegrationProvider,
-  ): Promise<{
-    statuses: Array<{ id: string; name: string; type?: string }>;
-    task: { labels: string[]; description?: string } | null;
-  }> {
-    const statuses = await this.getTaskStatuses(orgId, taskId, provider);
-
-    // Try to fetch the task for labels/description (for active task file)
-    let task: { labels: string[]; description?: string } | null = null;
-    try {
-      const allTasks = await this.getTasks(orgId, {});
-      const found = allTasks.find((t: Task) => t.id === taskId);
-      if (found) {
-        task = { labels: found.labels, description: found.description };
-      }
-    } catch {
-      // Non-critical — skill can work without labels
-    }
-
-    return { statuses, task };
-  }
-
   async updateTask(
     orgId: string,
     taskId: string,

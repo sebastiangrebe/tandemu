@@ -179,21 +179,16 @@ cat > ~/.claude/tandemu-active-task.json << EOF
 EOF
 ```
 
-- Start the task on the ticket system — this returns the available statuses AND task metadata (labels, description) in one call:
+- Update the task on the ticket system — set status to "in progress" AND assign it to the current developer. First fetch the available statuses, then pick the one that best represents "in progress":
 
 ```bash
-START_RESULT=$(curl -sf -X POST "$TANDEMU_API/api/tasks/<task.id>/start" \
-  -H "Authorization: Bearer $TANDEMU_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"provider": "<task.provider>"}')
-echo "$START_RESULT"
+# Fetch available statuses for this task
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/statuses?provider=<task.provider>"
 ```
 
-This returns `{ statuses: [{ id, name, type }], task: { labels, description } }`.
+This returns an array of `{ id, name, type }` objects — the actual statuses available in the team's workflow (e.g., "Backlog", "In Progress", "In Review", "Done"). Pick the one that best represents "in progress" or "started".
 
-Use the `task.labels` from this response to infer the category for the active task file (instead of from the task list response).
-
-From the `statuses` array, pick the one that best represents "in progress" or "development started" for this team's workflow. Then update:
+Then send a single PATCH to update both status and assignee:
 
 ```bash
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<task.id>" \

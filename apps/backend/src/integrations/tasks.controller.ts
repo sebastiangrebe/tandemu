@@ -119,20 +119,6 @@ export class TasksController {
     );
   }
 
-  @Post(':taskId/start')
-  @HttpCode(HttpStatus.OK)
-  async startTask(
-    @CurrentUser() user: RequestUser,
-    @Param('taskId') taskId: string,
-    @Body() body: { provider: IntegrationProvider },
-  ) {
-    return this.tasksService.prepareStartTask(
-      user.organizationId,
-      taskId,
-      body.provider,
-    );
-  }
-
   @Patch(':taskId')
   @HttpCode(HttpStatus.OK)
   async updateTask(
