@@ -50,3 +50,31 @@ export interface MemoryStatsResponse {
   total: number;
   categories: Record<string, number>;
 }
+
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  memoryCount: number;
+  children: FileTreeNode[];
+  memoryIds: string[];
+}
+
+export interface GapEntry {
+  filePath: string;
+  changeCount: number;
+  memoryCount: number;
+  gapScore: number;
+}
+
+export interface UsageEntry {
+  memoryId: string;
+  content: string;
+  accessCount: number;
+  lastAccessed?: string;
+}
+
+export interface UsageInsightsResponse {
+  topUsed: UsageEntry[];
+  leastUsed: UsageEntry[];
+  neverAccessedCount: number;
+}

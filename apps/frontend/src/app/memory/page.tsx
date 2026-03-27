@@ -32,20 +32,28 @@ import {
   FolderTree,
   Clock,
   CheckCircle,
+  AlertTriangle,
+  List,
+  FileCode,
 } from 'lucide-react';
 import {
   getMemoryList,
   getMemoryStats,
   searchMemories,
   approveMemory,
+  getMemoryFileTree,
+  getMemoryGaps,
   type MemoryEntry,
   type MemoryScope,
   type MemoryStatsResponse,
+  type FileTreeNode,
+  type GapEntry,
 } from '@/lib/api';
 import { MemorySkeleton } from '@/components/ui/skeleton-helpers';
 import { InstallBanner } from '@/components/install-banner';
 import { EditMemoryDialog } from '@/components/memory/edit-memory-dialog';
 import { DeleteMemoryDialog } from '@/components/memory/delete-memory-dialog';
+import { FileTree } from '@/components/memory/file-tree';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
 
@@ -132,6 +140,16 @@ export default function MemoryPage() {
   const [repoFilter, setRepoFilter] = useState<string>('all');
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
 
+  // View mode: 'list' (default) or 'files' (file tree)
+  const [viewMode, setViewMode] = useState<'list' | 'files'>('list');
+  const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
+  const [fileTreeLoading, setFileTreeLoading] = useState(false);
+  const [selectedTreePath, setSelectedTreePath] = useState<string | undefined>();
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
+
+  // Knowledge gaps
+  const [gaps, setGaps] = useState<GapEntry[]>([]);
+
   // Dialogs
   const [editMemory, setEditMemory] = useState<MemoryEntry | null>(null);
   const [deleteMemoryId, setDeleteMemoryId] = useState<string | null>(null);
@@ -145,12 +163,22 @@ export default function MemoryPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load stats
+  // Load stats + gaps
   useEffect(() => {
-    getMemoryStats()
-      .then(setStats)
-      .catch(() => {});
+    getMemoryStats().then(setStats).catch(() => {});
+    getMemoryGaps().then((r) => setGaps(r.gaps)).catch(() => {});
   }, []);
+
+  // Load file tree when switching to files view or changing scope
+  useEffect(() => {
+    if (viewMode === 'files') {
+      setFileTreeLoading(true);
+      getMemoryFileTree(activeScope)
+        .then((r) => setFileTree(r.tree))
+        .catch(() => setFileTree([]))
+        .finally(() => setFileTreeLoading(false));
+    }
+  }, [viewMode, activeScope]);
 
   // Load memories
   const loadMemories = useCallback(async () => {
@@ -340,14 +368,62 @@ export default function MemoryPage() {
         </div>
       )}
 
+      {/* Knowledge Gaps */}
+      {gaps.length > 0 && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              Knowledge Gaps
+            </CardTitle>
+            <CardDescription>Modules with heavy activity but few or no memories.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {gaps.slice(0, 5).map((gap) => (
+                <div key={gap.filePath} className="flex items-center justify-between text-sm">
+                  <code className="font-mono text-xs text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span>{gap.changeCount} changes</span>
+                    <span className="text-amber-400">{gap.memoryCount} memories</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs + Search + Filters */}
       <div className="space-y-4">
-        <Tabs value={activeScope} onValueChange={(v) => setActiveScope(v as MemoryScope)}>
-          <TabsList>
-            <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="org">Organization</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center justify-between">
+          <Tabs value={activeScope} onValueChange={(v) => setActiveScope(v as MemoryScope)}>
+            <TabsList>
+              <TabsTrigger value="personal">Personal</TabsTrigger>
+              <TabsTrigger value="org">Organization</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* View mode toggle */}
+          <div className="flex items-center gap-1 border rounded-md p-0.5">
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setViewMode('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'files' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setViewMode('files')}
+            >
+              <FileCode className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
@@ -400,8 +476,66 @@ export default function MemoryPage() {
         </div>
       </div>
 
-      {/* Memory list */}
-      {!hasData ? (
+      {/* File tree view */}
+      {viewMode === 'files' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileCode className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>File Explorer</CardTitle>
+            </div>
+            <CardDescription>Navigate memories by file path. Click a file or folder to filter memories.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {fileTreeLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-7 bg-muted/50 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <FileTree
+                tree={fileTree}
+                selectedPath={selectedTreePath}
+                onSelectPath={(path, memoryIds) => {
+                  setSelectedTreePath(path);
+                  setSelectedMemoryIds(memoryIds);
+                }}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filtered memories from file tree selection */}
+      {viewMode === 'files' && selectedTreePath && selectedMemoryIds.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-mono">{selectedTreePath}</CardTitle>
+            <CardDescription>{selectedMemoryIds.length} memories associated with this path</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {filteredMemories
+                .filter((m) => selectedMemoryIds.includes(m.id))
+                .map((mem) => (
+                  <MemoryRow
+                    key={mem.id}
+                    memory={mem}
+                    expanded={expandedIds.has(mem.id)}
+                    onToggleExpand={() => toggleExpand(mem.id)}
+                    onEdit={() => setEditMemory(mem)}
+                    onDelete={() => setDeleteMemoryId(mem.id)}
+                    onApprove={isAdmin && mem.metadata.status === 'draft' ? () => handleApprove(mem.id) : undefined}
+                  />
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Memory list (list view) */}
+      {viewMode === 'list' && !hasData ? (
         <>
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
@@ -414,7 +548,7 @@ export default function MemoryPage() {
           </Card>
           <InstallBanner />
         </>
-      ) : debouncedQuery ? (
+      ) : viewMode === 'list' && debouncedQuery ? (
         /* Flat search results */
         <Card>
           <CardHeader>
@@ -441,7 +575,7 @@ export default function MemoryPage() {
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === 'list' ? (
         /* Structured repo tree view */
         <Card>
           <CardHeader>
@@ -492,10 +626,10 @@ export default function MemoryPage() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Load more */}
-      {canLoadMore && (
+      {viewMode === 'list' && canLoadMore && (
         <div className="flex justify-center">
           <Button
             variant="outline"

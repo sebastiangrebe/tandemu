@@ -22,9 +22,10 @@ import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
 import { MembershipRole } from '@tandemu/types';
 import { MemoryScope } from '@tandemu/types';
-import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse } from '@tandemu/types';
+import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse, FileTreeNode, GapEntry } from '@tandemu/types';
 import { MemoryService } from './memory.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,6 +36,7 @@ export class MemoryController {
   constructor(
     private readonly memoryService: MemoryService,
     private readonly tasksService: TasksService,
+    private readonly telemetryService: TelemetryService,
   ) {}
 
   @Get('config')
@@ -986,6 +988,149 @@ export class MemoryController {
     return { success: true };
   }
 
+  // ---- Intelligence endpoints ----
+
+  /**
+   * Build a file tree from memory metadata.files[] paths.
+   */
+  @Get('file-tree')
+  async getFileTree(
+    @CurrentUser() user: RequestUser,
+    @Query('scope') scope: string = 'personal',
+  ): Promise<{ tree: FileTreeNode[] }> {
+    const args: Record<string, unknown> = {};
+    if (scope === 'org') {
+      args.app_id = user.organizationId;
+      args.filters = { app_id: user.organizationId };
+    } else {
+      args.user_id = user.userId;
+      args.filters = { user_id: user.userId };
+    }
+
+    const result = await this.callMcpTool('get_memories', args, user);
+    let memories = this.extractMemories(result);
+
+    if (scope === 'org') {
+      memories = await this.filterOrgDrafts(memories, user);
+    }
+
+    // Build tree from file paths
+    const root: FileTreeNode = { name: '', path: '', memoryCount: 0, children: [], memoryIds: [] };
+
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      const files = (metadata?.files as string[]) ?? [];
+      const memId = mem.id as string;
+
+      if (files.length === 0) {
+        // Uncategorized — attach to a special node
+        let uncategorized = root.children.find((c) => c.name === 'Uncategorized');
+        if (!uncategorized) {
+          uncategorized = { name: 'Uncategorized', path: 'Uncategorized', memoryCount: 0, children: [], memoryIds: [] };
+          root.children.push(uncategorized);
+        }
+        uncategorized.memoryIds.push(memId);
+        uncategorized.memoryCount++;
+        continue;
+      }
+
+      for (const filePath of files) {
+        const parts = filePath.split('/').filter(Boolean);
+        let current = root;
+
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const fullPath = parts.slice(0, i + 1).join('/');
+          let child = current.children.find((c) => c.name === part);
+          if (!child) {
+            child = { name: part, path: fullPath, memoryCount: 0, children: [], memoryIds: [] };
+            current.children.push(child);
+          }
+          current = child;
+        }
+
+        // Attach memory to the leaf node
+        if (!current.memoryIds.includes(memId)) {
+          current.memoryIds.push(memId);
+          current.memoryCount++;
+        }
+      }
+    }
+
+    // Propagate memory counts upward
+    this.propagateTreeCounts(root);
+
+    // Sort children alphabetically, Uncategorized last
+    this.sortTree(root);
+
+    return { tree: root.children };
+  }
+
+  /**
+   * Knowledge gap detection — cross-reference hot files with memory coverage.
+   */
+  @Get('gaps')
+  async getKnowledgeGaps(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<{ gaps: GapEntry[] }> {
+    // Fetch hot files from telemetry
+    let hotFiles: Array<{ filePath: string; changeCount: number }> = [];
+    try {
+      hotFiles = await this.telemetryService.getHotFiles(
+        user.organizationId,
+        startDate,
+        endDate,
+      );
+    } catch {
+      // Telemetry may not be available
+      return { gaps: [] };
+    }
+
+    // Fetch all org memories and extract file paths
+    const result = await this.callMcpTool('get_memories', {
+      app_id: user.organizationId,
+      filters: { app_id: user.organizationId },
+    }, user);
+    const orgMemories = await this.filterOrgDrafts(this.extractMemories(result), user);
+
+    // Also fetch personal memories for a more complete picture
+    const personalResult = await this.callMcpTool('get_memories', {
+      user_id: user.userId,
+      filters: { user_id: user.userId },
+    }, user);
+    const personalMemories = this.extractMemories(personalResult);
+
+    // Build a set of all file paths covered by memories
+    const coveredFiles = new Set<string>();
+    for (const mem of [...orgMemories, ...personalMemories]) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      const files = (metadata?.files as string[]) ?? [];
+      for (const f of files) coveredFiles.add(f);
+    }
+
+    // Compute gaps
+    const gaps: GapEntry[] = hotFiles.map((hf) => {
+      // Check if any memory covers this file or a parent path
+      const memoryCount = [...coveredFiles].filter(
+        (cf) => cf === hf.filePath || hf.filePath.startsWith(cf + '/') || cf.startsWith(hf.filePath + '/'),
+      ).length;
+      const gapScore = hf.changeCount * (1 - memoryCount / Math.max(hf.changeCount, 1));
+      return {
+        filePath: hf.filePath,
+        changeCount: hf.changeCount,
+        memoryCount,
+        gapScore,
+      };
+    })
+      .filter((g) => g.gapScore > 0)
+      .sort((a, b) => b.gapScore - a.gapScore)
+      .slice(0, 20);
+
+    return { gaps };
+  }
+
   // ---- Helpers ----
 
   /**
@@ -1001,6 +1146,34 @@ export class MemoryController {
       updatedAt: (raw.updated_at as string) ?? (raw.updatedAt as string) ?? '',
       score: raw.score as number | undefined,
     };
+  }
+
+  /**
+   * Propagate memory counts from leaves to parent nodes.
+   */
+  private propagateTreeCounts(node: FileTreeNode): number {
+    if (node.children.length === 0) return node.memoryCount;
+    let total = node.memoryIds.length;
+    for (const child of node.children) {
+      total += this.propagateTreeCounts(child);
+    }
+    node.memoryCount = total;
+    return total;
+  }
+
+  /**
+   * Sort tree children alphabetically, directories first, Uncategorized last.
+   */
+  private sortTree(node: FileTreeNode): void {
+    node.children.sort((a, b) => {
+      if (a.name === 'Uncategorized') return 1;
+      if (b.name === 'Uncategorized') return -1;
+      const aIsDir = a.children.length > 0 ? 0 : 1;
+      const bIsDir = b.children.length > 0 ? 0 : 1;
+      if (aIsDir !== bIsDir) return aIsDir - bIsDir;
+      return a.name.localeCompare(b.name);
+    });
+    for (const child of node.children) this.sortTree(child);
   }
 
 }
