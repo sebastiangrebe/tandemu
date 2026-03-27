@@ -35,6 +35,8 @@ import {
   AlertTriangle,
   List,
   FileCode,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import {
   getMemoryList,
@@ -43,11 +45,13 @@ import {
   approveMemory,
   getMemoryFileTree,
   getMemoryGaps,
+  getMemoryUsageInsights,
   type MemoryEntry,
   type MemoryScope,
   type MemoryStatsResponse,
   type FileTreeNode,
   type GapEntry,
+  type UsageInsightsResponse,
 } from '@/lib/api';
 import { MemorySkeleton } from '@/components/ui/skeleton-helpers';
 import { InstallBanner } from '@/components/install-banner';
@@ -150,6 +154,9 @@ export default function MemoryPage() {
   // Knowledge gaps
   const [gaps, setGaps] = useState<GapEntry[]>([]);
 
+  // Usage insights
+  const [usageInsights, setUsageInsights] = useState<UsageInsightsResponse | null>(null);
+
   // Dialogs
   const [editMemory, setEditMemory] = useState<MemoryEntry | null>(null);
   const [deleteMemoryId, setDeleteMemoryId] = useState<string | null>(null);
@@ -163,10 +170,11 @@ export default function MemoryPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Load stats + gaps
+  // Load stats + gaps + usage insights
   useEffect(() => {
     getMemoryStats().then(setStats).catch(() => {});
     getMemoryGaps().then((r) => setGaps(r.gaps)).catch(() => {});
+    getMemoryUsageInsights('all', 30).then(setUsageInsights).catch(() => {});
   }, []);
 
   // Load file tree when switching to files view or changing scope
@@ -392,6 +400,59 @@ export default function MemoryPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Usage Insights */}
+      {usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {usageInsights.topUsed.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                  Most Used Knowledge
+                </CardTitle>
+                <CardDescription>Memories the AI relies on most.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {usageInsights.topUsed.slice(0, 5).map((u) => (
+                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-sm">
+                      <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
+                      <Badge variant="secondary" className="shrink-0 text-xs">{u.accessCount}x</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {(usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-orange-400" />
+                  Cleanup Candidates
+                </CardTitle>
+                <CardDescription>
+                  {usageInsights.neverAccessedCount > 0 && (
+                    <>{usageInsights.neverAccessedCount} memories never accessed. </>
+                  )}
+                  Consider reviewing these.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {usageInsights.leastUsed.slice(0, 5).map((u) => (
+                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-sm">
+                      <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
+                      <Badge variant="outline" className="shrink-0 text-xs">{u.accessCount}x</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Tabs + Search + Filters */}

@@ -868,13 +868,18 @@ export class MemoryController {
       }
       merged.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
 
-      return {
-        memories: merged.slice(0, limit).map((m) => {
-          // Determine scope from presence of app_id in the org results
-          const isOrg = orgMemories.some((o) => (o.id as string) === (m.id as string));
-          return this.toMemoryEntry(m, isOrg ? 'org' : 'personal');
-        }),
-      };
+      const resultMemories = merged.slice(0, limit).map((m) => {
+        const isOrg = orgMemories.some((o) => (o.id as string) === (m.id as string));
+        return this.toMemoryEntry(m, isOrg ? 'org' : 'personal');
+      });
+
+      // Fire-and-forget access logging
+      this.telemetryService.logMemoryAccess(
+        resultMemories.map((m) => m.id),
+        user.organizationId, user.userId, 'search',
+      ).catch(() => {});
+
+      return { memories: resultMemories };
     }
 
     // Single-scope search
@@ -894,9 +899,14 @@ export class MemoryController {
       memories = await this.filterOrgDrafts(memories, user);
     }
 
-    return {
-      memories: memories.map((m) => this.toMemoryEntry(m, scope === 'org' ? 'org' : 'personal')),
-    };
+    const resultMemories = memories.map((m) => this.toMemoryEntry(m, scope === 'org' ? 'org' : 'personal'));
+
+    this.telemetryService.logMemoryAccess(
+      resultMemories.map((m) => m.id),
+      user.organizationId, user.userId, 'search',
+    ).catch(() => {});
+
+    return { memories: resultMemories };
   }
 
   /**
@@ -1129,6 +1139,71 @@ export class MemoryController {
       .slice(0, 20);
 
     return { gaps };
+  }
+
+  /**
+   * Memory usage insights — top-used and least-used memories.
+   */
+  @Get('usage-insights')
+  async getUsageInsights(
+    @CurrentUser() user: RequestUser,
+    @Query('scope') scope: string = 'all',
+    @Query('days') daysStr: string = '30',
+  ): Promise<{ topUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; leastUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; neverAccessedCount: number }> {
+    const days = parseInt(daysStr, 10) || 30;
+
+    // Get usage data from ClickHouse
+    const usage = await this.telemetryService.getUsageInsights(user.organizationId, days);
+
+    // Fetch all memories to resolve content and find never-accessed
+    const allMemoryIds = new Set<string>();
+    const memoryContentMap = new Map<string, string>();
+
+    const fetchScope = async (s: 'personal' | 'org') => {
+      const args: Record<string, unknown> = {};
+      if (s === 'org') {
+        args.app_id = user.organizationId;
+        args.filters = { app_id: user.organizationId };
+      } else {
+        args.user_id = user.userId;
+        args.filters = { user_id: user.userId };
+      }
+      const result = await this.callMcpTool('get_memories', args, user);
+      let memories = this.extractMemories(result);
+      if (s === 'org') memories = await this.filterOrgDrafts(memories, user);
+      for (const mem of memories) {
+        const id = mem.id as string;
+        allMemoryIds.add(id);
+        memoryContentMap.set(id, (mem.memory as string) ?? (mem.content as string) ?? '');
+      }
+    };
+
+    if (scope === 'all' || scope === 'personal') await fetchScope('personal');
+    if (scope === 'all' || scope === 'org') await fetchScope('org');
+
+    // Resolve content for usage entries
+    const topUsed = usage.topUsed.map((u) => ({
+      memoryId: u.memoryId,
+      content: memoryContentMap.get(u.memoryId) ?? '',
+      accessCount: u.accessCount,
+      lastAccessed: u.lastAccessed,
+    })).filter((u) => u.content); // Only include memories that still exist
+
+    const leastUsed = usage.leastUsed.map((u) => ({
+      memoryId: u.memoryId,
+      content: memoryContentMap.get(u.memoryId) ?? '',
+      accessCount: u.accessCount,
+      lastAccessed: u.lastAccessed,
+    })).filter((u) => u.content);
+
+    // Count never-accessed: all memory IDs minus those in the usage log
+    const trackedIds = new Set([
+      ...usage.topUsed.map((u) => u.memoryId),
+      ...usage.leastUsed.map((u) => u.memoryId),
+    ]);
+    const neverAccessedCount = [...allMemoryIds].filter((id) => !trackedIds.has(id)).length;
+
+    return { topUsed, leastUsed, neverAccessedCount };
   }
 
   // ---- Helpers ----

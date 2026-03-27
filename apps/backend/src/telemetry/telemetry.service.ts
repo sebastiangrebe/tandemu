@@ -924,4 +924,74 @@ export class TelemetryService implements OnModuleDestroy {
       return [];
     }
   }
+
+  // ---- Memory Usage Tracking ----
+
+  /**
+   * Log memory access events (fire-and-forget).
+   */
+  async logMemoryAccess(
+    memoryIds: string[],
+    organizationId: string,
+    userId: string,
+    accessType: 'search' | 'list' | 'mcp_proxy',
+  ): Promise<void> {
+    if (memoryIds.length === 0) return;
+    try {
+      const values = memoryIds
+        .map((id) => `('${id.replace(/'/g, "''")}', '${organizationId}', '${userId}', '${accessType}', now())`)
+        .join(',');
+      await this.client.query({
+        query: `INSERT INTO memory_access_log (memory_id, organization_id, user_id, access_type, timestamp) VALUES ${values}`,
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to log memory access: ${err}`);
+    }
+  }
+
+  /**
+   * Get memory usage insights: top-used and least-used memories.
+   */
+  async getUsageInsights(
+    organizationId: string,
+    days = 30,
+  ): Promise<{ topUsed: Array<{ memoryId: string; accessCount: number; lastAccessed: string }>; leastUsed: Array<{ memoryId: string; accessCount: number; lastAccessed: string }>; totalTracked: number }> {
+    try {
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            memory_id,
+            count(*) AS access_count,
+            max(timestamp) AS last_accessed
+          FROM memory_access_log
+          WHERE organization_id = {organizationId: String}
+            AND timestamp >= now() - INTERVAL {days: UInt32} DAY
+          GROUP BY memory_id
+          ORDER BY access_count DESC
+        `,
+        query_params: { organizationId, days },
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{ memory_id: string; access_count: number; last_accessed: string }>();
+
+      const topUsed = rows.slice(0, 10).map((r) => ({
+        memoryId: r.memory_id,
+        accessCount: Number(r.access_count),
+        lastAccessed: r.last_accessed,
+      }));
+
+      const leastUsed = rows.length > 10
+        ? rows.slice(-10).reverse().map((r) => ({
+            memoryId: r.memory_id,
+            accessCount: Number(r.access_count),
+            lastAccessed: r.last_accessed,
+          }))
+        : [];
+
+      return { topUsed, leastUsed, totalTracked: rows.length };
+    } catch {
+      return { topUsed: [], leastUsed: [], totalTracked: 0 };
+    }
+  }
 }
