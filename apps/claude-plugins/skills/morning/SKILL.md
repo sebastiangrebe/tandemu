@@ -203,6 +203,25 @@ If you can't determine which status to use, still send the assignee update witho
 - Search the codebase for files relevant to the task title/description
 - List the related files
 
+### 5c. Check for knowledge gaps (optional, don't block on failure)
+
+After setting up the task, silently check for knowledge gaps:
+
+```bash
+GAPS=$(curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/gaps" 2>/dev/null)
+```
+
+If the response contains gaps (non-empty `gaps` array), include them in the readiness summary:
+
+```
+Knowledge gaps detected:
+  ⚠ src/auth/ — 15 changes, 0 memories
+  ⚠ src/telemetry/ — 12 changes, 1 memory
+Consider documenting decisions in these areas during this session.
+```
+
+Only show the top 3 gaps. If the API call fails, skip silently — this is informational only.
+
 ### 6. Confirm readiness and choose approach
 
 Show the readiness summary:
