@@ -83,201 +83,75 @@ If no PR exists and there are commits ahead of main, use AskUserQuestion:
 
 ### 4. Measure and report work
 
-Load config, active task, and OTEL setup in a **single Bash call** ("Prepare telemetry"):
+Load config and active task in a **single Bash call** ("Prepare telemetry"):
 
 ```bash
 # Load Tandemu config
 source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+echo "---CONFIG---"
+echo "TOKEN=$TANDEMU_TOKEN"
+echo "API=$TANDEMU_API"
 
 # Active task metadata
 echo "---ACTIVE_TASK---"
 cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
-
-# OTEL endpoint
-echo "---OTEL---"
-python3 -c "
-import json
-try:
-    s = json.load(open('$HOME/.claude/settings.json'))
-    print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))
-except: print('http://localhost:4318')
-" 2>/dev/null
 ```
 
-Extract `taskId`, `title`, `startedAt`, `repos` from the active task. If the file does not exist, use the current repo and estimate start from the first commit on the branch. Extract `organization.id` and `user.id` from the config env vars. Extract the OTEL endpoint.
+Extract `taskId`, `title`, `startedAt`, `repos`, `category`, `labels` from the active task.
 
-#### 4a. Measure work across all repos
+#### 4a. Collect raw git data across all repos
 
-For each repo in the `repos` array:
+For each repo in the `repos` array, collect the raw data that the backend needs:
 
 ```bash
-# Detect default branch for this repo
 DEFAULT_BRANCH=$(git -C <repo> symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH=$(git -C <repo> branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 
-# Total lines added and removed on this branch
+# Per-file additions and deletions
 git -C <repo> diff $DEFAULT_BRANCH...HEAD --numstat 2>/dev/null
 
-# All commits on this branch
+# All commits with Co-Authored-By check
 git -C <repo> log $DEFAULT_BRANCH..HEAD --format='%H|||%an|||%s|||%b' 2>/dev/null
-```
 
-For AI vs Manual attribution:
-- For each commit, check if the body contains `Co-Authored-By: Claude` (case-insensitive).
-- For commits WITH Co-Authored-By Claude, get their individual line counts:
-  ```bash
-  git -C <repo> diff <commit>^..<commit> --numstat 2>/dev/null
-  ```
-  Sum those as `ai_lines`.
-- All other line additions are `manual_lines`.
-- If no commits have the Claude co-author tag, attribute all lines as `manual_lines`.
-
-Additionally, collect file-level data for each repo:
-
-```bash
-# Changed file paths
+# Changed file list
 git -C <repo> diff $DEFAULT_BRANCH...HEAD --name-only 2>/dev/null
-
-# Files touched by AI-attributed commits only
-for hash in <AI_COMMIT_HASHES>; do
-  git -C <repo> diff $hash^..$hash --name-only 2>/dev/null
-done | sort -u
 ```
 
-Aggregate across all repos into comma-separated strings:
-- `changed_files`: all unique file paths changed on the branch
-- `file_count`: number of unique files changed
-- `ai_files`: file paths touched by AI-attributed commits only
+For each commit, check if the body contains `Co-Authored-By: Claude` (case-insensitive) and set `hasCoAuthorClaude: true/false`.
 
-Also read `category` and `labels` from the active task file (set by `/morning`).
+Build the request body from the collected data — do NOT calculate AI lines yourself.
 
-Calculate:
-- `duration_seconds`: `startedAt` to now
-- `total_commits`: total commits across all repos
-- `ai_lines`: total additions from Claude-attributed commits
-- `manual_lines`: total additions minus `ai_lines`
-- `changed_files`: comma-separated file paths
-- `file_count`: number of unique files
-- `ai_files`: comma-separated file paths from AI commits
-- `task_category`: from active task file (feature/bugfix/tech_debt/maintenance/other)
-- `task_labels`: from active task file (comma-separated label names)
+#### 4b. Send to backend
 
-#### 4b. Send telemetry
-
-Convert timestamps to nanoseconds (use the OTEL endpoint from the setup call above):
+**IMPORTANT: This call MUST succeed for /finish to complete. If it fails, tell the developer and STOP.**
 
 ```bash
-read START_NS END_NS DURATION_S TRACE_ID SPAN_ID <<< $(python3 -c "
-from datetime import datetime, timezone
-import secrets
-start = datetime.fromisoformat('<startedAt>'.replace('Z','+00:00'))
-end = datetime.now(timezone.utc)
-start_ns = int(start.timestamp() * 1_000_000_000)
-end_ns = int(end.timestamp() * 1_000_000_000)
-duration_s = int((end - start).total_seconds())
-print(start_ns, end_ns, duration_s, secrets.token_hex(16), secrets.token_hex(8))
-")
-```
-
-**IMPORTANT: Telemetry MUST succeed for /finish to complete. If either the trace or metrics call fails, tell the developer and STOP — do not clear the active task, do not update the ticket status, do not proceed. The whole point of /finish is to record the work.**
-
-**Send trace span** — this represents the completed task session:
-
-```bash
-TRACE_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/traces" \
+RESULT=$(curl -sf -X POST "$TANDEMU_API/api/telemetry/tasks/<taskId>/finish" \
+  -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "resourceSpans": [{
-      "resource": {
-        "attributes": [
-          {"key": "service.name", "value": {"stringValue": "claude-code"}},
-          {"key": "organization_id", "value": {"stringValue": "<orgId>"}}
-        ]
-      },
-      "scopeSpans": [{
-        "scope": {"name": "tandemu"},
-        "spans": [{
-          "traceId": "'"$TRACE_ID"'",
-          "spanId": "'"$SPAN_ID"'",
-          "name": "task_session",
-          "kind": 1,
-          "startTimeUnixNano": "'"$START_NS"'",
-          "endTimeUnixNano": "'"$END_NS"'",
-          "attributes": [
-            {"key": "user_id", "value": {"stringValue": "<userId>"}},
-            {"key": "task_id", "value": {"stringValue": "<taskId>"}},
-            {"key": "status", "value": {"stringValue": "completed"}},
-            {"key": "ai_lines", "value": {"stringValue": "<ai_lines>"}},
-            {"key": "manual_lines", "value": {"stringValue": "<manual_lines>"}},
-            {"key": "duration_seconds", "value": {"stringValue": "'"$DURATION_S"'"}},
-            {"key": "commits", "value": {"stringValue": "<total_commits>"}},
-            {"key": "changed_files", "value": {"stringValue": "<changed_files>"}},
-            {"key": "file_count", "value": {"stringValue": "<file_count>"}},
-            {"key": "ai_files", "value": {"stringValue": "<ai_files>"}},
-            {"key": "task_category", "value": {"stringValue": "<task_category>"}},
-            {"key": "task_labels", "value": {"stringValue": "<task_labels>"}},
-            {"key": "deployment", "value": {"stringValue": "true"}}
-          ],
-          "status": {}
-        }]
-      }]
-    }]
-  }' 2>/dev/null)
+    "provider": "<provider>",
+    "startedAt": "<startedAt>",
+    "commits": [
+      {"hash": "<hash>", "author": "<author>", "subject": "<subject>", "hasCoAuthorClaude": <true/false>}
+    ],
+    "files": [
+      {"path": "<file>", "additions": <N>, "deletions": <N>}
+    ],
+    "changedFilesList": ["<file1>", "<file2>"],
+    "category": "<category from active task>",
+    "labels": ["<label1>", "<label2>"]
+  }')
+echo "$RESULT"
 ```
 
-If `TRACE_HTTP` is not `200`, tell the developer: "Telemetry failed (trace span returned HTTP <code>). Check that the OTEL collector is running at $OTEL_ENDPOINT. You may need to re-run install.sh to fix the endpoint." Then **STOP** — do not continue with the rest of /finish.
+The backend handles:
+- AI vs manual attribution (using native OTEL data when available, falling back to Co-Authored-By)
+- OTLP telemetry submission (trace span + metrics)
+- Returns: `{ aiLines, manualLines, totalCommits, durationSeconds, filesChanged }`
 
-**Send metrics** — lines of code and task completion:
-
-```bash
-METRICS_HTTP=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$OTEL_ENDPOINT/v1/metrics" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "resourceMetrics": [{
-      "resource": {
-        "attributes": [
-          {"key": "service.name", "value": {"stringValue": "claude-code"}},
-          {"key": "organization_id", "value": {"stringValue": "<orgId>"}}
-        ]
-      },
-      "scopeMetrics": [{
-        "scope": {"name": "tandemu"},
-        "metrics": [
-          {
-            "name": "tandemu.task.completed",
-            "sum": {
-              "dataPoints": [{"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": 1}],
-              "aggregationTemporality": 2,
-              "isMonotonic": true
-            }
-          },
-          {
-            "name": "tandemu.lines_of_code",
-            "sum": {
-              "dataPoints": [
-                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <ai_lines>, "attributes": [{"key": "type", "value": {"stringValue": "ai"}}, {"key": "task_id", "value": {"stringValue": "<taskId>"}}]},
-                {"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <manual_lines>, "attributes": [{"key": "type", "value": {"stringValue": "manual"}}, {"key": "task_id", "value": {"stringValue": "<taskId>"}}]}
-              ],
-              "aggregationTemporality": 2,
-              "isMonotonic": true
-            }
-          },
-          {
-            "name": "tandemu.commits",
-            "sum": {
-              "dataPoints": [{"startTimeUnixNano": "'"$START_NS"'", "timeUnixNano": "'"$END_NS"'", "asDouble": <total_commits>, "attributes": [{"key": "task_id", "value": {"stringValue": "<taskId>"}}]}],
-              "aggregationTemporality": 2,
-              "isMonotonic": true
-            }
-          }
-        ]
-      }]
-    }]
-  }' 2>/dev/null)
-```
-
-If `METRICS_HTTP` is not `200`, tell the developer: "Telemetry failed (metrics returned HTTP <code>). Check that the OTEL collector is running at $OTEL_ENDPOINT. You may need to re-run install.sh to fix the endpoint." Then **STOP** — do not continue with the rest of /finish.
+If the curl fails or returns an error, tell the developer and **STOP**.
 
 #### 4c. Update task status on ticket system
 
@@ -304,13 +178,13 @@ If you can't determine which status to use, skip this step silently.
 rm -f ~/.claude/tandemu-active-task.json
 ```
 
-Tell the developer:
+Tell the developer (using values from the backend response):
 
 ```
 Task completed: <title>
-Duration: <elapsed>
-Code: <ai_lines> AI lines + <manual_lines> manual lines (<total_commits> commits)
-Telemetry: trace ✓ | metrics ✓
+Duration: <durationSeconds formatted as Xh Ym>
+Code: <aiLines> AI lines + <manualLines> manual lines (<totalCommits> commits, <filesChanged> files)
+Telemetry: ✓ sent
 ```
 
 ### 5. Reflect and store memories
