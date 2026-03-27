@@ -33,6 +33,7 @@ import {
   LayoutDashboard,
   Clock,
   Flame,
+  Brain,
   Layers,
   Plug,
   Settings,
@@ -53,31 +54,28 @@ const mainNavAll = [
   { href: "/settings", label: "Settings", adminOnly: true },
 ];
 
+const dashboardSubNav = [
+  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/activity", label: "Activity", icon: Clock },
+  { href: "/friction-map", label: "Friction Map", icon: Flame },
+  { href: "/memory", label: "AI Memory", icon: Brain },
+];
+
 const subNavMap: Record<
   string,
   Array<{ href: string; label: string; icon: typeof LayoutDashboard }>
 > = {
-  "/": [
-    { href: "/", label: "Overview", icon: LayoutDashboard },
-    { href: "/activity", label: "Activity", icon: Clock },
-    { href: "/friction-map", label: "Friction Map", icon: Flame },
-  ],
-  "/activity": [
-    { href: "/", label: "Overview", icon: LayoutDashboard },
-    { href: "/activity", label: "Activity", icon: Clock },
-    { href: "/friction-map", label: "Friction Map", icon: Flame },
-  ],
-  "/friction-map": [
-    { href: "/", label: "Overview", icon: LayoutDashboard },
-    { href: "/activity", label: "Activity", icon: Clock },
-    { href: "/friction-map", label: "Friction Map", icon: Flame },
-  ],
+  "/": dashboardSubNav,
+  "/activity": dashboardSubNav,
+  "/friction-map": dashboardSubNav,
+  "/memory": dashboardSubNav,
 };
 
 const allNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: Clock },
   { href: "/friction-map", label: "Friction Map", icon: Flame },
+  { href: "/memory", label: "AI Memory", icon: Brain },
   { href: "/teams", label: "Teams", icon: Layers, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
@@ -201,7 +199,8 @@ export function Header() {
                 item.href === "/"
                   ? pathname === "/" ||
                     pathname === "/activity" ||
-                    pathname === "/friction-map"
+                    pathname === "/friction-map" ||
+                    pathname === "/memory"
                   : pathname.startsWith(item.href);
               return (
                 <Link
