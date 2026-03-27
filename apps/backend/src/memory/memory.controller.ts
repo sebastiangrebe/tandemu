@@ -1112,31 +1112,41 @@ export class MemoryController {
     }, user);
     const personalMemories = this.extractMemories(personalResult);
 
-    // Build a set of all file paths covered by memories
-    const coveredFiles = new Set<string>();
+    // Build a set of all folder paths covered by memories
+    const coveredFolders = new Set<string>();
     for (const mem of [...orgMemories, ...personalMemories]) {
       const metadata = mem.metadata as Record<string, unknown> | null;
       const files = (metadata?.files as string[]) ?? [];
-      for (const f of files) coveredFiles.add(f);
+      for (const f of files) {
+        // Add file and all parent folders
+        const parts = f.split('/');
+        for (let i = 1; i <= parts.length; i++) {
+          coveredFolders.add(parts.slice(0, i).join('/'));
+        }
+      }
     }
 
-    // Compute gaps
-    const gaps: GapEntry[] = hotFiles.map((hf) => {
-      // Check if any memory covers this file or a parent path
-      const memoryCount = [...coveredFiles].filter(
-        (cf) => cf === hf.filePath || hf.filePath.startsWith(cf + '/') || cf.startsWith(hf.filePath + '/'),
+    // Aggregate hot files to folder level (2 segments deep, e.g. "apps/backend")
+    const folderChanges = new Map<string, number>();
+    for (const hf of hotFiles) {
+      const parts = hf.filePath.split('/');
+      // Use first 2 segments as the folder key (e.g., "apps/backend" from "apps/backend/src/foo.ts")
+      const folder = parts.length > 2 ? parts.slice(0, 2).join('/') : parts[0];
+      folderChanges.set(folder, (folderChanges.get(folder) ?? 0) + hf.changeCount);
+    }
+
+    // Compute gaps at folder level
+    const gaps: GapEntry[] = Array.from(folderChanges.entries()).map(([folder, changeCount]) => {
+      // Check if any memory covers files in this folder
+      const memoryCount = [...coveredFolders].filter(
+        (cf) => cf === folder || cf.startsWith(folder + '/'),
       ).length;
-      const gapScore = hf.changeCount * (1 - memoryCount / Math.max(hf.changeCount, 1));
-      return {
-        filePath: hf.filePath,
-        changeCount: hf.changeCount,
-        memoryCount,
-        gapScore,
-      };
+      const gapScore = changeCount * (memoryCount === 0 ? 1 : 1 / (memoryCount + 1));
+      return { filePath: folder, changeCount, memoryCount, gapScore };
     })
-      .filter((g) => g.gapScore > 0)
+      .filter((g) => g.memoryCount === 0 || g.gapScore > 1)
       .sort((a, b) => b.gapScore - a.gapScore)
-      .slice(0, 20);
+      .slice(0, 10);
 
     return { gaps };
   }

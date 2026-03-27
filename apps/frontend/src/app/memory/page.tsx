@@ -376,79 +376,80 @@ export default function MemoryPage() {
         </div>
       )}
 
-      {/* Knowledge Gaps */}
-      {gaps.length > 0 && (
-        <Card className="border-amber-500/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-400" />
-              Knowledge Gaps
-            </CardTitle>
-            <CardDescription>Modules with heavy activity but few or no memories.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {gaps.slice(0, 5).map((gap) => (
-                <div key={gap.filePath} className="flex items-center justify-between text-sm">
-                  <code className="font-mono text-xs text-muted-foreground truncate max-w-[60%]">{gap.filePath}</code>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span>{gap.changeCount} changes</span>
-                    <span className="text-amber-400">{gap.memoryCount} memories</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Usage Insights */}
-      {usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {usageInsights.topUsed.length > 0 && (
-            <Card>
+      {/* Insights row */}
+      {(gaps.length > 0 || (usageInsights && (usageInsights.topUsed.length > 0 || usageInsights.neverAccessedCount > 0))) && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Knowledge Gaps */}
+          {gaps.length > 0 && (
+            <Card className="border-amber-500/20">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-emerald-400" />
-                  Most Used Knowledge
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  Knowledge Gaps
                 </CardTitle>
-                <CardDescription>Memories the AI relies on most.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {usageInsights.topUsed.slice(0, 5).map((u) => (
-                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-sm">
-                      <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
-                      <Badge variant="secondary" className="shrink-0 text-xs">{u.accessCount}x</Badge>
+                <div className="space-y-1.5">
+                  {gaps.slice(0, 4).map((gap) => (
+                    <div key={gap.filePath} className="flex items-center justify-between text-xs">
+                      <code className="font-mono text-muted-foreground truncate max-w-[65%]">{gap.filePath}</code>
+                      <span className="text-amber-400 shrink-0">{gap.changeCount} changes</span>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
           )}
-          {(usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+
+          {/* Most Used */}
+          {usageInsights && usageInsights.topUsed.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-orange-400" />
-                  Cleanup Candidates
+                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                  Most Used
                 </CardTitle>
-                <CardDescription>
-                  {usageInsights.neverAccessedCount > 0 && (
-                    <>{usageInsights.neverAccessedCount} memories never accessed. </>
-                  )}
-                  Consider reviewing these.
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {usageInsights.leastUsed.slice(0, 5).map((u) => (
-                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-sm">
+                <div className="space-y-1.5">
+                  {usageInsights.topUsed.slice(0, 4).map((u) => (
+                    <div key={u.memoryId} className="flex items-start justify-between gap-2 text-xs">
                       <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
-                      <Badge variant="outline" className="shrink-0 text-xs">{u.accessCount}x</Badge>
+                      <Badge variant="secondary" className="shrink-0 text-[10px] h-4">{u.accessCount}x</Badge>
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Cleanup Candidates */}
+          {usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0) && (
+            <Card className="border-orange-500/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-orange-400" />
+                  Cleanup
+                  {usageInsights.neverAccessedCount > 0 && (
+                    <Badge variant="outline" className="text-[10px] h-4 text-orange-400 border-orange-500/30">{usageInsights.neverAccessedCount} unused</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {usageInsights.leastUsed.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {usageInsights.leastUsed.slice(0, 4).map((u) => (
+                      <div key={u.memoryId} className="flex items-start justify-between gap-2 text-xs">
+                        <p className="line-clamp-1 text-muted-foreground flex-1">{u.content}</p>
+                        <Badge variant="outline" className="shrink-0 text-[10px] h-4">{u.accessCount}x</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {usageInsights.neverAccessedCount} memories have never been accessed. Search or browse memories to build usage data.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
