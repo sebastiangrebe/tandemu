@@ -1,9 +1,12 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
+import { encrypt, decrypt, isEncrypted } from '../common/crypto.js';
 import type {
   Integration,
   IntegrationProvider,
@@ -22,6 +25,7 @@ interface IntegrationRow {
   external_workspace_id: string | null;
   external_workspace_name: string | null;
   config: Record<string, unknown>;
+  encryption_key_version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -68,21 +72,53 @@ function mapMapping(row: MappingRow): IntegrationProjectMapping {
 
 @Injectable()
 export class IntegrationsService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(IntegrationsService.name);
+  private readonly encryptionKey: string;
+
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly configService: ConfigService,
+  ) {
+    this.encryptionKey = this.configService.get<string>('encryption.key', '');
+    if (this.encryptionKey) {
+      this.logger.log('Token encryption: enabled');
+    } else {
+      this.logger.warn('Token encryption: disabled (ENCRYPTION_KEY not set)');
+    }
+  }
+
+  private encryptToken(plaintext: string): string {
+    if (!this.encryptionKey) return plaintext;
+    return encrypt(plaintext, this.encryptionKey);
+  }
+
+  private decryptToken(stored: string): string {
+    if (!this.encryptionKey) return stored;
+    if (!isEncrypted(stored)) return stored; // plain text (legacy/OSS)
+    return decrypt(stored, this.encryptionKey);
+  }
+
+  private get keyVersion(): number {
+    return this.encryptionKey ? 1 : 0;
+  }
 
   async create(orgId: string, dto: CreateIntegrationDto): Promise<Integration> {
     try {
+      const encryptedToken = this.encryptToken(dto.accessToken);
+      const encryptedRefresh = dto.refreshToken ? this.encryptToken(dto.refreshToken) : null;
+
       const result = await this.db.query<IntegrationRow>(
-        `INSERT INTO integrations (organization_id, provider, access_token, refresh_token, external_workspace_id, external_workspace_name)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO integrations (organization_id, provider, access_token, refresh_token, external_workspace_id, external_workspace_name, encryption_key_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
         [
           orgId,
           dto.provider,
-          dto.accessToken,
-          dto.refreshToken ?? null,
+          encryptedToken,
+          encryptedRefresh,
           dto.externalWorkspaceId ?? null,
           dto.externalWorkspaceName ?? null,
+          this.keyVersion,
         ],
       );
       return mapIntegration(result.rows[0]!);
@@ -101,10 +137,14 @@ export class IntegrationsService {
       `SELECT * FROM integrations WHERE organization_id = $1`,
       [orgId],
     );
-    return result.rows.map((row) => ({
-      ...mapIntegration(row),
-      maskedToken: maskToken(row.access_token),
-    }));
+    return result.rows.map((row) => {
+      // Decrypt to get the real token for masking (shows last 4 of actual token, not ciphertext)
+      const plainToken = this.decryptToken(row.access_token);
+      return {
+        ...mapIntegration(row),
+        maskedToken: maskToken(plainToken),
+      };
+    });
   }
 
   async findOne(orgId: string, provider: IntegrationProvider): Promise<IntegrationRow> {
@@ -115,7 +155,13 @@ export class IntegrationsService {
     if (result.rows.length === 0) {
       throw new NotFoundException(`No ${provider} integration found for this organization`);
     }
-    return result.rows[0]!;
+    const row = result.rows[0]!;
+    // Decrypt tokens before returning to callers (providers need plain text)
+    return {
+      ...row,
+      access_token: this.decryptToken(row.access_token),
+      refresh_token: row.refresh_token ? this.decryptToken(row.refresh_token) : null,
+    };
   }
 
   async delete(orgId: string, provider: IntegrationProvider): Promise<boolean> {
@@ -124,6 +170,35 @@ export class IntegrationsService {
       [orgId, provider],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Re-encrypt all plain text tokens for an organization.
+   * Called on startup or via admin endpoint when ENCRYPTION_KEY is set.
+   */
+  async reencryptTokens(): Promise<number> {
+    if (!this.encryptionKey) return 0;
+
+    const result = await this.db.query<IntegrationRow>(
+      `SELECT * FROM integrations WHERE encryption_key_version = 0`,
+    );
+
+    let count = 0;
+    for (const row of result.rows) {
+      const encryptedToken = this.encryptToken(row.access_token);
+      const encryptedRefresh = row.refresh_token ? this.encryptToken(row.refresh_token) : null;
+
+      await this.db.query(
+        `UPDATE integrations SET access_token = $1, refresh_token = $2, encryption_key_version = $3, updated_at = now() WHERE id = $4`,
+        [encryptedToken, encryptedRefresh, this.keyVersion, row.id],
+      );
+      count++;
+    }
+
+    if (count > 0) {
+      this.logger.log(`Re-encrypted ${count} integration token(s)`);
+    }
+    return count;
   }
 
   async createMapping(integrationId: string, dto: CreateProjectMappingDto): Promise<IntegrationProjectMapping> {
