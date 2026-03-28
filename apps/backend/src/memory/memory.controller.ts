@@ -16,6 +16,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { createHash } from 'crypto';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { CurrentUser, Roles } from '../auth/auth.decorator.js';
@@ -1314,6 +1315,127 @@ export class MemoryController {
       return a.name.localeCompare(b.name);
     });
     for (const child of node.children) this.sortTree(child);
+  }
+
+  /**
+   * Generate a compressed memory index for a repo.
+   * Returns a compact markdown summary grouped by folder with category breakdowns.
+   * Supports ETag caching — returns 304 if unchanged.
+   */
+  @Get('index')
+  async getMemoryIndex(
+    @CurrentUser() user: RequestUser,
+    @Query('repo') repo: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    // Fetch all memories (personal + org)
+    const [personalResult, orgResult] = await Promise.all([
+      this.callMcpTool('get_memories', {
+        user_id: user.userId,
+        filters: { user_id: user.userId },
+      }, user),
+      this.callMcpTool('get_memories', {
+        app_id: user.organizationId,
+        filters: { app_id: user.organizationId },
+      }, user),
+    ]);
+
+    const personalMemories = this.extractMemories(personalResult);
+    const orgMemories = await this.filterOrgDrafts(
+      this.extractMemories(orgResult),
+      user,
+    );
+
+    const allMemories = [...personalMemories, ...orgMemories];
+
+    // Filter by repo if specified
+    const filtered = repo
+      ? allMemories.filter((m) => {
+          const metadata = m.metadata as Record<string, unknown> | null;
+          const memRepo = metadata?.repo as string | undefined;
+          return memRepo && (memRepo.includes(repo) || repo.includes(String(memRepo)));
+        })
+      : allMemories;
+
+    // Group by folder (2-level deep) with category breakdown
+    const folders = new Map<string, { categories: Map<string, string[]>; count: number; recent: string[] }>();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    for (const mem of filtered) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      const files = (metadata?.files as string[]) ?? [];
+      const category = (metadata?.category as string) ?? 'uncategorized';
+      const content = (mem.memory as string) ?? (mem.content as string) ?? '';
+      const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
+      const snippet = content.length > 80 ? content.slice(0, 80) + '...' : content;
+
+      // Derive folder from first file path (2 segments deep)
+      let folder = 'general';
+      if (files.length > 0) {
+        const parts = files[0]!.split('/');
+        folder = parts.length >= 2 ? parts.slice(0, 2).join('/') : parts[0]!;
+      }
+
+      if (!folders.has(folder)) {
+        folders.set(folder, { categories: new Map(), count: 0, recent: [] });
+      }
+      const entry = folders.get(folder)!;
+      entry.count++;
+
+      if (!entry.categories.has(category)) {
+        entry.categories.set(category, []);
+      }
+      entry.categories.get(category)!.push(snippet);
+
+      if (createdAt > sevenDaysAgo) {
+        entry.recent.push(snippet);
+      }
+    }
+
+    // Build markdown index
+    const lines: string[] = [
+      `# Memory Index`,
+      `> ${filtered.length} memories for ${repo || 'all repos'}. Use \`search_memories\` to get full content.`,
+      '',
+    ];
+
+    // Sort folders by memory count (most first)
+    const sortedFolders = [...folders.entries()].sort((a, b) => b[1].count - a[1].count);
+
+    for (const [folder, data] of sortedFolders) {
+      lines.push(`## ${folder} (${data.count})`);
+      for (const [category, snippets] of data.categories) {
+        // Show category with first snippet as example
+        lines.push(`- **${category}**: ${snippets[0]!}`);
+        if (snippets.length > 1) {
+          lines.push(`  _+${snippets.length - 1} more_`);
+        }
+      }
+      if (data.recent.length > 0) {
+        lines.push(`- _${data.recent.length} new this week_`);
+      }
+      lines.push('');
+    }
+
+    if (folders.size === 0) {
+      lines.push('_No memories yet for this repo. Memories are created during /finish and work sessions._');
+    }
+
+    const markdown = lines.join('\n');
+
+    // ETag for caching
+    const etag = createHash('md5').update(markdown).digest('hex');
+    const clientEtag = req.headers['if-none-match'];
+
+    if (clientEtag === etag) {
+      res.status(304).end();
+      return;
+    }
+
+    res.setHeader('ETag', etag);
+    res.setHeader('Content-Type', 'text/markdown');
+    res.status(200).send(markdown);
   }
 
 }

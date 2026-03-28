@@ -50,8 +50,29 @@ cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
 
 # Git state
 echo "---GIT---"
-echo "REPO=$(git rev-parse --show-toplevel 2>/dev/null)"
+REPO=$(git rev-parse --show-toplevel 2>/dev/null)
+echo "REPO=$REPO"
 echo "STATUS=$(git status --short)"
+
+# Refresh memory index for this repo
+REPO_NAME=$(basename "$REPO" 2>/dev/null || echo "unknown")
+echo "---MEMORY_INDEX---"
+ETAG=$(cat ~/.claude/tandemu-memory-index-${REPO_NAME}.etag 2>/dev/null || echo "")
+INDEX_RESPONSE=$(curl -sf -w "\n%{http_code}" \
+  -H "Authorization: Bearer $TANDEMU_TOKEN" \
+  -H "If-None-Match: $ETAG" \
+  "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null || echo -e "\n000")
+HTTP_CODE=$(echo "$INDEX_RESPONSE" | tail -1)
+if [ "$HTTP_CODE" = "200" ]; then
+  echo "$INDEX_RESPONSE" | sed '$d' > ~/.claude/tandemu-memory-index-${REPO_NAME}.md
+  RESPONSE_ETAG=$(curl -sI -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null | grep -i etag | tr -d '\r' | awk '{print $2}')
+  echo "$RESPONSE_ETAG" > ~/.claude/tandemu-memory-index-${REPO_NAME}.etag
+  echo "REFRESHED"
+elif [ "$HTTP_CODE" = "304" ]; then
+  echo "UNCHANGED"
+else
+  echo "SKIPPED (status: $HTTP_CODE)"
+fi
 ```
 
 If the config load fails, tell the developer: "Tandemu is not configured. Run install.sh to set it up."
