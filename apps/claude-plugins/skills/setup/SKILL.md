@@ -329,8 +329,9 @@ API: <API_URL>
 Telemetry: enabled
 Memory: enabled
 
-⚠️  Please restart Claude Code to activate the memory server.
-   Type /exit, then reopen claude.
+⚠️  Please start a new session to activate the memory server.
+   Type /exit, then run `claude` again (don't resume — start fresh).
+   Resuming this session won't activate memory or load the knowledge index.
 
 Available skills:
   /morning   — Pick a task and start working
