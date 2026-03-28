@@ -1,5 +1,7 @@
 import { Injectable, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { randomBytes } from 'crypto';
@@ -7,6 +9,7 @@ import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry }
 import { MemoryService } from '../memory/memory.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
+import type { TelemetryJobData } from '../queue/queue.types.js';
 
 export interface TimesheetEntry {
   readonly userId: string;
@@ -69,6 +72,7 @@ export class TelemetryService implements OnModuleDestroy {
     @Inject(forwardRef(() => MemoryService)) private readonly memoryService: MemoryService,
     @Inject(forwardRef(() => GitHubGitService)) private readonly gitHubGitService: GitHubGitService,
     @Inject(forwardRef(() => IntegrationsService)) private readonly integrationsService: IntegrationsService,
+    @InjectQueue('telemetry') private readonly telemetryQueue: Queue<TelemetryJobData>,
   ) {
     const clickhouseUrl = this.configService.get<string>('clickhouse.url', 'http://localhost:8123');
     this.client = createClient({
@@ -208,93 +212,81 @@ export class TelemetryService implements OnModuleDestroy {
       ? (await this.getNativeAIAttribution(organizationId, input.startedAt, now.toISOString()).catch(() => ({ aiFilePaths: [] as string[], totalNativeAiLines: 0 }))).aiFilePaths.join(',')
       : '';
 
-    // Send trace span
-    try {
-      const traceRes = await fetch(`${otelEndpoint}/v1/traces`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          resourceSpans: [{
-            resource: {
+    // Queue trace span
+    this.telemetryQueue.add('otlp-trace', {
+      type: 'otlp-trace',
+      otelEndpoint,
+      payload: {
+        resourceSpans: [{
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'claude-code' } },
+              { key: 'organization_id', value: { stringValue: organizationId } },
+            ],
+          },
+          scopeSpans: [{
+            scope: { name: 'tandemu' },
+            spans: [{
+              traceId, spanId, name: 'task_session', kind: 1,
+              startTimeUnixNano: startNs.toString(),
+              endTimeUnixNano: endNs.toString(),
               attributes: [
-                { key: 'service.name', value: { stringValue: 'claude-code' } },
-                { key: 'organization_id', value: { stringValue: organizationId } },
+                { key: 'user_id', value: { stringValue: userId } },
+                { key: 'task_id', value: { stringValue: taskId } },
+                { key: 'status', value: { stringValue: 'completed' } },
+                { key: 'ai_lines', value: { stringValue: String(aiLines) } },
+                { key: 'manual_lines', value: { stringValue: String(manualLines) } },
+                { key: 'duration_seconds', value: { stringValue: String(durationSeconds) } },
+                { key: 'commits', value: { stringValue: String(input.commits.length) } },
+                { key: 'changed_files', value: { stringValue: changedFiles } },
+                { key: 'file_count', value: { stringValue: String(input.changedFilesList.length) } },
+                { key: 'ai_files', value: { stringValue: aiFilesList } },
+                { key: 'task_category', value: { stringValue: input.category ?? 'other' } },
+                { key: 'task_labels', value: { stringValue: (input.labels ?? []).join(',') } },
+                { key: 'deployment', value: { stringValue: 'true' } },
               ],
-            },
-            scopeSpans: [{
-              scope: { name: 'tandemu' },
-              spans: [{
-                traceId, spanId, name: 'task_session', kind: 1,
-                startTimeUnixNano: startNs.toString(),
-                endTimeUnixNano: endNs.toString(),
-                attributes: [
-                  { key: 'user_id', value: { stringValue: userId } },
-                  { key: 'task_id', value: { stringValue: taskId } },
-                  { key: 'status', value: { stringValue: 'completed' } },
-                  { key: 'ai_lines', value: { stringValue: String(aiLines) } },
-                  { key: 'manual_lines', value: { stringValue: String(manualLines) } },
-                  { key: 'duration_seconds', value: { stringValue: String(durationSeconds) } },
-                  { key: 'commits', value: { stringValue: String(input.commits.length) } },
-                  { key: 'changed_files', value: { stringValue: changedFiles } },
-                  { key: 'file_count', value: { stringValue: String(input.changedFilesList.length) } },
-                  { key: 'ai_files', value: { stringValue: aiFilesList } },
-                  { key: 'task_category', value: { stringValue: input.category ?? 'other' } },
-                  { key: 'task_labels', value: { stringValue: (input.labels ?? []).join(',') } },
-                  { key: 'deployment', value: { stringValue: 'true' } },
+              status: {},
+            }],
+          }],
+        }],
+      },
+    });
+
+    // Queue metrics
+    this.telemetryQueue.add('otlp-metrics', {
+      type: 'otlp-metrics',
+      otelEndpoint,
+      payload: {
+        resourceMetrics: [{
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'claude-code' } },
+              { key: 'organization_id', value: { stringValue: organizationId } },
+            ],
+          },
+          scopeMetrics: [{
+            scope: { name: 'tandemu' },
+            metrics: [{
+              name: 'tandemu.lines_of_code',
+              sum: {
+                dataPoints: [
+                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: aiLines, attributes: [{ key: 'type', value: { stringValue: 'ai' } }, { key: 'task_id', value: { stringValue: taskId } }] },
+                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: manualLines, attributes: [{ key: 'type', value: { stringValue: 'manual' } }, { key: 'task_id', value: { stringValue: taskId } }] },
                 ],
-                status: {},
-              }],
+                aggregationTemporality: 2,
+                isMonotonic: true,
+              },
             }],
           }],
-        }),
-      });
-      if (!traceRes.ok) {
-        this.logger.error(`OTLP trace failed: ${traceRes.status}`);
-      }
-    } catch (err) {
-      this.logger.error('Failed to send OTLP trace', err);
-    }
+        }],
+      },
+    });
 
-    // Send metrics
-    try {
-      const metricsRes = await fetch(`${otelEndpoint}/v1/metrics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          resourceMetrics: [{
-            resource: {
-              attributes: [
-                { key: 'service.name', value: { stringValue: 'claude-code' } },
-                { key: 'organization_id', value: { stringValue: organizationId } },
-              ],
-            },
-            scopeMetrics: [{
-              scope: { name: 'tandemu' },
-              metrics: [{
-                name: 'tandemu.lines_of_code',
-                sum: {
-                  dataPoints: [
-                    { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: aiLines, attributes: [{ key: 'type', value: { stringValue: 'ai' } }, { key: 'task_id', value: { stringValue: taskId } }] },
-                    { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: manualLines, attributes: [{ key: 'type', value: { stringValue: 'manual' } }, { key: 'task_id', value: { stringValue: taskId } }] },
-                  ],
-                  aggregationTemporality: 2,
-                  isMonotonic: true,
-                },
-              }],
-            }],
-          }],
-        }),
-      });
-      if (!metricsRes.ok) {
-        this.logger.error(`OTLP metrics failed: ${metricsRes.status}`);
-      }
-    } catch (err) {
-      this.logger.error('Failed to send OTLP metrics', err);
-    }
-
-    // Fire-and-forget: self-heal git history into org memories
-    this.selfHealGitMemories(organizationId, input).catch((err) => {
-      this.logger.warn(`Self-healing git memories failed: ${err}`);
+    // Queue git self-healing
+    this.telemetryQueue.add('git-self-heal', {
+      type: 'git-self-heal',
+      organizationId,
+      input,
     });
 
     return {
@@ -310,7 +302,7 @@ export class TelemetryService implements OnModuleDestroy {
    * Self-healing: auto-index merged PRs for changed files as org memories.
    * Runs as fire-and-forget after task completion.
    */
-  private async selfHealGitMemories(
+  async selfHealGitMemories(
     organizationId: string,
     input: FinishTaskInput,
   ): Promise<void> {
