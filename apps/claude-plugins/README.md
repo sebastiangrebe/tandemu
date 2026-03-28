@@ -24,7 +24,6 @@ Skills are invoked as slash commands within a Claude Code session. Each skill li
 | **pause** | `/tandemu:pause` | Pauses current task so you can switch to another |
 | **create** | `/tandemu:create` | Creates a new task in the connected ticket system |
 | **standup** | `/tandemu:standup` | Generates a team standup report from task and telemetry data |
-| **blockers** | `/tandemu:blockers` | Surfaces team friction and blocked/stale tasks |
 
 ### Adding a new skill
 
@@ -113,7 +112,6 @@ apps/claude-plugins/
     pause/SKILL.md             # Task pausing
     create/SKILL.md            # Task creation
     standup/SKILL.md           # Team standup report
-    blockers/SKILL.md          # Friction and blockers
   hooks/
     pre-session.sh             # Session initialization
     post-commit.sh             # Commit validation and telemetry

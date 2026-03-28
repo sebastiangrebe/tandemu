@@ -992,8 +992,19 @@ export class TelemetryService implements OnModuleDestroy {
    * Will need normalization layer for Codex (codex.tool.call) and Cursor (REST API).
    * Failed tool calls grouped by file path — augments custom friction logs.
    */
-  async getNativeFriction(organizationId: string): Promise<FrictionEvent[]> {
+  async getNativeFriction(organizationId: string, startDate?: string, endDate?: string): Promise<FrictionEvent[]> {
     try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) {
+        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        params.endDate = endDate;
+      }
+
       const resultSet = await this.client.query({
         query: `
           SELECT
@@ -1008,12 +1019,13 @@ export class TelemetryService implements OnModuleDestroy {
             AND LogAttributes['event.name'] = 'tool_result'
             AND LogAttributes['success'] = 'false'
             AND JSONExtractString(LogAttributes['tool_parameters'], 'file_path') != ''
+            ${dateFilter}
           GROUP BY session_id, user_id, repository_path
-          HAVING error_count >= 2
+          HAVING error_count >= 1
           ORDER BY error_count DESC
           LIMIT 100
         `,
-        query_params: { organizationId },
+        query_params: params,
         format: 'JSONEachRow',
       });
 

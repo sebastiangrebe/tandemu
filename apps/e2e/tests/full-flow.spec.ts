@@ -296,7 +296,6 @@ test.describe.serial('Tandemu E2E: Full Setup Flow', () => {
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'finish', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'pause', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'standup', 'SKILL.md'))).toBe(true);
-    expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'blockers', 'SKILL.md'))).toBe(true);
 
     // /tandemu skill should NOT exist (its logic is in install.sh)
     expect(fs.existsSync(path.join(HOME, '.claude', 'skills', 'tandemu', 'SKILL.md'))).toBe(false);

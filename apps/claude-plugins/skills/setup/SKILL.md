@@ -354,7 +354,6 @@ Available skills:
   /finish    — Complete task, measure work, send telemetry
   /pause     — Pause current task, switch to another
   /standup   — Generate a team standup report
-  /blockers  — See what's slowing the team down
 
 After restarting, get started with:
   > /morning

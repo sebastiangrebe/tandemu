@@ -240,4 +240,3 @@ Also create a matching feature branch in the new repo (same name as the current 
 - `/pause` — Pause current task, switch to another
 - `/create` — Create a new task in the ticket system
 - `/standup` — Generate a team standup report
-- `/blockers` — See what's slowing the team down

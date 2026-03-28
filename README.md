@@ -159,7 +159,7 @@ except: pass
 rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task.json ~/.claude/tandemu-version.txt
 rm -f ~/.claude/tandemu-memory-index-*.md
 rm -f ~/.claude/CLAUDE.md ~/.claude/lib/tandemu-env.sh
-rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,blockers,setup}
+rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,setup}
 python3 -c "
 import json, os
 for f in [os.path.expanduser('~/.mcp.json'), os.path.expanduser('~/.claude.json')]:
@@ -192,7 +192,6 @@ Claude Code has an official plugin marketplace, but plugin skills are namespaced
 | `/pause` | Pause current task, switch to another |
 | `/create` | Create a new task in the ticket system |
 | `/standup` | Generate a team standup report |
-| `/blockers` | See what's slowing the team down |
 
 ## License
 

@@ -99,7 +99,7 @@ PYEOF
   ok "Config removed"
 
   # Remove skills
-  for skill in morning finish pause create standup blockers setup; do
+  for skill in morning finish pause create standup setup; do
     rm -rf "$SKILLS_DIR/$skill"
   done
   ok "Skills removed"
@@ -627,7 +627,6 @@ print_done() {
   printf '%b\n' "    ${GREEN}/finish${NC}    — Complete task, measure work, send telemetry"
   printf '%b\n' "    ${GREEN}/pause${NC}     — Pause current task, switch to another"
   printf '%b\n' "    ${GREEN}/standup${NC}   — Generate a team standup report"
-  printf '%b\n' "    ${GREEN}/blockers${NC}  — See what's slowing the team down"
   echo ""
   printf '%b\n' "  ${BOLD}Manage:${NC}"
   dim "    Re-authenticate:  ./install.sh"

@@ -39,7 +39,7 @@ export class TelemetryController {
   ): Promise<FrictionEvent[]> {
     const [custom, native] = await Promise.all([
       this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate),
-      this.telemetryService.getNativeFriction(user.organizationId),
+      this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate),
     ]);
     return [...custom, ...native];
   }

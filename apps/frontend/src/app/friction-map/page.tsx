@@ -141,11 +141,14 @@ export default function FrictionMapPage() {
       {!hasData ? (
         <>
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Flame className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No friction events detected yet</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                Friction data will appear as developers use Claude Code in your repositories.
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <Flame className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <h3 className="text-lg font-medium mb-1">No friction events detected yet</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-lg">
+                Friction is detected automatically from Claude Code tool failures when OTEL telemetry is enabled.
+                Enable it by setting <code className="text-xs bg-muted px-1.5 py-0.5 rounded">CLAUDE_CODE_ENABLE_TELEMETRY=1</code> and
+                configuring <code className="text-xs bg-muted px-1.5 py-0.5 rounded">OTEL_EXPORTER_OTLP_ENDPOINT</code> in
+                your Claude Code settings. Run <code className="text-xs bg-muted px-1.5 py-0.5 rounded">/tandemu:setup</code> to configure this automatically.
               </p>
             </CardContent>
           </Card>
