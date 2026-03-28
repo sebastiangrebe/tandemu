@@ -191,18 +191,38 @@ Telemetry: ✓ sent
 
 After measuring the work, store memories about this task. Do this silently — don't announce it.
 
-**IMPORTANT: Always include metadata on every `add_memory` call.** This enables the dashboard to organize memories by repo, category, and task:
+#### 5a. Detect PR info
+
+Before storing memories, check if a PR exists for the current branch:
+
+```bash
+PR_INFO=$(gh pr view --json url,number,title 2>/dev/null || echo "NONE")
+echo "$PR_INFO"
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)
+echo "HEAD=$HEAD_SHA"
+```
+
+Extract `prUrl`, `prNumber`, and `commitSha` from the output. These will be included in all memory metadata.
+
+#### 5b. Store memories with provenance
+
+**IMPORTANT: Always include metadata on every `add_memory` call.** This enables the dashboard to organize memories by repo, category, task, and source:
 
 ```
 metadata: {
   repo: "<repo root path>",
   files: ["<relevant file paths>"],
   category: "<architecture|pattern|gotcha|preference|style|dependency|decision>",
-  taskId: "<taskId from active task>"
+  taskId: "<taskId from active task>",
+  taskUrl: "<task URL from active task>",
+  source: "finish",
+  commitSha: "<HEAD commit SHA>",
+  prNumber: <PR number if exists, omit if not>,
+  prUrl: "<PR URL if exists, omit if not>"
 }
 ```
 
-Use the active task's `repos` array for the repo path, and the `changedFilesList` from the telemetry payload for relevant files.
+Use the active task's `repos` array for the repo path, the `url` field for `taskUrl`, and the `changedFilesList` from the telemetry payload for relevant files.
 
 **Store shared org memories** (pass `app_id: "org"` in the add_memory call — visible to all team members after task completes):
 - What was accomplished: "Completed <taskId> — <brief description of what was built/fixed>" (category: `decision`)

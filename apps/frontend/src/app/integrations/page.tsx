@@ -21,6 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import {
   Plug,
   Trash2,
@@ -32,6 +33,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Info,
+  ListTodo,
+  Brain,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SiGithub, SiJira, SiLinear, SiClickup, SiAsana } from '@icons-pack/react-simple-icons';
@@ -68,18 +71,20 @@ function ProviderIcon({ providerId, size = 20 }: { providerId: string; size?: nu
 const PROVIDERS = [
   {
     id: 'github',
-    name: 'GitHub Issues',
-    description: 'Track issues and pull requests from GitHub repositories.',
+    name: 'GitHub',
+    description: 'Track issues from GitHub repositories and index PR history as team knowledge.',
+    capabilities: ['tasks', 'memory'] as const,
     workspaceLabel: 'Organization',
     workspacePlaceholder: 'my-org (leave blank for personal repos)',
     workspaceRequired: false,
-    helpText: 'Create a personal access token at github.com/settings/tokens with `repo` scope',
+    helpText: 'Create a personal access token at github.com/settings/tokens with `repo` scope. The repo scope is required for both issue tracking and git history indexing.',
     helpUrl: 'https://github.com/settings/tokens',
   },
   {
     id: 'jira',
     name: 'Jira',
     description: 'Sync issues and sprints from Atlassian Jira.',
+    capabilities: ['tasks'] as const,
     workspaceLabel: 'Site URL',
     workspacePlaceholder: 'mycompany.atlassian.net',
     workspaceRequired: true,
@@ -90,6 +95,7 @@ const PROVIDERS = [
     id: 'linear',
     name: 'Linear',
     description: 'Import issues, cycles, and projects from Linear.',
+    capabilities: ['tasks'] as const,
     workspaceLabel: 'Workspace',
     workspacePlaceholder: 'Derived from token (leave blank)',
     workspaceRequired: false,
@@ -100,6 +106,7 @@ const PROVIDERS = [
     id: 'clickup',
     name: 'ClickUp',
     description: 'Connect tasks, lists, and spaces from ClickUp.',
+    capabilities: ['tasks'] as const,
     workspaceLabel: 'Workspace ID (optional)',
     workspacePlaceholder: 'Auto-detected from token',
     workspaceRequired: false,
@@ -110,6 +117,7 @@ const PROVIDERS = [
     id: 'asana',
     name: 'Asana',
     description: 'Sync tasks and projects from Asana workspaces.',
+    capabilities: ['tasks'] as const,
     workspaceLabel: 'Workspace GID',
     workspacePlaceholder: 'Your Asana workspace GID',
     workspaceRequired: true,
@@ -120,6 +128,7 @@ const PROVIDERS = [
     id: 'monday',
     name: 'Monday.com',
     description: 'Connect boards and items from Monday.com.',
+    capabilities: ['tasks'] as const,
     workspaceLabel: 'Workspace',
     workspacePlaceholder: 'Not required (leave blank)',
     workspaceRequired: false,
@@ -393,6 +402,12 @@ export default function IntegrationsPage() {
                           {integration.externalWorkspaceName}
                         </span>
                       )}
+                      {meta?.capabilities.includes('tasks') && (
+                        <Badge variant="outline" className="text-[10px] gap-0.5"><ListTodo className="h-2.5 w-2.5" />Tasks</Badge>
+                      )}
+                      {meta?.capabilities.includes('memory') && (
+                        <Badge variant="outline" className="text-[10px] gap-0.5 bg-violet-500/10 text-violet-400 border-violet-500/30"><Brain className="h-2.5 w-2.5" />Memory</Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         Connected{' '}
                         {new Date(integration.createdAt).toLocaleDateString('en-US', {
@@ -513,7 +528,7 @@ export default function IntegrationsPage() {
               <Plus className="h-5 w-5 text-muted-foreground" />
               <div>
                 <CardTitle>Add Integration</CardTitle>
-                <CardDescription>Connect a new ticket system to your organization.</CardDescription>
+                <CardDescription>Connect your tools to sync tasks and enrich team memory.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -529,7 +544,15 @@ export default function IntegrationsPage() {
                       <ProviderIcon providerId={provider.id} size={24} />
                       <span className="text-sm font-medium">{provider.name}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{provider.description}</p>
+                    <p className="text-sm text-muted-foreground mb-2">{provider.description}</p>
+                    <div className="flex items-center gap-1.5">
+                      {provider.capabilities.includes('tasks') && (
+                        <Badge variant="outline" className="text-[10px] gap-0.5"><ListTodo className="h-2.5 w-2.5" />Tasks</Badge>
+                      )}
+                      {provider.capabilities.includes('memory') && (
+                        <Badge variant="outline" className="text-[10px] gap-0.5 bg-violet-500/10 text-violet-400 border-violet-500/30"><Brain className="h-2.5 w-2.5" />Memory</Badge>
+                      )}
+                    </div>
                   </div>
                   <Button
                     size="sm"

@@ -36,6 +36,8 @@ import {
   FileCode,
   Sparkles,
   GitBranch,
+  GitPullRequest,
+  ExternalLink,
   Zap,
   Code2,
 } from 'lucide-react';
@@ -471,7 +473,19 @@ function MemoryCard({ memory, expanded, onToggleExpand, onEdit, onDelete, onAppr
         <button onClick={onToggleExpand} className="text-left text-sm w-full"><p className={expanded ? '' : 'line-clamp-2'}>{memory.content}</p></button>
         <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
           <span>{relativeTime(memory.updatedAt || memory.createdAt)}</span>
-          {memory.metadata.taskId && <span className="font-mono">{memory.metadata.taskId}</span>}
+          {memory.metadata.author_name && <span>by {memory.metadata.author_name}</span>}
+          {memory.metadata.taskId && (
+            memory.metadata.taskUrl
+              ? <a href={memory.metadata.taskUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:text-foreground inline-flex items-center gap-0.5">{memory.metadata.taskId}<ExternalLink className="h-2 w-2" /></a>
+              : <span className="font-mono">{memory.metadata.taskId}</span>
+          )}
+          {memory.metadata.source && memory.metadata.source !== 'mcp' && (
+            <span className="inline-flex items-center gap-0.5">
+              {memory.metadata.source === 'pr' && <><GitPullRequest className="h-2.5 w-2.5" />PR</>}
+              {memory.metadata.source === 'git' && <><GitBranch className="h-2.5 w-2.5" />Git</>}
+              {memory.metadata.source === 'finish' && <><CheckCircle className="h-2.5 w-2.5" />Finish</>}
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { IntegrationsModule } from '../integrations/integrations.module.js';
 import { TelemetryModule } from '../telemetry/telemetry.module.js';
 
 @Module({
-  imports: [AuthModule, forwardRef(() => IntegrationsModule), TelemetryModule],
+  imports: [AuthModule, forwardRef(() => IntegrationsModule), forwardRef(() => TelemetryModule)],
   controllers: [MemoryController],
   providers: [MemoryService],
   exports: [MemoryService],
