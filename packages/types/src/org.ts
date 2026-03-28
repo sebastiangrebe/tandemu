@@ -14,6 +14,7 @@ export interface Organization {
   readonly stripeSubscriptionId?: string;
   readonly planTier: PlanTier;
   readonly subscriptionStatus: SubscriptionStatus;
+  readonly settings?: OrgSettings;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -48,12 +49,22 @@ export interface UpdateOrganizationDto {
   readonly stripeCustomerId?: string;
   readonly stripeSubscriptionId?: string;
   readonly subscriptionStatus?: SubscriptionStatus;
+  readonly settings?: Partial<OrgSettings>;
 }
 
 export interface InviteMemberDto {
   readonly email: string;
   readonly organizationId: string;
   readonly role: MembershipRole;
+}
+
+export interface OrgSettings {
+  /** Fully-loaded hourly cost of one developer in USD. Default: 75 */
+  readonly developerHourlyRate?: number;
+  /** Estimated seconds a developer takes to write one line manually. Default: 120 */
+  readonly aiLineTimeEstimateSeconds?: number;
+  /** Currency code. Default: 'USD' */
+  readonly currency?: string;
 }
 
 export interface TeamSettings {

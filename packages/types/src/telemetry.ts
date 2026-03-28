@@ -93,3 +93,48 @@ export interface TokenUsageEntry {
   readonly model: string;
   readonly totalTokens: number;
 }
+
+export interface InsightsDaily {
+  readonly date: string;
+  readonly aiCost: number;
+  readonly aiLines: number;
+  readonly manualLines: number;
+}
+
+export interface InsightsMetrics {
+  // Throughput
+  readonly totalAILines: number;
+  readonly totalManualLines: number;
+  readonly totalTasks: number;
+  /** (aiLines + manualLines) / manualLines — null if no manual lines */
+  readonly productivityMultiplier: number | null;
+
+  // Capacity freed
+  /** Hours of manual coding work handled by AI */
+  readonly capacityFreedHours: number;
+
+  // Cost efficiency
+  readonly totalAICost: number;
+  /** totalAICost / totalAILines — null if no AI lines */
+  readonly costPerAILine: number | null;
+  /** totalAICost / totalTasks — null if no tasks */
+  readonly costPerTask: number | null;
+
+  // Tandemu impact
+  /** Times memories were accessed in the period */
+  readonly memoryHits: number;
+  /** % change in friction events vs previous period (negative = improvement) */
+  readonly frictionEventsReduced: number | null;
+  /** Number of org-scoped memories shared across team */
+  readonly orgMemoriesShared: number;
+
+  // Charting
+  readonly daily: readonly InsightsDaily[];
+
+  // Transparency
+  readonly assumptions: {
+    readonly developerHourlyRate: number;
+    readonly aiLineTimeEstimateSeconds: number;
+    readonly currency: string;
+  };
+}

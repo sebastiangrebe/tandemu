@@ -5,7 +5,7 @@ import type { Queue } from 'bullmq';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { randomBytes } from 'crypto';
-import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, InsightsDaily, OrgSettings } from '@tandemu/types';
 import { MemoryService } from '../memory/memory.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
@@ -1107,6 +1107,211 @@ export class TelemetryService implements OnModuleDestroy {
       return { topUsed, leastUsed, totalTracked: rows.length };
     } catch {
       return { topUsed: [], leastUsed: [], totalTracked: 0 };
+    }
+  }
+
+  /**
+   * Compute insights metrics: throughput, capacity freed, cost efficiency, and Tandemu impact.
+   * All derived from existing ClickHouse data — no new instrumentation.
+   */
+  async getInsightsMetrics(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    settings?: OrgSettings,
+  ): Promise<InsightsMetrics> {
+    const hourlyRate = settings?.developerHourlyRate ?? 75;
+    const secsPerLine = settings?.aiLineTimeEstimateSeconds ?? 120;
+    const currency = settings?.currency ?? 'USD';
+
+    const params: Record<string, string> = { organizationId };
+    let dateFilter = '';
+    if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
+    if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+
+    // Build a previous-period date filter for friction trend comparison
+    let prevDateFilter = '';
+    const prevParams: Record<string, string> = { organizationId };
+    if (startDate && endDate) {
+      const start = new Date(startDate).getTime();
+      const end = new Date(endDate).getTime();
+      const duration = end - start;
+      const prevStart = new Date(start - duration).toISOString();
+      const prevEnd = new Date(start).toISOString();
+      prevDateFilter = ` AND Timestamp >= parseDateTimeBestEffort({prevStart: String}) AND Timestamp <= parseDateTimeBestEffort({prevEnd: String})`;
+      prevParams.prevStart = prevStart;
+      prevParams.prevEnd = prevEnd;
+    }
+
+    try {
+      // Run all queries in parallel
+      const [dailyResult, taskResult, memoryHitsResult, frictionCurrentResult, frictionPrevResult] = await Promise.all([
+        // Query 1: Daily cost + AI/manual lines
+        this.client.query({
+          query: `
+            SELECT
+              toDate(TimeUnix) AS date,
+              sumIf(Value, MetricName = 'claude_code.cost.usage') AS ai_cost,
+              sumIf(Value, MetricName = 'tandemu.lines_of_code' AND Attributes['type'] = 'ai') AS ai_lines,
+              sumIf(Value, MetricName = 'tandemu.lines_of_code' AND Attributes['type'] = 'manual') AS manual_lines
+            FROM otel_metrics_sum
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND MetricName IN ('claude_code.cost.usage', 'tandemu.lines_of_code')
+              ${dateFilter}
+            GROUP BY date
+            ORDER BY date ASC
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+
+        // Query 2: Completed task count
+        this.client.query({
+          query: `
+            SELECT count(*) AS task_count
+            FROM otel_traces
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND SpanName = 'task_session'
+              AND SpanAttributes['status'] = 'completed'
+              ${dateFilter.replace(/TimeUnix/g, 'Timestamp')}
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+
+        // Query 3: Memory access count
+        this.client.query({
+          query: `
+            SELECT count(*) AS hits
+            FROM memory_access_log
+            WHERE organization_id = {organizationId: String}
+              ${startDate ? ` AND timestamp >= parseDateTimeBestEffort({startDate: String})` : ''}
+              ${endDate ? ` AND timestamp <= parseDateTimeBestEffort({endDate: String})` : ''}
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+
+        // Query 4: Current-period friction count
+        this.client.query({
+          query: `
+            SELECT count(*) AS friction_count
+            FROM otel_logs
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND (SeverityText IN ('prompt_loop', 'error')
+                   OR (LogAttributes['event.name'] = 'tool_result' AND LogAttributes['success'] = 'false'))
+              ${dateFilter.replace(/TimeUnix/g, 'Timestamp')}
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+
+        // Query 5: Previous-period friction count (for trend)
+        prevDateFilter
+          ? this.client.query({
+              query: `
+                SELECT count(*) AS friction_count
+                FROM otel_logs
+                WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+                  AND (SeverityText IN ('prompt_loop', 'error')
+                       OR (LogAttributes['event.name'] = 'tool_result' AND LogAttributes['success'] = 'false'))
+                  ${prevDateFilter}
+              `,
+              query_params: prevParams,
+              format: 'JSONEachRow',
+            })
+          : Promise.resolve(null),
+      ]);
+
+      // Parse results
+      const dailyRows = await dailyResult.json<{
+        date: string;
+        ai_cost: number;
+        ai_lines: number;
+        manual_lines: number;
+      }>();
+
+      const taskRows = await taskResult.json<{ task_count: number }>();
+      const totalTasks = Number(taskRows[0]?.task_count ?? 0);
+
+      const memoryRows = await memoryHitsResult.json<{ hits: number }>();
+      const memoryHits = Number(memoryRows[0]?.hits ?? 0);
+
+      const frictionRows = await frictionCurrentResult.json<{ friction_count: number }>();
+      const currentFriction = Number(frictionRows[0]?.friction_count ?? 0);
+
+      let frictionEventsReduced: number | null = null;
+      if (frictionPrevResult) {
+        const prevRows = await frictionPrevResult.json<{ friction_count: number }>();
+        const prevFriction = Number(prevRows[0]?.friction_count ?? 0);
+        if (prevFriction > 0) {
+          frictionEventsReduced = Math.round(((currentFriction - prevFriction) / prevFriction) * 100);
+        }
+      }
+
+      // Aggregate totals from daily rows
+      let totalAICost = 0;
+      let totalAILines = 0;
+      let totalManualLines = 0;
+      const daily: InsightsDaily[] = dailyRows.map((r) => {
+        const aiCost = Math.round(Number(r.ai_cost) * 100) / 100;
+        const aiLines = Number(r.ai_lines);
+        const manualLines = Number(r.manual_lines);
+        totalAICost += aiCost;
+        totalAILines += aiLines;
+        totalManualLines += manualLines;
+        return { date: r.date, aiCost, aiLines, manualLines };
+      });
+
+      totalAICost = Math.round(totalAICost * 100) / 100;
+
+      // Derived metrics
+      const productivityMultiplier = totalManualLines > 0
+        ? Math.round(((totalAILines + totalManualLines) / totalManualLines) * 100) / 100
+        : null;
+
+      const capacityFreedHours = Math.round(((totalAILines * secsPerLine) / 3600) * 10) / 10;
+
+      const costPerAILine = totalAILines > 0
+        ? Math.round((totalAICost / totalAILines) * 10000) / 10000
+        : null;
+
+      const costPerTask = totalTasks > 0
+        ? Math.round((totalAICost / totalTasks) * 100) / 100
+        : null;
+
+      return {
+        totalAILines,
+        totalManualLines,
+        totalTasks,
+        productivityMultiplier,
+        capacityFreedHours,
+        totalAICost,
+        costPerAILine,
+        costPerTask,
+        memoryHits,
+        frictionEventsReduced,
+        orgMemoriesShared: 0, // Populated by controller from memory service
+        daily,
+        assumptions: { developerHourlyRate: hourlyRate, aiLineTimeEstimateSeconds: secsPerLine, currency },
+      };
+    } catch (err) {
+      this.logger.warn(`Failed to get insights metrics: ${err}`);
+      return {
+        totalAILines: 0,
+        totalManualLines: 0,
+        totalTasks: 0,
+        productivityMultiplier: null,
+        capacityFreedHours: 0,
+        totalAICost: 0,
+        costPerAILine: null,
+        costPerTask: null,
+        memoryHits: 0,
+        frictionEventsReduced: null,
+        orgMemoriesShared: 0,
+        daily: [],
+        assumptions: { developerHourlyRate: hourlyRate, aiLineTimeEstimateSeconds: secsPerLine, currency },
+      };
     }
   }
 }

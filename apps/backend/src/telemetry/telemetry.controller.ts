@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, OrgSettings } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
 
 @Controller('telemetry')
@@ -160,6 +160,39 @@ export class TelemetryController {
     }
 
     return entries;
+  }
+
+  @Get('insights')
+  async getInsightsMetrics(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<InsightsMetrics> {
+    // Fetch org settings for ROI assumptions
+    const orgResult = await this.db.query<{ settings: OrgSettings }>(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [user.organizationId],
+    );
+    const settings = orgResult.rows[0]?.settings;
+
+    // Fetch org memory count (org memories use user_id = organizationId)
+    let orgMemoriesShared = 0;
+    try {
+      const countResult = await this.db.query<{ count: string }>(
+        `SELECT 0 AS count`, // Placeholder — org memory count comes from Mem0 via /memory/stats
+        [],
+      );
+      // We'll enrich from the memory stats endpoint client-side instead
+      orgMemoriesShared = 0;
+    } catch {
+      // Non-critical
+    }
+
+    const metrics = await this.telemetryService.getInsightsMetrics(
+      user.organizationId, startDate, endDate, settings,
+    );
+
+    return { ...metrics, orgMemoriesShared };
   }
 
   /**

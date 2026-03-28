@@ -19,6 +19,7 @@ import {
   Search,
   Layers,
   Brain,
+  Lightbulb,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -66,6 +67,7 @@ const overviewItems = [
 ];
 
 const analyticsItems = [
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/friction-map", label: "Friction Map", icon: Flame },
 ];
 

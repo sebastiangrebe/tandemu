@@ -280,6 +280,37 @@ export async function getTokenUsage(filter?: TelemetryFilter): Promise<TokenUsag
   return fetchApi<TokenUsageEntry[]>(`/api/telemetry/token-usage${buildParams(filter)}`);
 }
 
+export interface InsightsDaily {
+  date: string;
+  aiCost: number;
+  aiLines: number;
+  manualLines: number;
+}
+
+export interface InsightsMetrics {
+  totalAILines: number;
+  totalManualLines: number;
+  totalTasks: number;
+  productivityMultiplier: number | null;
+  capacityFreedHours: number;
+  totalAICost: number;
+  costPerAILine: number | null;
+  costPerTask: number | null;
+  memoryHits: number;
+  frictionEventsReduced: number | null;
+  orgMemoriesShared: number;
+  daily: InsightsDaily[];
+  assumptions: {
+    developerHourlyRate: number;
+    aiLineTimeEstimateSeconds: number;
+    currency: string;
+  };
+}
+
+export async function getInsightsMetrics(filter?: TelemetryFilter): Promise<InsightsMetrics> {
+  return fetchApi<InsightsMetrics>(`/api/telemetry/insights${buildParams(filter)}`);
+}
+
 // ---- Organizations (mutations) ----
 
 export async function createOrganization(data: { name: string; slug: string }): Promise<Organization> {
@@ -289,7 +320,7 @@ export async function createOrganization(data: { name: string; slug: string }): 
   });
 }
 
-export async function updateOrganization(orgId: string, data: { name?: string; slug?: string }): Promise<Organization> {
+export async function updateOrganization(orgId: string, data: { name?: string; slug?: string; settings?: { developerHourlyRate?: number; aiLineTimeEstimateSeconds?: number; currency?: string } }): Promise<Organization> {
   return fetchApi<Organization>(`/api/organizations/${orgId}`, {
     method: "PATCH",
     body: JSON.stringify(data),

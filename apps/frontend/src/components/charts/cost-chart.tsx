@@ -1,6 +1,7 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -66,6 +67,11 @@ export function CostChart({ data }: CostChartProps) {
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>
+      <CardFooter className="border-t px-6 py-3">
+        <Link href="/insights" className="text-sm text-primary hover:underline">
+          View Insights &rarr;
+        </Link>
+      </CardFooter>
     </Card>
   );
 }
