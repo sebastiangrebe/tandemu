@@ -55,8 +55,9 @@ export class MemoryService {
    * so we don't need a real user context for server-initiated operations.
    *
    * Works with both Mem0 Cloud (SaaS) and OpenMemory (OSS):
-   * - Mem0 Cloud: POST to https://mcp.mem0.ai/mcp with Token auth
-   * - OpenMemory: POST to http://host:port/mcp/tandemu/sse/{userId} (accepts JSON-RPC POSTs)
+   * - Mem0 Cloud: POST to https://mcp.mem0.ai/mcp with Token auth — returns SSE (data: lines)
+   * - OpenMemory: POST to http://host:port/mcp/tandemu/sse/{userId} — returns SSE or JSON
+   * Response is read as text and format is auto-detected.
    */
   private async callMcpTool(
     toolName: string,
@@ -86,8 +87,8 @@ export class MemoryService {
       throw new Error(`MCP tool ${toolName} failed (${response.status}): ${errText}`);
     }
 
-    // Read response as text first, then determine format.
-    // Mem0 Cloud returns SSE (data: lines), OpenMemory may return JSON directly.
+    // Read response as text first, then auto-detect format.
+    // Both providers may return SSE (data: lines) or JSON depending on the endpoint.
     const responseText = await response.text();
 
     // Check if response is SSE format (starts with "data:" or "event:")
