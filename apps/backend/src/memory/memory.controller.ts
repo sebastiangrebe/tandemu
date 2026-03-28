@@ -627,6 +627,26 @@ export class MemoryController {
   // ---- Shared MCP helper ----
 
   /**
+   * Fetch memories via the direct REST API (fast) with MCP fallback (OSS).
+   * Returns raw memory objects in the same shape as extractMemories expects.
+   */
+  private async getMemoriesFast(
+    scopeUserId: string,
+    user: RequestUser,
+  ): Promise<Record<string, unknown>[]> {
+    const restResults = await this.memoryService.getMemoriesRest(scopeUserId);
+    if (restResults.length > 0 || this.memoryService.isMem0Cloud) {
+      return restResults;
+    }
+    // OSS fallback: use MCP
+    const result = await this.callMcpTool('get_memories', {
+      user_id: scopeUserId,
+      filters: { user_id: scopeUserId },
+    }, user);
+    return this.extractMemories(result);
+  }
+
+  /**
    * Call an MCP tool on the upstream Mem0 server and return the parsed result.
    * Handles both Mem0 Cloud (direct POST) and OpenMemory OSS (SSE handshake → POST to /messages).
    */
@@ -799,17 +819,8 @@ export class MemoryController {
     const limit = Math.min(parseInt(limitStr, 10) || 50, 200);
     const offset = parseInt(offsetStr, 10) || 0;
 
-    const args: Record<string, unknown> = {};
-    if (scope === 'org') {
-      args.user_id = user.organizationId;
-      args.filters = { user_id: user.organizationId };
-    } else {
-      args.user_id = user.userId;
-      args.filters = { user_id: user.userId };
-    }
-
-    const result = await this.callMcpTool('get_memories', args, user);
-    let memories = this.extractMemories(result);
+    const scopeUserId = scope === 'org' ? user.organizationId : user.userId;
+    let memories = await this.getMemoriesFast(scopeUserId, user);
 
     if (scope === 'org') {
       memories = await this.filterOrgDrafts(memories, user);
@@ -925,22 +936,13 @@ export class MemoryController {
     @CurrentUser() user: RequestUser,
   ): Promise<MemoryStatsResponse> {
     const [personalResult, orgResult, usageData] = await Promise.all([
-      this.callMcpTool('get_memories', {
-        user_id: user.userId,
-        filters: { user_id: user.userId },
-      }, user),
-      this.callMcpTool('get_memories', {
-        user_id: user.organizationId,
-        filters: { user_id: user.organizationId },
-      }, user),
+      this.getMemoriesFast(user.userId, user),
+      this.getMemoriesFast(user.organizationId, user),
       this.telemetryService.getUsageInsights(user.organizationId, 30).catch(() => ({ topUsed: [], leastUsed: [], totalTracked: 0 })),
     ]);
 
-    const personalMemories = this.extractMemories(personalResult);
-    const orgMemories = await this.filterOrgDrafts(
-      this.extractMemories(orgResult),
-      user,
-    );
+    const personalMemories = personalResult;
+    const orgMemories = await this.filterOrgDrafts(orgResult, user);
 
     // Category breakdown from all memories
     const allMemories = [...personalMemories, ...orgMemories];
@@ -993,6 +995,7 @@ export class MemoryController {
     }
 
     await this.callMcpTool('update_memory', args, user);
+
     return { success: true };
   }
 
@@ -1005,6 +1008,7 @@ export class MemoryController {
     @Param('id') memoryId: string,
   ): Promise<{ success: boolean }> {
     await this.callMcpTool('delete_memory', { memory_id: memoryId }, user);
+
     return { success: true };
   }
 
@@ -1021,6 +1025,7 @@ export class MemoryController {
       memory_id: memoryId,
       metadata: { status: 'published' },
     }, user);
+
     return { success: true };
   }
 
@@ -1034,17 +1039,8 @@ export class MemoryController {
     @CurrentUser() user: RequestUser,
     @Query('scope') scope: string = 'personal',
   ): Promise<{ tree: FileTreeNode[] }> {
-    const args: Record<string, unknown> = {};
-    if (scope === 'org') {
-      args.user_id = user.organizationId;
-      args.filters = { user_id: user.organizationId };
-    } else {
-      args.user_id = user.userId;
-      args.filters = { user_id: user.userId };
-    }
-
-    const result = await this.callMcpTool('get_memories', args, user);
-    let memories = this.extractMemories(result);
+    const scopeUserId = scope === 'org' ? user.organizationId : user.userId;
+    let memories = await this.getMemoriesFast(scopeUserId, user);
 
     if (scope === 'org') {
       memories = await this.filterOrgDrafts(memories, user);
@@ -1125,19 +1121,13 @@ export class MemoryController {
       return { gaps: [] };
     }
 
-    // Fetch org + personal memories in parallel
+    // Fetch org + personal memories in parallel (cached)
     const [orgResult, personalResult] = await Promise.all([
-      this.callMcpTool('get_memories', {
-        user_id: user.organizationId,
-        filters: { user_id: user.organizationId },
-      }, user),
-      this.callMcpTool('get_memories', {
-        user_id: user.userId,
-        filters: { user_id: user.userId },
-      }, user),
+      this.getMemoriesFast(user.organizationId, user),
+      this.getMemoriesFast(user.userId, user),
     ]);
-    const orgMemories = await this.filterOrgDrafts(this.extractMemories(orgResult), user);
-    const personalMemories = this.extractMemories(personalResult);
+    const orgMemories = await this.filterOrgDrafts(orgResult, user);
+    const personalMemories = personalResult;
 
     // Build a set of all folder paths covered by memories
     const coveredFolders = new Set<string>();
@@ -1200,15 +1190,8 @@ export class MemoryController {
 
     const fetchScope = async (s: 'personal' | 'org') => {
       const args: Record<string, unknown> = {};
-      if (s === 'org') {
-        args.user_id = user.organizationId;
-        args.filters = { user_id: user.organizationId };
-      } else {
-        args.user_id = user.userId;
-        args.filters = { user_id: user.userId };
-      }
-      const result = await this.callMcpTool('get_memories', args, user);
-      let memories = this.extractMemories(result);
+      const scopeUserId = s === 'org' ? user.organizationId : user.userId;
+      let memories = await this.getMemoriesFast(scopeUserId, user);
       if (s === 'org') memories = await this.filterOrgDrafts(memories, user);
       for (const mem of memories) {
         const id = mem.id as string;

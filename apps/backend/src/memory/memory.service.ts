@@ -134,6 +134,41 @@ export class MemoryService {
     }
   }
 
+  // ---- Direct REST API (bypasses MCP for dashboard reads) ----
+
+  /**
+   * Fetch all memories for a given user_id via the Mem0 REST API.
+   * Much faster than MCP for dashboard read-only operations.
+   */
+  async getMemoriesRest(userId: string): Promise<Array<Record<string, unknown>>> {
+    if (!this.isMem0Cloud) {
+      // OSS OpenMemory doesn't have a REST API — fall back to MCP via callMcpTool
+      return [];
+    }
+
+    const response = await fetch('https://api.mem0.ai/v2/memories/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${this.mem0ApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filters: { user_id: userId },
+        page_size: 200,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      this.logger.warn(`Mem0 REST get_memories failed (${response.status}): ${text}`);
+      return [];
+    }
+
+    const data = await response.json() as { results?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+    if (Array.isArray(data)) return data;
+    return data.results ?? [];
+  }
+
   /**
    * Search org memories by query text.
    */
