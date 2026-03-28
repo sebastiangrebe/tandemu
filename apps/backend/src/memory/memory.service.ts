@@ -50,20 +50,29 @@ export class MemoryService {
 
   /**
    * Call an MCP tool on the upstream memory server.
-   * Uses a system user ID for server-initiated operations.
+   * For org-scoped operations, the userId in the URL (OSS) doesn't affect scoping —
+   * org memories are scoped by app_id in the arguments. We use a fixed 'system' userId
+   * so we don't need a real user context for server-initiated operations.
+   *
+   * Works with both Mem0 Cloud (SaaS) and OpenMemory (OSS):
+   * - Mem0 Cloud: POST to https://mcp.mem0.ai/mcp with Token auth
+   * - OpenMemory: POST to http://host:port/mcp/tandemu/sse/{userId} (accepts JSON-RPC POSTs)
    */
   private async callMcpTool(
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<unknown> {
-    // Use a fixed system user ID for server-initiated memory operations
     const systemUserId = 'system';
     const url = this.getUpstreamSseUrl(systemUserId);
     const headers = this.getUpstreamHeaders();
 
-    const response = await fetch(url, {
+    const response: globalThis.Response = await fetch(url, {
       method: 'POST',
-      headers: { ...headers, 'Accept': 'application/json' },
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream, application/json',
+      },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: `selfheal-${Date.now()}`,
@@ -73,11 +82,36 @@ export class MemoryService {
     });
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`MCP tool ${toolName} failed (${response.status}): ${text}`);
+      const errText = await response.text().catch(() => '');
+      throw new Error(`MCP tool ${toolName} failed (${response.status}): ${errText}`);
     }
 
-    return response.json();
+    // Read response as text first, then determine format.
+    // Mem0 Cloud returns SSE (data: lines), OpenMemory may return JSON directly.
+    const responseText = await response.text();
+
+    // Check if response is SSE format (starts with "data:" or "event:")
+    if (responseText.trimStart().startsWith('data:') || responseText.trimStart().startsWith('event:')) {
+      const dataLines = responseText.split('\n').filter((l) => l.startsWith('data: '));
+      for (const line of dataLines) {
+        const payload = line.slice(6).trim();
+        if (payload && payload !== '[DONE]') {
+          try {
+            return JSON.parse(payload);
+          } catch {
+            // Not valid JSON, continue
+          }
+        }
+      }
+      return {};
+    }
+
+    // Plain JSON response
+    try {
+      return JSON.parse(responseText);
+    } catch {
+      return {};
+    }
   }
 
   /**
