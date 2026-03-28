@@ -24,6 +24,10 @@ export interface AppConfig {
     openmemoryHost: string;
     openmemoryPort: number;
   };
+  sentry: {
+    dsn: string;
+    environment: string;
+  };
   oauth: {
     appUrl: string;
     frontendUrl: string;
@@ -71,6 +75,10 @@ export default (): AppConfig => {
       mem0ApiKey: process.env['MEM0_API_KEY'] ?? '',
       openmemoryHost: process.env['OPENMEMORY_HOST'] ?? 'localhost',
       openmemoryPort: parseInt(process.env['OPENMEMORY_PORT'] ?? '8765', 10),
+    },
+    sentry: {
+      dsn: process.env['SENTRY_BACKEND_DSN'] ?? '',
+      environment: process.env['NODE_ENV'] ?? 'development',
     },
     oauth: {
       appUrl: process.env['APP_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3001'}`,
