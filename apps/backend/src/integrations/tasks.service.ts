@@ -17,57 +17,47 @@ export class TasksService {
   constructor(private readonly integrationsService: IntegrationsService) {}
 
   async getTasks(orgId: string, params: GetTasksParams): Promise<Task[]> {
-    // Get all integrations for this org
+    // Get all integrations for this org (findAll already returns full rows)
     const integrations = await this.integrationsService.findAll(orgId);
 
     if (integrations.length === 0) {
       return [];
     }
 
-    const allTasks: Task[] = [];
-
-    for (const integration of integrations) {
-      // Get the raw integration with access token
-      const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
-      const provider = getProvider(integration.provider);
-
-      if (params.teamId) {
-        // Look up the project mapping for this team
+    // Fetch raw integrations + mappings in parallel (one findOne per integration, not N+1)
+    const integrationData = await Promise.all(
+      integrations.map(async (integration) => {
+        const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
         const mappings = await this.integrationsService.getMappings(rawIntegration.id);
-        const mapping = mappings.find((m) => m.teamId === params.teamId);
-        if (!mapping) {
-          // No mapping for this team in this integration — skip
-          continue;
-        }
+        return { rawIntegration, mappings, provider: getProvider(integration.provider) };
+      }),
+    );
 
-        const tasks = await provider.fetchTasks({
-          accessToken: rawIntegration.access_token,
-          externalProjectId: mapping.externalProjectId,
-          assigneeEmail: params.assigneeEmail,
-          assigneeEmails: params.assigneeEmails,
-          sprint: params.sprint,
-          excludeDone: params.excludeDone,
-          config: { ...rawIntegration.config, ...mapping.config },
-        });
-        allTasks.push(...tasks);
-      } else {
-        // No team specified — fetch from all mapped projects
-        const mappings = await this.integrationsService.getMappings(rawIntegration.id);
-        for (const mapping of mappings) {
-          const tasks = await provider.fetchTasks({
+    // Build all fetch promises in parallel
+    const fetchPromises: Promise<Task[]>[] = [];
+
+    for (const { rawIntegration, mappings, provider } of integrationData) {
+      const targetMappings = params.teamId
+        ? mappings.filter((m) => m.teamId === params.teamId)
+        : mappings;
+
+      for (const mapping of targetMappings) {
+        fetchPromises.push(
+          provider.fetchTasks({
             accessToken: rawIntegration.access_token,
             externalProjectId: mapping.externalProjectId,
             assigneeEmail: params.assigneeEmail,
             assigneeEmails: params.assigneeEmails,
             sprint: params.sprint,
+            excludeDone: params.excludeDone,
             config: { ...rawIntegration.config, ...mapping.config },
-          });
-          allTasks.push(...tasks);
-        }
+          }),
+        );
       }
     }
 
-    return allTasks;
+    const results = await Promise.all(fetchPromises);
+    return results.flat();
   }
 
   async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {
@@ -109,13 +99,19 @@ export class TasksService {
       throw new NotFoundException('No integrations configured for this organization');
     }
 
-    for (const integration of integrations) {
-      const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
-      const mappings = await this.integrationsService.getMappings(rawIntegration.id);
+    // Fetch raw integrations + mappings in parallel
+    const integrationData = await Promise.all(
+      integrations.map(async (integration) => {
+        const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
+        const mappings = await this.integrationsService.getMappings(rawIntegration.id);
+        return { rawIntegration, mappings, provider: getProvider(integration.provider) };
+      }),
+    );
+
+    for (const { rawIntegration, mappings, provider } of integrationData) {
       const mapping = mappings.find((m) => m.teamId === params.teamId);
       if (!mapping) continue;
 
-      const provider = getProvider(integration.provider);
       return provider.createTask({
         accessToken: rawIntegration.access_token,
         externalProjectId: mapping.externalProjectId,

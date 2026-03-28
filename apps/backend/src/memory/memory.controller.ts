@@ -764,6 +764,36 @@ export class MemoryController {
     memories: Array<Record<string, unknown>>,
     user: RequestUser,
   ): Promise<Array<Record<string, unknown>>> {
+    // Collect all unique task IDs from drafts to batch-lookup statuses
+    const draftTaskIds = new Set<string>();
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      if (!metadata) continue;
+      const status = metadata.status as string | undefined;
+      if (status === 'draft' && metadata.author_id !== user.userId) {
+        const taskId = metadata.taskId as string | undefined;
+        if (taskId && !this.publishedTaskCache.has(taskId)) {
+          draftTaskIds.add(taskId);
+        }
+      }
+    }
+
+    // Single batch fetch of all tasks (instead of N+1 per draft)
+    if (draftTaskIds.size > 0) {
+      try {
+        const tasks = await this.tasksService.getTasks(user.organizationId, {});
+        const taskMap = new Map(tasks.map((t) => [t.id, t.status]));
+        for (const taskId of draftTaskIds) {
+          const s = taskMap.get(taskId);
+          if (s === 'done') this.publishedTaskCache.set(taskId, true);
+          else if (s === 'cancelled') this.publishedTaskCache.set(taskId, false);
+          else this.publishedTaskCache.set(taskId, false);
+        }
+      } catch {
+        // If task fetch fails, treat all as pending
+      }
+    }
+
     const filtered: Array<Record<string, unknown>> = [];
 
     for (const mem of memories) {
@@ -1307,23 +1337,12 @@ export class MemoryController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    // Fetch all memories (personal + org)
-    const [personalResult, orgResult] = await Promise.all([
-      this.callMcpTool('get_memories', {
-        user_id: user.userId,
-        filters: { user_id: user.userId },
-      }, user),
-      this.callMcpTool('get_memories', {
-        user_id: user.organizationId,
-        filters: { user_id: user.organizationId },
-      }, user),
+    // Fetch all memories (personal + org) via REST API
+    const [personalMemories, orgRaw] = await Promise.all([
+      this.getMemoriesFast(user.userId, user),
+      this.getMemoriesFast(user.organizationId, user),
     ]);
-
-    const personalMemories = this.extractMemories(personalResult);
-    const orgMemories = await this.filterOrgDrafts(
-      this.extractMemories(orgResult),
-      user,
-    );
+    const orgMemories = await this.filterOrgDrafts(orgRaw, user);
 
     const allMemories = [...personalMemories, ...orgMemories];
 
