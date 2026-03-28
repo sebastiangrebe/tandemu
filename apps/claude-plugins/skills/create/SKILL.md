@@ -1,3 +1,12 @@
+---
+name: create
+description: Create a new task in the team's ticket system. Use when you discover work that needs tracking while coding.
+allowed-tools:
+  - Bash
+  - Read
+  - AskUserQuestion
+---
+
 Create a new task in the team's ticket system. Use when you discover work that needs tracking while coding.
 
 ## Steps

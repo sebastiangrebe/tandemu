@@ -1,3 +1,13 @@
+---
+name: setup
+description: Set up Tandemu for the current developer. Handles authentication, configuration, and installs short-named skills for daily use.
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - AskUserQuestion
+---
+
 Set up Tandemu for the current developer. This skill handles authentication, configuration, and installs short-named skills for daily use.
 
 **This skill should only be run once per machine.** Re-run to re-authenticate or update.
