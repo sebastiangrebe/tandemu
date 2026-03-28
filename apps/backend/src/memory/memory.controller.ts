@@ -347,8 +347,13 @@ export class MemoryController {
         if (isOrgScope) {
           // Replace "org" sentinel with actual organization ID
           args.app_id = organizationId;
-          // Don't set user_id for org memories — they're shared
-          // But add metadata for draft gating
+          // Mem0 Cloud requires at least one of user_id/agent_id/run_id —
+          // pass user_id alongside app_id so memories aren't orphaned to default entity.
+          // app_id scopes it as org-shared; user_id identifies the author.
+          if (!args.user_id) {
+            args.user_id = userId;
+          }
+          // Add metadata for draft gating
           if (!args.metadata || typeof args.metadata !== 'object') {
             args.metadata = {};
           }

@@ -127,6 +127,7 @@ export class MemoryService {
       await this.callMcpTool('add_memory', {
         content,
         app_id: organizationId,
+        user_id: organizationId,
         metadata: { ...metadata, status: 'published' },
       });
     } catch (err) {
