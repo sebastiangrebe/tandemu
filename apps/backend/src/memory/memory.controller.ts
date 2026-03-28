@@ -965,14 +965,13 @@ export class MemoryController {
   async getStats(
     @CurrentUser() user: RequestUser,
   ): Promise<MemoryStatsResponse> {
-    const [personalResult, orgResult, usageData] = await Promise.all([
+    const [personalMemories, orgRaw, accessedIds] = await Promise.all([
       this.getMemoriesFast(user.userId, user),
       this.getMemoriesFast(user.organizationId, user),
-      this.telemetryService.getUsageInsights(user.organizationId, 30).catch(() => ({ topUsed: [], leastUsed: [], totalTracked: 0 })),
+      this.telemetryService.getAccessedMemoryIds(user.organizationId, 30),
     ]);
 
-    const personalMemories = personalResult;
-    const orgMemories = await this.filterOrgDrafts(orgResult, user);
+    const orgMemories = await this.filterOrgDrafts(orgRaw, user);
 
     // Category breakdown from all memories
     const allMemories = [...personalMemories, ...orgMemories];
@@ -985,14 +984,10 @@ export class MemoryController {
 
     // Count never-accessed memories (exclude those created in last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const trackedIds = new Set([
-      ...usageData.topUsed.map((u) => u.memoryId),
-      ...usageData.leastUsed.map((u) => u.memoryId),
-    ]);
     let neverAccessedCount = 0;
     for (const mem of allMemories) {
       const id = mem.id as string;
-      if (trackedIds.has(id)) continue;
+      if (accessedIds.has(id)) continue;
       const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
       if (createdAt && new Date(createdAt) > sevenDaysAgo) continue;
       neverAccessedCount++;

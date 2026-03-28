@@ -1044,6 +1044,29 @@ export class TelemetryService implements OnModuleDestroy {
   /**
    * Log memory access events (fire-and-forget).
    */
+  /**
+   * Get the set of memory IDs that have been accessed in the last N days.
+   * Lightweight query — just distinct IDs, no counts or sorting.
+   */
+  async getAccessedMemoryIds(organizationId: string, days = 30): Promise<Set<string>> {
+    try {
+      const resultSet = await this.client.query({
+        query: `
+          SELECT DISTINCT memory_id
+          FROM memory_access_log
+          WHERE organization_id = {organizationId: String}
+            AND timestamp >= now() - INTERVAL {days: UInt32} DAY
+        `,
+        query_params: { organizationId, days },
+        format: 'JSONEachRow',
+      });
+      const rows = await resultSet.json<{ memory_id: string }>();
+      return new Set(rows.map((r) => r.memory_id));
+    } catch {
+      return new Set();
+    }
+  }
+
   async logMemoryAccess(
     memoryIds: string[],
     organizationId: string,
