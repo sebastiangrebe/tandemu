@@ -29,6 +29,7 @@ export class OrganizationsService {
         stripe_subscription_id: string | null;
         plan_tier: string;
         subscription_status: string;
+        settings: Record<string, unknown>;
         created_at: Date;
         updated_at: Date;
       }>(
@@ -60,6 +61,7 @@ export class OrganizationsService {
       stripe_subscription_id: string | null;
       plan_tier: string;
       subscription_status: string;
+      settings: Record<string, unknown>;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -81,6 +83,7 @@ export class OrganizationsService {
       stripe_subscription_id: string | null;
       plan_tier: string;
       subscription_status: string;
+      settings: Record<string, unknown>;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -124,6 +127,10 @@ export class OrganizationsService {
       fields.push(`stripe_subscription_id = $${paramIndex++}`);
       values.push(dto.stripeSubscriptionId);
     }
+    if (dto.settings !== undefined) {
+      fields.push(`settings = settings || $${paramIndex++}::jsonb`);
+      values.push(JSON.stringify(dto.settings));
+    }
 
     if (fields.length === 0) {
       return this.findOne(orgId);
@@ -140,6 +147,7 @@ export class OrganizationsService {
       stripe_subscription_id: string | null;
       plan_tier: string;
       subscription_status: string;
+      settings: Record<string, unknown>;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -246,6 +254,7 @@ export class OrganizationsService {
     stripe_subscription_id: string | null;
     plan_tier: string;
     subscription_status: string;
+    settings?: Record<string, unknown>;
     created_at: Date;
     updated_at: Date;
   }): Organization {
@@ -257,6 +266,9 @@ export class OrganizationsService {
       stripeSubscriptionId: row.stripe_subscription_id ?? undefined,
       planTier: row.plan_tier.toUpperCase() as Organization['planTier'],
       subscriptionStatus: row.subscription_status as Organization['subscriptionStatus'],
+      settings: row.settings && Object.keys(row.settings).length > 0
+        ? row.settings as Organization['settings']
+        : undefined,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

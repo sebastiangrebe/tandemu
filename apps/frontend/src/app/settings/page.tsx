@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard, Lightbulb } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
@@ -58,6 +58,11 @@ export default function SettingsPage() {
   const [invitesList, setInvitesList] = useState<Invite[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
 
+  // ROI settings
+  const [editHourlyRate, setEditHourlyRate] = useState(75);
+  const [editSecsPerLine, setEditSecsPerLine] = useState(120);
+  const [savingROI, setSavingROI] = useState(false);
+
   // Invite dialog
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -66,6 +71,9 @@ export default function SettingsPage() {
       setOrg(activeOrg);
       setEditOrgName(activeOrg.name);
       setEditOrgSlug(activeOrg.slug);
+      const s = (activeOrg as any).settings;
+      if (s?.developerHourlyRate) setEditHourlyRate(s.developerHourlyRate);
+      if (s?.aiLineTimeEstimateSeconds) setEditSecsPerLine(s.aiLineTimeEstimateSeconds);
 
       const [memberList, invites, teamList] = await Promise.all([
         getMembers(activeOrg.id),
@@ -181,6 +189,77 @@ export default function SettingsPage() {
                 <>
                   <Save className="h-4 w-4 mr-2" />
                   Save Changes
+                </>
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {/* ROI Settings */}
+      {org && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Insights Settings</CardTitle>
+                <CardDescription>Configure assumptions for the Insights page. Conservative defaults are pre-filled.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Developer Hourly Rate ($)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editHourlyRate}
+                  onChange={(e) => setEditHourlyRate(Number(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">Fully-loaded cost per developer hour</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Est. Time per Manual Line (seconds)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editSecsPerLine}
+                  onChange={(e) => setEditSecsPerLine(Number(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">How long a developer takes to write one line manually</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These values estimate how much manual coding work AI replaces. They are used to calculate capacity freed on the Insights page.
+            </p>
+          </CardContent>
+          <CardFooter className="border-t px-6 py-4 flex justify-end">
+            <Button
+              onClick={async () => {
+                if (!org) return;
+                setSavingROI(true);
+                try {
+                  const updated = await updateOrganization(org.id, {
+                    settings: { developerHourlyRate: editHourlyRate, aiLineTimeEstimateSeconds: editSecsPerLine },
+                  });
+                  setOrg(updated);
+                  toast.success('Insights settings saved.');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+                } finally {
+                  setSavingROI(false);
+                }
+              }}
+              disabled={savingROI}
+            >
+              {savingROI ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
                 </>
               )}
             </Button>
