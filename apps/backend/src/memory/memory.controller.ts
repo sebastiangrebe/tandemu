@@ -1064,7 +1064,8 @@ export class MemoryController {
 
     for (const mem of memories) {
       const metadata = mem.metadata as Record<string, unknown> | null;
-      const files = (metadata?.files as string[]) ?? [];
+      const rawFiles = metadata?.files;
+      const files: string[] = Array.isArray(rawFiles) ? rawFiles : typeof rawFiles === 'string' ? [rawFiles] : [];
       const memId = mem.id as string;
 
       if (files.length === 0) {
@@ -1151,7 +1152,8 @@ export class MemoryController {
     const coveredFolders = new Set<string>();
     for (const mem of [...orgMemories, ...personalMemories]) {
       const metadata = mem.metadata as Record<string, unknown> | null;
-      const files = (metadata?.files as string[]) ?? [];
+      const rawFiles = metadata?.files;
+      const files: string[] = Array.isArray(rawFiles) ? rawFiles : typeof rawFiles === 'string' ? [rawFiles] : [];
       for (const f of files) {
         // Add file and all parent folders
         const parts = f.split('/');
@@ -1349,12 +1351,16 @@ export class MemoryController {
 
     const allMemories = [...personalMemories, ...orgMemories];
 
-    // Filter by repo if specified
+    // Filter by repo if specified (extract basename for exact match to avoid
+    // e.g. "tandemu" matching "tandemu-website")
+    const repoBasename = repo ? repo.split('/').pop()! : '';
     const filtered = repo
       ? allMemories.filter((m) => {
           const metadata = m.metadata as Record<string, unknown> | null;
           const memRepo = metadata?.repo as string | undefined;
-          return memRepo && (memRepo.includes(repo) || repo.includes(String(memRepo)));
+          if (!memRepo) return false;
+          const memBasename = memRepo.split('/').pop()!;
+          return memBasename === repoBasename;
         })
       : allMemories;
 
@@ -1364,17 +1370,18 @@ export class MemoryController {
 
     for (const mem of filtered) {
       const metadata = mem.metadata as Record<string, unknown> | null;
-      const files = (metadata?.files as string[]) ?? [];
+      const rawFiles = metadata?.files;
+      const files: string[] = Array.isArray(rawFiles) ? rawFiles : typeof rawFiles === 'string' ? [rawFiles] : [];
       const category = (metadata?.category as string) ?? 'uncategorized';
       const content = (mem.memory as string) ?? (mem.content as string) ?? '';
       const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
       const snippet = content.length > 80 ? content.slice(0, 80) + '...' : content;
 
-      // Derive folder from first file path (2 segments deep)
+      // Derive folder from first file path (2 directory segments deep)
       let folder = 'general';
       if (files.length > 0) {
-        const parts = files[0]!.split('/');
-        folder = parts.length >= 2 ? parts.slice(0, 2).join('/') : parts[0]!;
+        const parts = files[0]!.split('/').filter((p) => p && !p.includes('.'));
+        folder = parts.length >= 2 ? parts.slice(0, 2).join('/') : parts.length === 1 ? parts[0]! : 'general';
       }
 
       if (!folders.has(folder)) {
@@ -1412,7 +1419,7 @@ export class MemoryController {
           lines.push(`  _+${snippets.length - 1} more_`);
         }
       }
-      if (data.recent.length > 0) {
+      if (data.recent.length > 0 && data.recent.length < data.count) {
         lines.push(`- _${data.recent.length} new this week_`);
       }
       lines.push('');
