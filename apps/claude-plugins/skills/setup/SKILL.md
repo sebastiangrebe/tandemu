@@ -204,12 +204,16 @@ settings["env"] = env
 
 perms = settings.get("permissions", {})
 allow = perms.get("allow", [])
+home = os.path.expanduser("~")
 tandemu_perms = [
     "Edit(~/.claude/tandemu*)",
     "Write(~/.claude/tandemu*)",
     "Bash(cat > ~/.claude/tandemu*)",
     "Bash(rm ~/.claude/tandemu*)",
     "Bash(rm -f ~/.claude/tandemu*)",
+    f"Bash(cat > {home}/.claude/tandemu*)",
+    f"Bash(rm {home}/.claude/tandemu*)",
+    f"Bash(rm -f {home}/.claude/tandemu*)",
     f"Bash(curl*{api_url}*)",
 ]
 for p in tandemu_perms:
