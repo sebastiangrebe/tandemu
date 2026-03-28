@@ -20,6 +20,7 @@
     "@nestjs/event-emitter": "^2.1.0",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.4.0",
+    "@sentry/nestjs": "^10.46.0",
     "@tandemu/database": "workspace:*",
     "@tandemu/telemetry": "workspace:*",
     "@tandemu/types": "workspace:*",
