@@ -1010,7 +1010,12 @@ export class TelemetryService implements OnModuleDestroy {
           SELECT
             LogAttributes['session.id'] AS session_id,
             LogAttributes['user.account_uuid'] AS user_id,
-            JSONExtractString(LogAttributes['tool_parameters'], 'file_path') AS repository_path,
+            coalesce(
+              nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'file_path'), ''),
+              nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'path'), ''),
+              nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'command'), ''),
+              LogAttributes['tool_name']
+            ) AS repository_path,
             0 AS prompt_loop_count,
             count(*) AS error_count,
             max(Timestamp) AS timestamp
@@ -1018,7 +1023,6 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND LogAttributes['event.name'] = 'tool_result'
             AND LogAttributes['success'] = 'false'
-            AND JSONExtractString(LogAttributes['tool_parameters'], 'file_path') != ''
             ${dateFilter}
           GROUP BY session_id, user_id, repository_path
           HAVING error_count >= 1
