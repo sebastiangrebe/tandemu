@@ -24,6 +24,9 @@ export interface AppConfig {
     openmemoryHost: string;
     openmemoryPort: number;
   };
+  encryption: {
+    key: string;
+  };
   sentry: {
     dsn: string;
     environment: string;
@@ -75,6 +78,9 @@ export default (): AppConfig => {
       mem0ApiKey: process.env['MEM0_API_KEY'] ?? '',
       openmemoryHost: process.env['OPENMEMORY_HOST'] ?? 'localhost',
       openmemoryPort: parseInt(process.env['OPENMEMORY_PORT'] ?? '8765', 10),
+    },
+    encryption: {
+      key: process.env['ENCRYPTION_KEY'] ?? '',
     },
     sentry: {
       dsn: process.env['SENTRY_BACKEND_DSN'] ?? '',
