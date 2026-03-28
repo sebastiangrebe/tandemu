@@ -13,6 +13,7 @@ import { InvitesModule } from './invites/invites.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
 import { MemoryModule } from './memory/memory.module.js';
 import { SetupModule } from './setup/setup.module.js';
+import { QueueModule } from './queue/queue.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { SetupModule } from './setup/setup.module.js';
     IntegrationsModule,
     MemoryModule,
     SetupModule,
+    QueueModule,
   ],
 })
 export class AppModule implements NestModule {

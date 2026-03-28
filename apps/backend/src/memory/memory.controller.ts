@@ -24,10 +24,13 @@ import type { RequestUser } from '../auth/auth.decorator.js';
 import { MembershipRole } from '@tandemu/types';
 import { MemoryScope } from '@tandemu/types';
 import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse, FileTreeNode, GapEntry } from '@tandemu/types';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import { MemoryService } from './memory.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { AuthService } from '../auth/auth.service.js';
+import type { MemoryOpsJobData, TelemetryJobData } from '../queue/queue.types.js';
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,6 +44,8 @@ export class MemoryController {
     private readonly tasksService: TasksService,
     private readonly telemetryService: TelemetryService,
     private readonly authService: AuthService,
+    @InjectQueue('memory-ops') private readonly memoryOpsQueue: Queue<MemoryOpsJobData>,
+    @InjectQueue('telemetry') private readonly telemetryQueue: Queue<TelemetryJobData>,
   ) {}
 
   private async resolveUserName(userId: string): Promise<string | undefined> {
@@ -457,11 +462,21 @@ export class MemoryController {
             if (taskStatus === 'done') {
               // Promote to published — update the memory asynchronously
               metadata.status = 'published';
-              this.promoteMemory(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
+              this.memoryOpsQueue.add('promote-memory', {
+                type: 'promote-memory',
+                memoryId: mem.id as string,
+                upstreamUrl,
+                upstreamHeaders,
+              });
               filteredOrgMemories.push(mem);
             } else if (taskStatus === 'cancelled') {
               // Cancelled work — delete the draft, knowledge may be invalid
-              this.deleteMemoryUpstream(mem.id as string, upstreamUrl, upstreamHeaders).catch(() => {});
+              this.memoryOpsQueue.add('delete-memory-upstream', {
+                type: 'delete-memory-upstream',
+                memoryId: mem.id as string,
+                upstreamUrl,
+                upstreamHeaders,
+              });
               // Don't include in results
             }
             // 'pending' — skip, draft from unmerged work
@@ -605,62 +620,6 @@ export class MemoryController {
     }
   }
 
-  /**
-   * Promote a draft memory to published by updating its metadata.
-   */
-  private async promoteMemory(
-    memoryId: string,
-    upstreamUrl: string,
-    upstreamHeaders: Record<string, string>,
-  ): Promise<void> {
-    try {
-      await fetch(upstreamUrl, {
-        method: 'POST',
-        headers: { ...upstreamHeaders, 'Accept': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: `promote-${memoryId}`,
-          method: 'tools/call',
-          params: {
-            name: 'update_memory',
-            arguments: {
-              memory_id: memoryId,
-              metadata: { status: 'published' },
-            },
-          },
-        }),
-      });
-    } catch (err) {
-      this.logger.warn(`Failed to promote memory ${memoryId}: ${err}`);
-    }
-  }
-
-  /**
-   * Delete a memory (e.g., from cancelled task — knowledge may be invalid).
-   */
-  private async deleteMemoryUpstream(
-    memoryId: string,
-    upstreamUrl: string,
-    upstreamHeaders: Record<string, string>,
-  ): Promise<void> {
-    try {
-      await fetch(upstreamUrl, {
-        method: 'POST',
-        headers: { ...upstreamHeaders, 'Accept': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: `delete-${memoryId}`,
-          method: 'tools/call',
-          params: {
-            name: 'delete_memory',
-            arguments: { memory_id: memoryId },
-          },
-        }),
-      });
-    } catch (err) {
-      this.logger.warn(`Failed to delete memory ${memoryId}: ${err}`);
-    }
-  }
 
   // ---- Shared MCP helper ----
 
@@ -799,15 +758,20 @@ export class MemoryController {
           const taskStatus = await this.getTaskFinalStatus(taskId, user);
           if (taskStatus === 'done') {
             metadata.status = 'published';
-            this.callMcpTool('update_memory', {
-              memory_id: mem.id as string,
-              metadata: { status: 'published' },
-            }, user).catch(() => {});
+            this.memoryOpsQueue.add('mcp-tool-call', {
+              type: 'mcp-tool-call',
+              toolName: 'update_memory',
+              args: { memory_id: mem.id as string, metadata: { status: 'published' } },
+              userId: user.userId,
+            });
             filtered.push(mem);
           } else if (taskStatus === 'cancelled') {
-            this.callMcpTool('delete_memory', {
-              memory_id: mem.id as string,
-            }, user).catch(() => {});
+            this.memoryOpsQueue.add('mcp-tool-call', {
+              type: 'mcp-tool-call',
+              toolName: 'delete_memory',
+              args: { memory_id: mem.id as string },
+              userId: user.userId,
+            });
           }
           // 'pending' — skip
         }
@@ -908,11 +872,14 @@ export class MemoryController {
         return this.toMemoryEntry(m, isOrg ? 'org' : 'personal');
       });
 
-      // Fire-and-forget access logging
-      this.telemetryService.logMemoryAccess(
-        resultMemories.map((m) => m.id),
-        user.organizationId, user.userId, 'search',
-      ).catch(() => {});
+      // Queue access logging
+      this.telemetryQueue.add('memory-access-log', {
+        type: 'memory-access-log',
+        memoryIds: resultMemories.map((m) => m.id),
+        organizationId: user.organizationId,
+        userId: user.userId,
+        accessType: 'search',
+      });
 
       return { memories: resultMemories };
     }
@@ -936,10 +903,13 @@ export class MemoryController {
 
     const resultMemories = memories.map((m) => this.toMemoryEntry(m, scope === 'org' ? 'org' : 'personal'));
 
-    this.telemetryService.logMemoryAccess(
-      resultMemories.map((m) => m.id),
-      user.organizationId, user.userId, 'search',
-    ).catch(() => {});
+    this.telemetryQueue.add('memory-access-log', {
+      type: 'memory-access-log',
+      memoryIds: resultMemories.map((m) => m.id),
+      organizationId: user.organizationId,
+      userId: user.userId,
+      accessType: 'search',
+    });
 
     return { memories: resultMemories };
   }
