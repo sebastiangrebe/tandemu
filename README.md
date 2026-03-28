@@ -126,7 +126,7 @@ for f in ['installed_plugins.json', 'known_marketplaces.json']:
     except: pass
 "
 
-# 3. Remove from settings.json
+# 3. Remove from settings.json (env, permissions, hooks, plugin entries)
 python3 -c "
 import json, os
 f = os.path.expanduser('~/.claude/settings.json')
@@ -145,14 +145,21 @@ try:
     allow = [p for p in allow if 'tandemu' not in p.lower() and ':3001' not in p and ':4318' not in p]
     if allow: s['permissions']['allow'] = allow
     elif 'allow' in s.get('permissions',{}): del s['permissions']['allow']
+    if not s.get('permissions',{}).get('allow'):
+        s.get('permissions',{}).pop('allow', None)
+    if not s.get('permissions'): s.pop('permissions', None)
+    hooks = s.get('hooks', {})
+    hooks.pop('SessionStart', None)
+    if not hooks: s.pop('hooks', None)
     with open(f, 'w') as fh: json.dump(s, fh, indent=2)
 except: pass
 "
 
-# 4. Remove Tandemu config, skills, and MCP
+# 4. Remove Tandemu config, skills, lib, memory index, and MCP
 rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task.json ~/.claude/tandemu-version.txt
+rm -f ~/.claude/tandemu-memory-index-*.md
 rm -f ~/.claude/CLAUDE.md ~/.claude/lib/tandemu-env.sh
-rm -rf ~/.claude/skills/{morning,finish,pause,standup,blockers,setup}
+rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,blockers,setup}
 python3 -c "
 import json, os
 for f in [os.path.expanduser('~/.mcp.json'), os.path.expanduser('~/.claude.json')]:
@@ -183,6 +190,7 @@ Claude Code has an official plugin marketplace, but plugin skills are namespaced
 | `/morning` | Pick a task and start working |
 | `/finish` | Complete task, measure work, send telemetry |
 | `/pause` | Pause current task, switch to another |
+| `/create` | Create a new task in the ticket system |
 | `/standup` | Generate a team standup report |
 | `/blockers` | See what's slowing the team down |
 

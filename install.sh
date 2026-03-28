@@ -69,14 +69,37 @@ do_uninstall() {
   header
   step "Removing Tandemu..."
 
+  # Remove plugin cache and registry entries
+  rm -rf "$CLAUDE_DIR/plugins/marketplaces/tandemu"
+  rm -rf "$CLAUDE_DIR/plugins/cache/tandemu"*
+  python3 << 'PYEOF'
+import json, os
+plugins_dir = os.path.expanduser("~/.claude/plugins")
+for f in ["installed_plugins.json", "known_marketplaces.json"]:
+    path = os.path.join(plugins_dir, f)
+    try:
+        with open(path) as fh:
+            d = json.load(fh)
+        if f == "installed_plugins.json":
+            d["plugins"] = {k: v for k, v in d.get("plugins", {}).items() if "tandemu" not in k}
+        else:
+            d.pop("tandemu", None)
+        with open(path, "w") as fh:
+            json.dump(d, fh, indent=2)
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+PYEOF
+  ok "Plugin cache and registry cleaned"
+
   # Remove tandemu config
   rm -f "$CLAUDE_DIR/tandemu.json"
   rm -f "$CLAUDE_DIR/tandemu-active-task.json"
+  rm -f "$CLAUDE_DIR/tandemu-memory-index-"*.md
   rm -f "$VERSION_FILE"
   ok "Config removed"
 
   # Remove skills
-  for skill in morning finish pause standup blockers setup; do
+  for skill in morning finish pause create standup blockers setup; do
     rm -rf "$SKILLS_DIR/$skill"
   done
   ok "Skills removed"
@@ -137,7 +160,7 @@ PYEOF
     ok "Legacy MCP config cleaned"
   fi
 
-  # Clean settings.json (remove tandemu-specific env vars and permissions)
+  # Clean settings.json (remove tandemu-specific env vars, permissions, hooks, and plugin entries)
   if [ -f "$CLAUDE_DIR/settings.json" ]; then
     python3 << 'PYEOF'
 import json, os
@@ -145,6 +168,17 @@ settings_file = os.path.expanduser("~/.claude/settings.json")
 try:
     with open(settings_file) as f:
         settings = json.load(f)
+    # Remove tandemu plugin entries
+    ep = settings.get("enabledPlugins", {})
+    settings["enabledPlugins"] = {k: v for k, v in ep.items() if "tandemu" not in k}
+    if not settings["enabledPlugins"]:
+        del settings["enabledPlugins"]
+    ekm = settings.get("extraKnownMarketplaces", {})
+    ekm.pop("tandemu", None)
+    if ekm:
+        settings["extraKnownMarketplaces"] = ekm
+    elif "extraKnownMarketplaces" in settings:
+        del settings["extraKnownMarketplaces"]
     # Remove tandemu env vars
     env = settings.get("env", {})
     for key in list(env.keys()):
