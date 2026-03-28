@@ -42,6 +42,7 @@ import {
   Clock,
   Flame,
   Brain,
+  Lightbulb,
   Menu,
   Layers,
   Plug,
@@ -66,6 +67,7 @@ const mainNavAll = [
 const dashboardSubNav = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: Clock },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/friction-map", label: "Friction Map", icon: Flame },
   { href: "/memory", label: "AI Memory", icon: Brain },
 ];
@@ -76,6 +78,7 @@ const subNavMap: Record<
 > = {
   "/": dashboardSubNav,
   "/activity": dashboardSubNav,
+  "/insights": dashboardSubNav,
   "/friction-map": dashboardSubNav,
   "/memory": dashboardSubNav,
 };
@@ -83,6 +86,7 @@ const subNavMap: Record<
 const allNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: Clock },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/friction-map", label: "Friction Map", icon: Flame },
   { href: "/memory", label: "AI Memory", icon: Brain },
   { href: "/teams", label: "Teams", icon: Layers, adminOnly: true },
@@ -276,6 +280,7 @@ export function Header() {
                 item.href === "/"
                   ? pathname === "/" ||
                     pathname === "/activity" ||
+                    pathname === "/insights" ||
                     pathname === "/friction-map" ||
                     pathname === "/memory"
                   : pathname.startsWith(item.href);
