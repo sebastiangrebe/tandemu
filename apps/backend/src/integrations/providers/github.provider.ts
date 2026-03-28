@@ -38,7 +38,7 @@ function mapPriority(labels: Array<{ name: string }>): TaskPriority {
   return 'none';
 }
 
-async function githubFetch<T>(url: string, token: string): Promise<T> {
+export async function githubFetch<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,

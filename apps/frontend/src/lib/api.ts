@@ -523,10 +523,16 @@ export type MemoryScope = 'personal' | 'org';
 export interface MemoryMetadata {
   status?: 'draft' | 'published';
   author_id?: string;
+  author_name?: string;
+  source?: 'mcp' | 'git' | 'pr' | 'finish' | 'manual';
   taskId?: string;
+  taskUrl?: string;
   repo?: string;
   files?: string[];
   category?: string;
+  commitSha?: string;
+  prNumber?: number;
+  prUrl?: string;
   [key: string]: unknown;
 }
 

@@ -102,9 +102,12 @@ metadata: {
   repo: "<repo root path from git rev-parse --show-toplevel>",
   files: ["<relevant file paths, if applicable>"],
   category: "<one of: architecture, pattern, gotcha, preference, style, dependency, decision>",
-  taskId: "<current task ID from ~/.claude/tandemu-active-task.json, if available>"
+  taskId: "<current task ID from ~/.claude/tandemu-active-task.json, if available>",
+  taskUrl: "<task URL from ~/.claude/tandemu-active-task.json, if available>"
 }
 ```
+
+Note: The backend automatically enriches `add_memory` calls with `author_name` and `source: 'mcp'`. During `/finish`, the skill overrides `source` to `'finish'` and adds `commitSha`, `prNumber`, and `prUrl` when available.
 
 **Category guide:**
 - `architecture` — system design, module boundaries, data flow

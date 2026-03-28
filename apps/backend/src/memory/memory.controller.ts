@@ -26,18 +26,36 @@ import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse, FileTreeNode
 import { MemoryService } from './memory.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
+import { AuthService } from '../auth/auth.service.js';
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MemoryController {
   private readonly logger = new Logger(MemoryController.name);
   private readonly publishedTaskCache = new Map<string, boolean>();
+  private readonly userNameCache = new Map<string, string>();
 
   constructor(
     private readonly memoryService: MemoryService,
     private readonly tasksService: TasksService,
     private readonly telemetryService: TelemetryService,
+    private readonly authService: AuthService,
   ) {}
+
+  private async resolveUserName(userId: string): Promise<string | undefined> {
+    const cached = this.userNameCache.get(userId);
+    if (cached) return cached;
+    try {
+      const user = await this.authService.getMe(userId);
+      if (user?.name) {
+        this.userNameCache.set(userId, user.name);
+        return user.name;
+      }
+    } catch {
+      // Ignore lookup failures — name is optional enrichment
+    }
+    return undefined;
+  }
 
   @Get('config')
   getConfig(@Req() req: Request): { type: string; url: string } {
@@ -80,7 +98,7 @@ export class MemoryController {
     }
 
     // For non-search calls: inject user_id and optionally app_id
-    const enrichedBody = this.injectScoping(body, user.userId, user.organizationId);
+    const enrichedBody = await this.injectScoping(body, user.userId, user.organizationId);
 
     let upstreamResponse: globalThis.Response;
     try {
@@ -307,12 +325,13 @@ export class MemoryController {
    * - app_id: injected when Claude passes app_id: "org" (replaced with actual orgId)
    * - metadata: for add_memory, inject draft status with taskId for org memories
    */
-  private injectScoping(body: unknown, userId: string, organizationId: string): unknown {
+  private async injectScoping(body: unknown, userId: string, organizationId: string): Promise<unknown> {
     if (!body || typeof body !== 'object') return body;
     const rpc = body as Record<string, unknown>;
 
     if (rpc.method === 'tools/call' && rpc.params && typeof rpc.params === 'object') {
       const params = rpc.params as Record<string, unknown>;
+      const toolName = params.name as string | undefined;
       if (params.arguments && typeof params.arguments === 'object') {
         const args = params.arguments as Record<string, unknown>;
 
@@ -343,6 +362,21 @@ export class MemoryController {
             if (!filters.user_id) {
               filters.user_id = userId;
             }
+          }
+        }
+
+        // Enrich add_memory with author_name and source
+        if (toolName === 'add_memory') {
+          if (!args.metadata || typeof args.metadata !== 'object') {
+            args.metadata = {};
+          }
+          const metadata = args.metadata as Record<string, unknown>;
+          if (!metadata.author_name) {
+            const name = await this.resolveUserName(userId);
+            if (name) metadata.author_name = name;
+          }
+          if (!metadata.source) {
+            metadata.source = 'mcp';
           }
         }
       }

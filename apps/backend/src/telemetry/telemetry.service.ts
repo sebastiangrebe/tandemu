@@ -1,9 +1,12 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { randomBytes } from 'crypto';
 import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry } from '@tandemu/types';
+import { MemoryService } from '../memory/memory.service.js';
+import { GitHubGitService } from '../integrations/providers/github-git.service.js';
+import { IntegrationsService } from '../integrations/integrations.service.js';
 
 export interface TimesheetEntry {
   readonly userId: string;
@@ -61,7 +64,12 @@ export class TelemetryService implements OnModuleDestroy {
   private readonly client: ClickHouseClient;
   private readonly logger = new Logger(TelemetryService.name);
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => MemoryService)) private readonly memoryService: MemoryService,
+    @Inject(forwardRef(() => GitHubGitService)) private readonly gitHubGitService: GitHubGitService,
+    @Inject(forwardRef(() => IntegrationsService)) private readonly integrationsService: IntegrationsService,
+  ) {
     const clickhouseUrl = this.configService.get<string>('clickhouse.url', 'http://localhost:8123');
     this.client = createClient({
       url: clickhouseUrl,
@@ -283,6 +291,11 @@ export class TelemetryService implements OnModuleDestroy {
       this.logger.error('Failed to send OTLP metrics', err);
     }
 
+    // Fire-and-forget: self-heal git history into org memories
+    this.selfHealGitMemories(organizationId, input).catch((err) => {
+      this.logger.warn(`Self-healing git memories failed: ${err}`);
+    });
+
     return {
       aiLines,
       manualLines,
@@ -290,6 +303,97 @@ export class TelemetryService implements OnModuleDestroy {
       durationSeconds,
       filesChanged: input.changedFilesList.length,
     };
+  }
+
+  /**
+   * Self-healing: auto-index merged PRs for changed files as org memories.
+   * Runs as fire-and-forget after task completion.
+   */
+  private async selfHealGitMemories(
+    organizationId: string,
+    input: FinishTaskInput,
+  ): Promise<void> {
+    // Only heal if we have changed files
+    if (!input.changedFilesList?.length) return;
+
+    // Try to get GitHub integration and mapped repos
+    let token: string;
+    let repoFullName: string | undefined;
+    try {
+      const integration = await this.integrationsService.findOne(organizationId, 'github');
+      token = integration.access_token;
+      // Get the first mapped repo (externalProjectId = "owner/repo" for GitHub)
+      const mappings = await this.integrationsService.getMappings(integration.id);
+      repoFullName = mappings[0]?.externalProjectId;
+    } catch {
+      // No GitHub integration — skip silently
+      return;
+    }
+
+    if (!token || !repoFullName) return;
+
+    const [owner, repo] = repoFullName.split('/');
+    if (!owner || !repo) return;
+
+    // Deduplicate file paths to folder level (2 segments: "apps/backend")
+    const folders = new Set<string>();
+    for (const filePath of input.changedFilesList.slice(0, 20)) {
+      const parts = filePath.split('/');
+      if (parts.length >= 2) {
+        folders.add(parts.slice(0, 2).join('/'));
+      }
+    }
+
+    // For each folder, search for PRs and create memories
+    const BOT_AUTHORS = new Set(['dependabot', 'renovate', 'dependabot[bot]', 'renovate[bot]']);
+    let created = 0;
+
+    for (const folder of folders) {
+      if (created >= 10) break; // Cap to avoid flooding
+
+      try {
+        const prs = await this.gitHubGitService.fetchPRsForFile(token, owner, repo, folder);
+
+        for (const pr of prs) {
+          if (created >= 10) break;
+          // Skip bot PRs
+          if (BOT_AUTHORS.has(pr.author.login)) continue;
+          // Skip PRs with no meaningful body
+          if (!pr.body || pr.body.length < 50) continue;
+
+          // Check if memory already exists for this PR
+          const existing = await this.memoryService.searchOrgMemories(
+            organizationId,
+            `PR #${pr.number} ${pr.title}`,
+            3,
+          );
+          const alreadyIndexed = existing.some(
+            (m) => m.metadata?.prNumber === pr.number && m.metadata?.repo === repoFullName,
+          );
+          if (alreadyIndexed) continue;
+
+          // Create org memory from PR
+          const bodyExcerpt = pr.body.length > 500 ? pr.body.slice(0, 500) + '...' : pr.body;
+          await this.memoryService.createOrgMemory(organizationId, `PR #${pr.number}: ${pr.title} — ${bodyExcerpt}`, {
+            source: 'pr',
+            prNumber: pr.number,
+            prUrl: pr.url,
+            repo: repoFullName,
+            files: [folder],
+            author_name: pr.author.login,
+            status: 'published',
+            category: 'decision',
+          });
+          created++;
+        }
+      } catch (err) {
+        this.logger.warn(`Self-heal failed for folder ${folder}: ${err}`);
+      }
+    }
+
+    if (created > 0) {
+      this.logger.log(`Self-healed ${created} org memories from git history`);
+    }
   }
 
   /**
