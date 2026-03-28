@@ -126,7 +126,6 @@ export class MemoryService {
     try {
       await this.callMcpTool('add_memory', {
         content,
-        app_id: organizationId,
         user_id: organizationId,
         metadata: { ...metadata, status: 'published' },
       });
@@ -146,7 +145,7 @@ export class MemoryService {
     try {
       const result = await this.callMcpTool('search_memories', {
         query,
-        app_id: organizationId,
+        user_id: organizationId,
         limit,
       }) as { result?: { content?: Array<{ text?: string }> } };
 

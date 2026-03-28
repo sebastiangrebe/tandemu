@@ -98,12 +98,12 @@ export class MemoryController {
     const isSearch = rpc?.method === 'tools/call' && this.isSearchOrGetTool(rpc);
 
     if (isSearch) {
-      // Dual-scope search: personal (user_id) + org (app_id)
+      // Dual-scope search: personal (user_id) + org (user_id = orgId)
       await this.dualScopeSearch(body, user, upstreamUrl, upstreamHeaders, res);
       return;
     }
 
-    // For non-search calls: inject user_id and optionally app_id
+    // For non-search calls: inject user_id (personal or orgId for org scope)
     const enrichedBody = await this.injectScoping(body, user.userId, user.organizationId);
 
     let upstreamResponse: globalThis.Response;
@@ -328,7 +328,7 @@ export class MemoryController {
   /**
    * Inject scoping into MCP tool call arguments.
    * - user_id: always injected for personal scope
-   * - app_id: injected when Claude passes app_id: "org" (replaced with actual orgId)
+   * - org scope: when Claude passes app_id: "org", replaced with user_id: orgId
    * - metadata: for add_memory, inject draft status with taskId for org memories
    */
   private async injectScoping(body: unknown, userId: string, organizationId: string): Promise<unknown> {
@@ -345,14 +345,12 @@ export class MemoryController {
         const isOrgScope = args.app_id === 'org';
 
         if (isOrgScope) {
-          // Replace "org" sentinel with actual organization ID
-          args.app_id = organizationId;
-          // Mem0 Cloud requires at least one of user_id/agent_id/run_id —
-          // pass user_id alongside app_id so memories aren't orphaned to default entity.
-          // app_id scopes it as org-shared; user_id identifies the author.
-          if (!args.user_id) {
-            args.user_id = userId;
-          }
+          // Org memories: use organizationId as the Mem0 user_id.
+          // Mem0 Cloud scopes by user_id — using orgId makes all org memories
+          // live under a single "user" entity representing the org.
+          // Don't use app_id — it doesn't reliably scope on Mem0 Cloud.
+          delete args.app_id;
+          args.user_id = organizationId;
           // Add metadata for draft gating
           if (!args.metadata || typeof args.metadata !== 'object') {
             args.metadata = {};
@@ -397,7 +395,7 @@ export class MemoryController {
   }
 
   /**
-   * Dual-scope search: query personal memories (user_id) + org memories (app_id),
+   * Dual-scope search: query personal memories (user_id) + org memories (user_id = orgId),
    * merge results, and filter drafts from other users.
    */
   private async dualScopeSearch(
@@ -417,12 +415,12 @@ export class MemoryController {
     personalArgs.user_id = user.userId;
     if (!personalArgs.filters) personalArgs.filters = { user_id: user.userId };
 
-    // Build org search body
+    // Build org search body — org memories are stored under user_id = organizationId
     const orgBody = JSON.parse(JSON.stringify(body));
     const orgArgs = (orgBody.params as Record<string, unknown>).arguments as Record<string, unknown>;
-    delete orgArgs.user_id;
-    orgArgs.app_id = user.organizationId;
-    orgArgs.filters = { app_id: user.organizationId };
+    delete orgArgs.app_id;
+    orgArgs.user_id = user.organizationId;
+    orgArgs.filters = { user_id: user.organizationId };
 
     const fetchUpstream = async (reqBody: unknown) => {
       const response = await fetch(upstreamUrl, {
@@ -803,8 +801,8 @@ export class MemoryController {
 
     const args: Record<string, unknown> = {};
     if (scope === 'org') {
-      args.app_id = user.organizationId;
-      args.filters = { app_id: user.organizationId };
+      args.user_id = user.organizationId;
+      args.filters = { user_id: user.organizationId };
     } else {
       args.user_id = user.userId;
       args.filters = { user_id: user.userId };
@@ -850,8 +848,8 @@ export class MemoryController {
         }, user),
         this.callMcpTool('search_memories', {
           query,
-          app_id: user.organizationId,
-          filters: { app_id: user.organizationId },
+          user_id: user.organizationId,
+          filters: { user_id: user.organizationId },
           limit,
         }, user),
       ]);
@@ -892,8 +890,8 @@ export class MemoryController {
     // Single-scope search
     const args: Record<string, unknown> = { query, limit };
     if (scope === 'org') {
-      args.app_id = user.organizationId;
-      args.filters = { app_id: user.organizationId };
+      args.user_id = user.organizationId;
+      args.filters = { user_id: user.organizationId };
     } else {
       args.user_id = user.userId;
       args.filters = { user_id: user.userId };
@@ -932,8 +930,8 @@ export class MemoryController {
         filters: { user_id: user.userId },
       }, user),
       this.callMcpTool('get_memories', {
-        app_id: user.organizationId,
-        filters: { app_id: user.organizationId },
+        user_id: user.organizationId,
+        filters: { user_id: user.organizationId },
       }, user),
     ]);
 
@@ -1020,8 +1018,8 @@ export class MemoryController {
   ): Promise<{ tree: FileTreeNode[] }> {
     const args: Record<string, unknown> = {};
     if (scope === 'org') {
-      args.app_id = user.organizationId;
-      args.filters = { app_id: user.organizationId };
+      args.user_id = user.organizationId;
+      args.filters = { user_id: user.organizationId };
     } else {
       args.user_id = user.userId;
       args.filters = { user_id: user.userId };
@@ -1111,8 +1109,8 @@ export class MemoryController {
 
     // Fetch all org memories and extract file paths
     const result = await this.callMcpTool('get_memories', {
-      app_id: user.organizationId,
-      filters: { app_id: user.organizationId },
+      user_id: user.organizationId,
+      filters: { user_id: user.organizationId },
     }, user);
     const orgMemories = await this.filterOrgDrafts(this.extractMemories(result), user);
 
@@ -1185,8 +1183,8 @@ export class MemoryController {
     const fetchScope = async (s: 'personal' | 'org') => {
       const args: Record<string, unknown> = {};
       if (s === 'org') {
-        args.app_id = user.organizationId;
-        args.filters = { app_id: user.organizationId };
+        args.user_id = user.organizationId;
+        args.filters = { user_id: user.organizationId };
       } else {
         args.user_id = user.userId;
         args.filters = { user_id: user.userId };
@@ -1313,8 +1311,8 @@ export class MemoryController {
         filters: { user_id: user.userId },
       }, user),
       this.callMcpTool('get_memories', {
-        app_id: user.organizationId,
-        filters: { app_id: user.organizationId },
+        user_id: user.organizationId,
+        filters: { user_id: user.organizationId },
       }, user),
     ]);
 
