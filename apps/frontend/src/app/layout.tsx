@@ -60,7 +60,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn(jakarta.variable, jetbrains.variable, "font-sans", geist.variable)} suppressHydrationWarning>
+    <html lang="en" className={cn(jakarta.variable, jetbrains.variable, "font-sans", geist.variable, "dark")} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen font-sans antialiased">
         <ThemeProvider>
           <AuthProvider>
