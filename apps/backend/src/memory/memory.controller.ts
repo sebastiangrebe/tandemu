@@ -1180,19 +1180,12 @@ export class MemoryController {
   ): Promise<{ topUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; leastUsed: Array<{ memoryId: string; content: string; accessCount: number; lastAccessed?: string }>; neverAccessedCount: number; neverAccessed: Array<{ memoryId: string; content: string; accessCount: number }> }> {
     const days = parseInt(daysStr, 10) || 30;
 
-    // Get usage data from ClickHouse
-    const usage = await this.telemetryService.getUsageInsights(user.organizationId, days);
-
-    // Fetch all memories to resolve content and find never-accessed
+    // Run ClickHouse query and memory fetches in parallel
     const allMemoryIds = new Set<string>();
     const memoryContentMap = new Map<string, string>();
     const memoryCreatedMap = new Map<string, string>();
 
-    const fetchScope = async (s: 'personal' | 'org') => {
-      const args: Record<string, unknown> = {};
-      const scopeUserId = s === 'org' ? user.organizationId : user.userId;
-      let memories = await this.getMemoriesFast(scopeUserId, user);
-      if (s === 'org') memories = await this.filterOrgDrafts(memories, user);
+    const populateFromMemories = (memories: Record<string, unknown>[]) => {
       for (const mem of memories) {
         const id = mem.id as string;
         allMemoryIds.add(id);
@@ -1202,9 +1195,16 @@ export class MemoryController {
       }
     };
 
-    await Promise.all([
-      (scope === 'all' || scope === 'personal') ? fetchScope('personal') : Promise.resolve(),
-      (scope === 'all' || scope === 'org') ? fetchScope('org') : Promise.resolve(),
+    const [usage] = await Promise.all([
+      this.telemetryService.getUsageInsights(user.organizationId, days),
+      (scope === 'all' || scope === 'personal')
+        ? this.getMemoriesFast(user.userId, user).then(populateFromMemories)
+        : Promise.resolve(),
+      (scope === 'all' || scope === 'org')
+        ? this.getMemoriesFast(user.organizationId, user)
+            .then((mems) => this.filterOrgDrafts(mems, user))
+            .then(populateFromMemories)
+        : Promise.resolve(),
     ]);
 
     // Resolve content for usage entries
