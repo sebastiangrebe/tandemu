@@ -1,22 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Brain, User, Building2, Activity } from 'lucide-react';
-import { getMemoryStats, getMemoryUsageInsights, type MemoryStatsResponse, type UsageInsightsResponse } from '@/lib/api';
 import { CardSkeleton } from '@/components/ui/skeleton-helpers';
+import { useMemoryStats } from '@/app/memory/page';
 
 export function MemoryStats() {
-  const [stats, setStats] = useState<MemoryStatsResponse | null>(null);
-  const [usageInsights, setUsageInsights] = useState<UsageInsightsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.allSettled([
-      getMemoryStats().then(setStats),
-      getMemoryUsageInsights('all', 30).then(setUsageInsights),
-    ]).finally(() => setLoading(false));
-  }, []);
+  const { stats, loading } = useMemoryStats();
 
   if (loading) {
     return (
@@ -28,7 +18,7 @@ export function MemoryStats() {
 
   if (!stats) return null;
 
-  const accessedCount = stats.total - (usageInsights?.neverAccessedCount ?? 0);
+  const accessedCount = stats.total - stats.neverAccessedCount;
 
   return (
     <div className="grid gap-4 md:grid-cols-4">

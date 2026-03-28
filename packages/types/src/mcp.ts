@@ -55,6 +55,7 @@ export interface MemoryStatsResponse {
   org: number;
   total: number;
   categories: Record<string, number>;
+  neverAccessedCount: number;
 }
 
 export interface FileTreeNode {

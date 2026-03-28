@@ -586,6 +586,7 @@ export interface MemoryStatsResponse {
   org: number;
   total: number;
   categories: Record<string, number>;
+  neverAccessedCount: number;
 }
 
 export async function getMemoryList(scope: MemoryScope, limit = 50, offset = 0): Promise<MemoryListResponse> {

@@ -924,7 +924,7 @@ export class MemoryController {
   async getStats(
     @CurrentUser() user: RequestUser,
   ): Promise<MemoryStatsResponse> {
-    const [personalResult, orgResult] = await Promise.all([
+    const [personalResult, orgResult, usageData] = await Promise.all([
       this.callMcpTool('get_memories', {
         user_id: user.userId,
         filters: { user_id: user.userId },
@@ -933,6 +933,7 @@ export class MemoryController {
         user_id: user.organizationId,
         filters: { user_id: user.organizationId },
       }, user),
+      this.telemetryService.getUsageInsights(user.organizationId, 30).catch(() => ({ topUsed: [], leastUsed: [], totalTracked: 0 })),
     ]);
 
     const personalMemories = this.extractMemories(personalResult);
@@ -942,18 +943,35 @@ export class MemoryController {
     );
 
     // Category breakdown from all memories
+    const allMemories = [...personalMemories, ...orgMemories];
     const categories: Record<string, number> = {};
-    for (const mem of [...personalMemories, ...orgMemories]) {
+    for (const mem of allMemories) {
       const metadata = mem.metadata as Record<string, unknown> | null;
       const category = (metadata?.category as string) ?? 'uncategorized';
       categories[category] = (categories[category] ?? 0) + 1;
     }
 
+    // Count never-accessed memories (exclude those created in last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const trackedIds = new Set([
+      ...usageData.topUsed.map((u) => u.memoryId),
+      ...usageData.leastUsed.map((u) => u.memoryId),
+    ]);
+    let neverAccessedCount = 0;
+    for (const mem of allMemories) {
+      const id = mem.id as string;
+      if (trackedIds.has(id)) continue;
+      const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
+      if (createdAt && new Date(createdAt) > sevenDaysAgo) continue;
+      neverAccessedCount++;
+    }
+
     return {
       personal: personalMemories.length,
       org: orgMemories.length,
-      total: personalMemories.length + orgMemories.length,
+      total: allMemories.length,
       categories,
+      neverAccessedCount,
     };
   }
 
@@ -1107,18 +1125,18 @@ export class MemoryController {
       return { gaps: [] };
     }
 
-    // Fetch all org memories and extract file paths
-    const result = await this.callMcpTool('get_memories', {
-      user_id: user.organizationId,
-      filters: { user_id: user.organizationId },
-    }, user);
-    const orgMemories = await this.filterOrgDrafts(this.extractMemories(result), user);
-
-    // Also fetch personal memories for a more complete picture
-    const personalResult = await this.callMcpTool('get_memories', {
-      user_id: user.userId,
-      filters: { user_id: user.userId },
-    }, user);
+    // Fetch org + personal memories in parallel
+    const [orgResult, personalResult] = await Promise.all([
+      this.callMcpTool('get_memories', {
+        user_id: user.organizationId,
+        filters: { user_id: user.organizationId },
+      }, user),
+      this.callMcpTool('get_memories', {
+        user_id: user.userId,
+        filters: { user_id: user.userId },
+      }, user),
+    ]);
+    const orgMemories = await this.filterOrgDrafts(this.extractMemories(orgResult), user);
     const personalMemories = this.extractMemories(personalResult);
 
     // Build a set of all folder paths covered by memories
@@ -1201,8 +1219,10 @@ export class MemoryController {
       }
     };
 
-    if (scope === 'all' || scope === 'personal') await fetchScope('personal');
-    if (scope === 'all' || scope === 'org') await fetchScope('org');
+    await Promise.all([
+      (scope === 'all' || scope === 'personal') ? fetchScope('personal') : Promise.resolve(),
+      (scope === 'all' || scope === 'org') ? fetchScope('org') : Promise.resolve(),
+    ]);
 
     // Resolve content for usage entries
     const topUsed = usage.topUsed.map((u) => ({
