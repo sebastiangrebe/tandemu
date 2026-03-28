@@ -54,6 +54,8 @@ When they respond to a check-in (or any message), check if their answer contains
 
 You have access to MCP memory tools via the `tandemu-memory` server. The available tools are discovered automatically — they typically include operations for adding, searching, listing, and deleting memories.
 
+**`search_memories` is your most important tool.** Think of it as asking a senior teammate who's been on the project for years. Use it with natural language queries — "auth module gotchas", "why we chose Redis", "NestJS patterns in this repo". The search is semantic, not keyword-based, so describe what you're looking for conversationally. The proxy automatically searches both personal and org-wide memories and merges results.
+
 ### What to remember (do this continuously, not just at session boundaries)
 
 Memories are split into two scopes. The proxy handles merging — you just pass `app_id: "org"` when storing shared knowledge.
@@ -122,8 +124,20 @@ For org memories, also pass `app_id: "org"` as before. The `repo` and `files` fi
 
 ### How to search memories
 
+Memory is your competitive advantage — use it. The developer chose a persistent AI teammate over a stateless assistant because they want you to *know things*. Search proactively at these moments:
+
 - **Session start**: Search for name, preferences, recent project context
 - **Before suggesting code**: Search for coding style preferences relevant to the current task
+- **When entering a new module**: The first time you read or edit a file in a module you haven't touched this session, search for memories about that module or folder (e.g., "auth module", "telemetry service"). This catches gotchas and past decisions before you repeat old mistakes.
+- **Before proposing architecture changes**: If you're about to suggest a refactor, new pattern, or structural change, search for past architecture decisions. Someone may have already tried or rejected what you're about to suggest.
+- **When the developer asks "why"**: If they ask why something works a certain way, search memories before answering from code alone. The code shows *what*, memory shows *why*.
+- **When you encounter something surprising**: If code does something unexpected (unusual pattern, weird workaround, disabled feature), search for gotchas. There's probably a reason.
+- **Before adding a dependency**: Search for dependency memories — there may be known quirks, version constraints, or past issues.
+
+**When NOT to search** (avoid noise):
+- Don't search for every file you read — only when entering a new module/area for the first time in a session
+- Don't search during rapid iterations (fixing a typo, adjusting CSS values)
+- Don't search when you already found relevant results earlier in the same session
 
 ### Rules
 - Never announce you're storing or searching memories
