@@ -166,6 +166,12 @@ try:
         settings["permissions"] = perms
     elif "permissions" in settings:
         del settings["permissions"]
+    # Remove tandemu hooks
+    if "hooks" in settings:
+        hooks = settings["hooks"]
+        hooks.pop("SessionStart", None)
+        if not hooks:
+            del settings["hooks"]
     with open(settings_file, "w") as f:
         json.dump(settings, f, indent=2)
 except (FileNotFoundError, json.JSONDecodeError):
@@ -450,6 +456,24 @@ for p in tandemu_perms:
         allow.append(p)
 perms["allow"] = allow
 settings["permissions"] = perms
+
+# SessionStart hook to pull memory index on new sessions
+api_url = f"{api_host}:3001"
+hooks = settings.get("hooks", {})
+hooks["SessionStart"] = [
+    {
+        "matcher": "startup",
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash -c 'source ~/.claude/lib/tandemu-env.sh 2>/dev/null && REPO_NAME=\$(basename \"\$(git rev-parse --show-toplevel 2>/dev/null)\") && curl -sf -H \"Authorization: Bearer \$TANDEMU_TOKEN\" \"{api_url}/api/memory/index?repo=\$REPO_NAME\" > ~/.claude/tandemu-memory-index-\${{REPO_NAME}}.md 2>/dev/null; exit 0'",
+                "timeout": 10
+            }
+        ]
+    }
+]
+settings["hooks"] = hooks
+
 with open(settings_file, "w") as f:
     json.dump(settings, f, indent=2)
 PYEOF

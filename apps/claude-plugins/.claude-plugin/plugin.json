@@ -1,6 +1,6 @@
 {
   "name": "tandemu",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "AI Teammate — task lifecycle, telemetry, and persistent memory for AI-native development",
   "author": {
     "name": "Tandemu",
