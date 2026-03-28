@@ -89,7 +89,7 @@ export class TelemetryService implements OnModuleDestroy {
         ORDER BY (organization_id, memory_id, timestamp)
         TTL timestamp + INTERVAL 90 DAY
       `,
-    }).catch((err) => {
+    }).then((rs) => rs.text()).catch((err) => {
       this.logger.warn(`Failed to create memory_access_log table: ${err}`);
     });
   }
@@ -103,7 +103,8 @@ export class TelemetryService implements OnModuleDestroy {
     let collector = 'error';
 
     try {
-      await this.client.query({ query: 'SELECT 1', format: 'JSONEachRow' });
+      const hc = await this.client.query({ query: 'SELECT 1', format: 'JSONEachRow' });
+      await hc.text();
       clickhouse = 'ok';
     } catch (err) {
       this.logger.warn('ClickHouse health check failed', err);
@@ -1062,9 +1063,10 @@ export class TelemetryService implements OnModuleDestroy {
       const values = memoryIds
         .map((id) => `('${id.replace(/'/g, "''")}', '${organizationId}', '${userId}', '${accessType}', now())`)
         .join(',');
-      await this.client.query({
+      const insertRs = await this.client.query({
         query: `INSERT INTO memory_access_log (memory_id, organization_id, user_id, access_type, timestamp) VALUES ${values}`,
       });
+      await insertRs.text();
     } catch (err) {
       this.logger.warn(`Failed to log memory access: ${err}`);
     }
