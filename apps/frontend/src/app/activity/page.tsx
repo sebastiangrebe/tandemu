@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Calendar, TrendingUp } from "lucide-react";
-import { getTimesheets, type TimesheetEntry } from '@/lib/api';
+import { getTimesheets, getDeveloperStats, getHotFiles, getAIEffectiveness, type TimesheetEntry, type DeveloperStat, type HotFile, type AIEffectivenessEntry } from '@/lib/api';
 import { ActivityChart } from '@/components/charts/activity-chart';
+import { DeveloperLeaderboard } from '@/components/charts/developer-leaderboard';
+import { HotFilesChart } from '@/components/charts/hot-files-chart';
+import { AIEffectivenessChart } from '@/components/charts/ai-effectiveness-chart';
 import { SessionTable } from '@/components/charts/session-table';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ActivitySkeleton } from '@/components/ui/skeleton-helpers';
@@ -19,6 +22,9 @@ function formatDuration(minutes: number): string {
 
 export default function ActivityPage() {
   const [data, setData] = useState<TimesheetEntry[]>([]);
+  const [devStats, setDevStats] = useState<DeveloperStat[]>([]);
+  const [hotFiles, setHotFiles] = useState<HotFile[]>([]);
+  const [aiEffectiveness, setAiEffectiveness] = useState<AIEffectivenessEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { startDate, endDate } = useFilterParams();
@@ -26,8 +32,20 @@ export default function ActivityPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getTimesheets({ startDate, endDate })
-      .then((d) => { if (!cancelled) setData(d); })
+    const f = { startDate, endDate };
+    Promise.allSettled([
+      getTimesheets(f),
+      getDeveloperStats(f),
+      getHotFiles(f),
+      getAIEffectiveness(f),
+    ])
+      .then(([timesheets, devs, hot, aiEff]) => {
+        if (cancelled) return;
+        if (timesheets.status === 'fulfilled') setData(timesheets.value);
+        if (devs.status === 'fulfilled') setDevStats(devs.value);
+        if (hot.status === 'fulfilled') setHotFiles(hot.value);
+        if (aiEff.status === 'fulfilled') setAiEffectiveness(aiEff.value);
+      })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -127,6 +145,14 @@ export default function ActivityPage() {
           </div>
 
           <ActivityChart data={data} startDate={startDate} endDate={endDate} height={280} />
+
+          <DeveloperLeaderboard data={devStats} />
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <HotFilesChart data={hotFiles} />
+            <AIEffectivenessChart data={aiEffectiveness} />
+          </div>
+
           <SessionTable data={data} />
         </>
       )}

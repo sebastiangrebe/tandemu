@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Zap, Clock, DollarSign, Brain, TrendingDown, Share2, Info, Settings } from 'lucide-react';
-import { getInsightsMetrics, getMemoryStats } from '@/lib/api';
-import type { InsightsMetrics } from '@/lib/api';
+import { getInsightsMetrics, getMemoryStats, getTokenUsage } from '@/lib/api';
+import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
+import { TokenUsageChart } from '@/components/charts/token-usage-chart';
 import { DashboardSkeleton } from '@/components/ui/skeleton-helpers';
 
 function formatCurrency(value: number | null, currency = 'USD'): string {
@@ -23,6 +24,7 @@ function formatNumber(value: number | null): string {
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsMetrics | null>(null);
   const [orgMemoryCount, setOrgMemoryCount] = useState(0);
+  const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate } = useFilterParams();
 
@@ -32,13 +34,15 @@ export default function InsightsPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate };
-        const [insights, memStats] = await Promise.allSettled([
+        const [insights, memStats, tokens] = await Promise.allSettled([
           getInsightsMetrics(f),
           getMemoryStats(),
+          getTokenUsage(f),
         ]);
         if (cancelled) return;
         if (insights.status === 'fulfilled') setData(insights.value);
         if (memStats.status === 'fulfilled') setOrgMemoryCount(memStats.value.org);
+        if (tokens.status === 'fulfilled') setTokenData(tokens.value);
       } catch {
         // Non-critical
       } finally {
@@ -190,6 +194,8 @@ export default function InsightsPage() {
               <ThroughputChart data={data.daily} />
               <CostEfficiencyChart data={data.daily} />
             </div>
+
+            <TokenUsageChart data={tokenData} />
           </div>
 
           {/* Section 2: Tandemu Impact */}

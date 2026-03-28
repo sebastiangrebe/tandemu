@@ -3,20 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Brain, Users, Code2, Timer, Wrench } from "lucide-react";
-import { getAIRatio, getTimesheets, getToolUsage, getDeveloperStats, getTaskVelocity, getHotFiles, getInvestmentAllocation, getAIEffectiveness, getCostMetrics } from '@/lib/api';
-import type { TimesheetEntry, ToolUsageStat, DeveloperStat, TaskVelocityEntry, HotFile, InvestmentAllocation, AIEffectivenessEntry, CostEntry } from '@/lib/api';
+import { getAIRatio, getTimesheets, getToolUsage, getTaskVelocity, getInvestmentAllocation } from '@/lib/api';
+import type { TimesheetEntry, ToolUsageStat, TaskVelocityEntry, InvestmentAllocation } from '@/lib/api';
 import type { AIvsManualRatio } from '@tandemu/types';
 import { InstallBanner } from '@/components/install-banner';
 import { BillingBanner } from '@/components/billing-banner';
-import { ActivityChart } from '@/components/charts/activity-chart';
 import { AIRatioChart } from '@/components/charts/ai-ratio-chart';
 import { ToolUsageChart } from '@/components/charts/tool-usage-chart';
-import { DeveloperLeaderboard } from '@/components/charts/developer-leaderboard';
 import { VelocityChart } from '@/components/charts/velocity-chart';
-import { HotFilesChart } from '@/components/charts/hot-files-chart';
 import { InvestmentChart } from '@/components/charts/investment-chart';
-import { AIEffectivenessChart } from '@/components/charts/ai-effectiveness-chart';
-import { CostChart } from '@/components/charts/cost-chart';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { DashboardSkeleton } from '@/components/ui/skeleton-helpers';
 
@@ -32,12 +27,8 @@ export default function DashboardPage() {
   const [aiData, setAiData] = useState<AIvsManualRatio[]>([]);
   const [timesheetData, setTimesheetData] = useState<TimesheetEntry[]>([]);
   const [toolData, setToolData] = useState<ToolUsageStat[]>([]);
-  const [devStats, setDevStats] = useState<DeveloperStat[]>([]);
   const [velocityData, setVelocityData] = useState<TaskVelocityEntry[]>([]);
-  const [hotFiles, setHotFiles] = useState<HotFile[]>([]);
   const [investment, setInvestment] = useState<InvestmentAllocation[]>([]);
-  const [aiEffectiveness, setAiEffectiveness] = useState<AIEffectivenessEntry[]>([]);
-  const [costData, setCostData] = useState<CostEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { startDate, endDate } = useFilterParams();
@@ -48,20 +39,16 @@ export default function DashboardPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate };
-        const [ai, timesheets, tools, devs, velocity, hot, invest, aiEff, cost] = await Promise.allSettled([
-          getAIRatio(f), getTimesheets(f), getToolUsage(f), getDeveloperStats(f), getTaskVelocity(f),
-          getHotFiles(f), getInvestmentAllocation(f), getAIEffectiveness(f), getCostMetrics(f),
+        const [ai, timesheets, tools, velocity, invest] = await Promise.allSettled([
+          getAIRatio(f), getTimesheets(f), getToolUsage(f), getTaskVelocity(f),
+          getInvestmentAllocation(f),
         ]);
         if (cancelled) return;
         if (ai.status === 'fulfilled') setAiData(ai.value);
         if (timesheets.status === 'fulfilled') setTimesheetData(timesheets.value);
         if (tools.status === 'fulfilled') setToolData(tools.value);
-        if (devs.status === 'fulfilled') setDevStats(devs.value);
         if (velocity.status === 'fulfilled') setVelocityData(velocity.value);
-        if (hot.status === 'fulfilled') setHotFiles(hot.value);
         if (invest.status === 'fulfilled') setInvestment(invest.value);
-        if (aiEff.status === 'fulfilled') setAiEffectiveness(aiEff.value);
-        if (cost.status === 'fulfilled') setCostData(cost.value);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -208,14 +195,8 @@ export default function DashboardPage() {
         <>
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <ActivityChart data={timesheetData} startDate={startDate} endDate={endDate} />
             <AIRatioChart data={aiData} />
-          </div>
-
-          {/* Tool Usage + Developer Activity Row */}
-          <div className="grid gap-4 lg:grid-cols-2">
             <ToolUsageChart data={toolData} />
-            <DeveloperLeaderboard data={devStats} />
           </div>
 
           {/* Velocity + Investment Row */}
@@ -223,15 +204,6 @@ export default function DashboardPage() {
             <VelocityChart data={velocityData} />
             <InvestmentChart data={investment} />
           </div>
-
-          {/* Hot Files + AI Effectiveness Row */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <HotFilesChart data={hotFiles} />
-            <AIEffectivenessChart data={aiEffectiveness} />
-          </div>
-
-          {/* Cost */}
-          <CostChart data={costData} />
         </>
       )}
     </div>
