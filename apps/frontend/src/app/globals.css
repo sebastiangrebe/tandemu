@@ -188,7 +188,7 @@
   --overlay-bg: rgba(0, 0, 0, 0.7);
   --skeleton-bg: rgba(255, 255, 255, 0.04);
   --chart-area-opacity: 0.3;
-  --background: oklch(0.145 0 0);
+  --background: #09090b;
   --foreground: oklch(0.985 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover-foreground: oklch(0.985 0 0);
