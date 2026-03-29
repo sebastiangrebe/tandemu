@@ -226,8 +226,10 @@ BRANCH_NAME="feat/<task.id>-<short-kebab-description>"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 WORKTREE_DIR="${REPO_ROOT}/.worktrees/<task.id>"
 
-# Ensure .worktrees is gitignored
-grep -q '^\\.worktrees' "${REPO_ROOT}/.gitignore" 2>/dev/null || printf '\n.worktrees\n' >> "${REPO_ROOT}/.gitignore"
+# Add .worktrees to .gitignore ONLY if not already present
+if ! grep -qx '\.worktrees' "${REPO_ROOT}/.gitignore" 2>/dev/null; then
+  echo '.worktrees' >> "${REPO_ROOT}/.gitignore"
+fi
 
 # Fetch latest and create worktree with new branch
 git fetch origin "$DEFAULT_BRANCH" 2>/dev/null || true
