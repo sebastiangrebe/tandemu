@@ -27,11 +27,18 @@ export interface CleanStaleDraftsJob {
   readonly type: 'clean-stale-drafts';
 }
 
+export interface CleanupUserMemoriesJob {
+  readonly type: 'cleanup-user-memories';
+  readonly userId: string;
+  readonly organizationId: string;
+}
+
 export type MemoryOpsJobData =
   | PromoteMemoryJob
   | DeleteMemoryUpstreamJob
   | McpToolCallJob
-  | CleanStaleDraftsJob;
+  | CleanStaleDraftsJob
+  | CleanupUserMemoriesJob;
 
 // ── telemetry queue ──
 

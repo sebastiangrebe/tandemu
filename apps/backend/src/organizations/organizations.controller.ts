@@ -90,6 +90,20 @@ export class OrganizationsController {
     return this.organizationsService.addMember(id, dto.email, dto.role);
   }
 
+  // Owner/Admin only — remove a member
+  @Delete(':id/members/:userId')
+  @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ): Promise<void> {
+    const removed = await this.organizationsService.removeMember(id, userId);
+    if (!removed) {
+      throw new NotFoundException('Membership not found');
+    }
+  }
+
   // Any member can view the member list
   @Get(':id/members')
   async getMembers(

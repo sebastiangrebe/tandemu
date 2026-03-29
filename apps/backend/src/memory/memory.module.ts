@@ -8,6 +8,7 @@ import { IntegrationsModule } from '../integrations/integrations.module.js';
 import { TelemetryModule } from '../telemetry/telemetry.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { MemoryOpsProcessor } from '../queue/memory-ops.processor.js';
+import { MemoryCleanupListener } from './memory-cleanup.listener.js';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { MemoryOpsProcessor } from '../queue/memory-ops.processor.js';
     BullModule.registerQueue({ name: 'telemetry' }),
   ],
   controllers: [MemoryController],
-  providers: [MemoryService, MemoryOpsProcessor],
+  providers: [MemoryService, MemoryOpsProcessor, MemoryCleanupListener],
   exports: [MemoryService],
 })
 export class MemoryModule implements OnModuleInit {
