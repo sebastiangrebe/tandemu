@@ -31,14 +31,14 @@ export default function DashboardPage() {
   const [investment, setInvestment] = useState<InvestmentAllocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { startDate, endDate } = useFilterParams();
+  const { startDate, endDate, teamId } = useFilterParams();
 
   useEffect(() => {
     let cancelled = false;
     async function fetchData() {
       setLoading(true);
       try {
-        const f = { startDate, endDate };
+        const f = { startDate, endDate, teamId };
         const [ai, timesheets, tools, velocity, invest] = await Promise.allSettled([
           getAIRatio(f), getTimesheets(f), getToolUsage(f), getTaskVelocity(f),
           getInvestmentAllocation(f),
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     }
     fetchData();
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, teamId]);
 
   if (loading) {
     return (

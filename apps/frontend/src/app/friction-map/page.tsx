@@ -82,17 +82,17 @@ export default function FrictionMapPage() {
   const [frictionData, setFrictionData] = useState<FrictionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { startDate, endDate } = useFilterParams();
+  const { startDate, endDate, teamId } = useFilterParams();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getFrictionHeatmap({ startDate, endDate })
+    getFrictionHeatmap({ startDate, endDate, teamId })
       .then((events) => { if (!cancelled) setFrictionData(aggregateFriction(events)); })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load friction data'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, teamId]);
 
   if (loading) {
     return (

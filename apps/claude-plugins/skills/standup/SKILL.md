@@ -22,7 +22,17 @@ Load config and fetch all data in a **single Bash call** ("Fetch team data"):
 # Load Tandemu config
 source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 
-# If --team is specified, override $TANDEMU_TEAM_ID here
+# Multi-team support: resolve --team argument or prompt if multiple teams
+# Parse --team from arguments
+ACTIVE_TEAM_ID="$TANDEMU_TEAM_ID"
+ACTIVE_TEAM_NAME=""
+echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
+echo "TEAM_IDS=$TANDEMU_TEAM_IDS"
+echo "TEAM_NAMES=$TANDEMU_TEAM_NAMES"
+
+# If --team is specified, resolve name to ID
+# The Claude agent will parse the argument and do the lookup from TANDEMU_TEAM_NAMES/IDS
+# If TEAM_COUNT > 1 and no --team flag, Claude should use AskUserQuestion to prompt
 
 # Use local time (not UTC) so date boundaries match the developer's day
 YESTERDAY=$(date -v-1d +%Y-%m-%dT00:00:00Z 2>/dev/null || date -d "yesterday" +%Y-%m-%dT00:00:00Z)
@@ -37,10 +47,10 @@ echo "LOCAL_TODAY=$(date +%Y-%m-%d)"
 echo "LOCAL_YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' +%Y-%m-%d)"
 
 echo "---MEMBERS---"
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/organizations/$TANDEMU_ORG_ID/teams/$TANDEMU_TEAM_ID/members"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/organizations/$TANDEMU_ORG_ID/teams/$ACTIVE_TEAM_ID/members"
 
 echo "---TASKS---"
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$ACTIVE_TEAM_ID"
 
 echo "---TIMESHEETS---"
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/telemetry/timesheets?startDate=$YESTERDAY&endDate=$NOW"

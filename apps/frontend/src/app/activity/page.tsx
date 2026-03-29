@@ -27,12 +27,12 @@ export default function ActivityPage() {
   const [aiEffectiveness, setAiEffectiveness] = useState<AIEffectivenessEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { startDate, endDate } = useFilterParams();
+  const { startDate, endDate, teamId } = useFilterParams();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const f = { startDate, endDate };
+    const f = { startDate, endDate, teamId };
     Promise.allSettled([
       getTimesheets(f),
       getDeveloperStats(f),
@@ -49,7 +49,7 @@ export default function ActivityPage() {
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, teamId]);
 
   if (loading) {
     return (

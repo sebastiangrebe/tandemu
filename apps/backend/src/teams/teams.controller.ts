@@ -43,6 +43,15 @@ export class TeamsController {
     return this.teamsService.findAll(orgId);
   }
 
+  // Any member can list their own teams
+  @Get('mine')
+  async findMine(
+    @Param('orgId') orgId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<Team[]> {
+    return this.teamsService.findByUserId(orgId, user.userId);
+  }
+
   // Any member can view a team
   @Get(':teamId')
   async findOne(

@@ -19,6 +19,9 @@ echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
 echo "TEAM=$TANDEMU_TEAM_ID"
+echo "TEAM_IDS=$TANDEMU_TEAM_IDS"
+echo "TEAM_NAMES=$TANDEMU_TEAM_NAMES"
+echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 
 echo "---ACTIVE_TASK---"
@@ -49,12 +52,19 @@ Then optionally ask for priority:
 
 ### 3. Create the task
 
+**If `TEAM_COUNT` > 1**: use AskUserQuestion to let the developer choose which team to create the task in:
+- Question: "Which team should this task be created in?"
+- Header: "Team"
+- Options: one per team (from `TANDEMU_TEAM_IDS`/`TANDEMU_TEAM_NAMES`)
+
+Set `SELECTED_TEAM_ID` from the choice. If single team, use `$TANDEMU_TEAM_ID` directly.
+
 ```bash
 RESULT=$(curl -sf -X POST "$TANDEMU_API/api/tasks" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "teamId": "'"$TANDEMU_TEAM_ID"'",
+    "teamId": "'"$SELECTED_TEAM_ID"'",
     "title": "<title from step 2>",
     "description": "<description if provided>",
     "assigneeEmail": "'"$TANDEMU_USER_EMAIL"'",

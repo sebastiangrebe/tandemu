@@ -26,14 +26,14 @@ export default function InsightsPage() {
   const [orgMemoryCount, setOrgMemoryCount] = useState(0);
   const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const { startDate, endDate } = useFilterParams();
+  const { startDate, endDate, teamId } = useFilterParams();
 
   useEffect(() => {
     let cancelled = false;
     async function fetchData() {
       setLoading(true);
       try {
-        const f = { startDate, endDate };
+        const f = { startDate, endDate, teamId };
         const [insights, memStats, tokens] = await Promise.allSettled([
           getInsightsMetrics(f),
           getMemoryStats(),
@@ -51,7 +51,7 @@ export default function InsightsPage() {
     }
     fetchData();
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, teamId]);
 
   if (loading) {
     return (
@@ -61,7 +61,7 @@ export default function InsightsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
             <p className="text-muted-foreground">Honest assessment of AI investment value</p>
           </div>
-          <TelemetryFilters showTeamFilter={false} />
+          <TelemetryFilters showTeamFilter={true} />
         </div>
         <DashboardSkeleton />
       </div>
@@ -78,7 +78,7 @@ export default function InsightsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
           <p className="text-muted-foreground">Honest assessment of AI investment value</p>
         </div>
-        <TelemetryFilters showTeamFilter={false} />
+        <TelemetryFilters showTeamFilter={true} />
       </div>
 
       {/* Assumptions banner */}
