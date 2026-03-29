@@ -1,91 +1,60 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Layers, Plus, Users, Trash2, UserPlus, ArrowLeft, UserMinus, Mail, Clock, MoreHorizontal, Pencil, Settings } from 'lucide-react';
+import { Layers, Plus, Users, Trash2, Mail } from 'lucide-react';
 import { TeamsSkeleton } from '@/components/ui/skeleton-helpers';
 import { CreateTeamDialog } from '@/components/teams/create-team-dialog';
 import { DeleteTeamDialog } from '@/components/teams/delete-team-dialog';
-import { RenameTeamDialog } from '@/components/teams/rename-team-dialog';
-import { AddMemberDialog } from '@/components/teams/add-member-dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import { updateTeam } from '@/lib/api';
 import {
   getTeams,
   getTeamMembers,
-  removeTeamMember,
-  getMembers,
   getInvites,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import type { Team, TeamMember, Membership, Organization, Invite } from '@tandemu/types';
+import type { Team, Organization, Invite } from '@tandemu/types';
 
 interface TeamWithMembers extends Team {
-  members?: TeamMember[];
   memberCount?: number;
   pendingInvites?: number;
 }
 
 export default function TeamsPage() {
+  const router = useRouter();
   const { currentOrg: authOrg } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [teams, setTeams] = useState<TeamWithMembers[]>([]);
-  const [orgMembers, setOrgMembers] = useState<Membership[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Selected team detail view
-  const [selectedTeam, setSelectedTeam] = useState<TeamWithMembers | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [teamInvites, setTeamInvites] = useState<Invite[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-
-  // Dialog states
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TeamWithMembers | null>(null);
-  const [renameTarget, setRenameTarget] = useState<TeamWithMembers | null>(null);
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const loadTeams = useCallback(async (orgId: string) => {
     try {
-      const [teamList, memberList, inviteList] = await Promise.all([
+      const [teamList, inviteList] = await Promise.all([
         getTeams(orgId),
-        getMembers(orgId),
         getInvites(orgId),
       ]);
 
       const pending = inviteList.filter((inv) => inv.status === 'pending');
-      setPendingInvites(pending);
 
       const teamsWithCounts = await Promise.all(
         teamList.map(async (team) => {
           try {
             const members = await getTeamMembers(orgId, team.id);
             const teamPendingCount = pending.filter((inv) => inv.teamId === team.id).length;
-            return { ...team, members, memberCount: members.length, pendingInvites: teamPendingCount };
+            return { ...team, memberCount: members.length, pendingInvites: teamPendingCount };
           } catch {
             const teamPendingCount = pending.filter((inv) => inv.teamId === team.id).length;
-            return { ...team, members: [], memberCount: 0, pendingInvites: teamPendingCount };
+            return { ...team, memberCount: 0, pendingInvites: teamPendingCount };
           }
         })
       );
 
       setTeams(teamsWithCounts);
-      setOrgMembers(memberList);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load teams');
     }
@@ -100,46 +69,6 @@ export default function TeamsPage() {
     }
   }, [authOrg, loadTeams]);
 
-  const handleSelectTeam = async (team: TeamWithMembers) => {
-    if (!org) return;
-    setSelectedTeam(team);
-    setLoadingMembers(true);
-    try {
-      const members = await getTeamMembers(org.id, team.id);
-      setTeamMembers(members);
-      setTeamInvites(pendingInvites.filter((inv) => inv.teamId === team.id));
-    } catch {
-      setTeamMembers([]);
-      setTeamInvites([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  const handleRemoveMember = async (userId: string) => {
-    if (!org || !selectedTeam) return;
-    setError('');
-    try {
-      await removeTeamMember(org.id, selectedTeam.id, userId);
-      const members = await getTeamMembers(org.id, selectedTeam.id);
-      setTeamMembers(members);
-      await loadTeams(org.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove member');
-    }
-  };
-
-  const refreshAfterMemberChange = async () => {
-    if (!org || !selectedTeam) return;
-    const members = await getTeamMembers(org.id, selectedTeam.id);
-    setTeamMembers(members);
-    await loadTeams(org.id);
-  };
-
-  const availableMembers = orgMembers.filter(
-    (m: any) => !teamMembers.some((tm) => tm.userId === (m.id ?? m.userId))
-  );
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -152,245 +81,6 @@ export default function TeamsPage() {
     );
   }
 
-  // Team detail view
-  if (selectedTeam && org) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedTeam(null)}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{selectedTeam.name}</h1>
-              {selectedTeam.description && (
-                <p className="text-muted-foreground">{selectedTeam.description}</p>
-              )}
-            </div>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setRenameTarget(selectedTeam)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setDeleteTarget(selectedTeam)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {error && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Members</CardTitle>
-                  <CardDescription>{teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}</CardDescription>
-                </div>
-              </div>
-              <Button size="sm" onClick={() => setShowAddMemberDialog(true)}>
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Member
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loadingMembers ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
-            ) : teamMembers.length === 0 && teamInvites.length === 0 ? (
-              <div className="flex flex-col items-center py-8">
-                <Users className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No members yet.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Added</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {teamMembers.map((member: any) => (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">{member.name || member.userId}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{member.email || '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                          Active
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(member.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveMember(member.userId)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {teamInvites.map((invite) => (
-                    <TableRow key={invite.id} className="opacity-70">
-                      <TableCell className="font-medium">
-                        <span className="text-muted-foreground">{invite.email.split('@')[0]}</span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{invite.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Pending
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(invite.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">Invited</span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Settings</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="doneWindowDays">Done window (days)</Label>
-                <p className="text-sm text-muted-foreground">
-                  Show completed tasks from the last {selectedTeam.settings?.doneWindowDays ?? 14} days.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 ml-auto">
-                <Input
-                  id="doneWindowDays"
-                  type="number"
-                  min={1}
-                  max={365}
-                  className="w-20"
-                  value={selectedTeam.settings?.doneWindowDays ?? 14}
-                  onChange={(e) => {
-                    const val = Math.max(1, parseInt(e.target.value, 10) || 14);
-                    setSelectedTeam((prev) => prev ? { ...prev, settings: { ...prev.settings, doneWindowDays: val } } : prev);
-                  }}
-                />
-                <Button
-                  size="sm"
-                  disabled={savingSettings}
-                  onClick={async () => {
-                    setSavingSettings(true);
-                    try {
-                      await updateTeam(org.id, selectedTeam.id, {
-                        settings: { doneWindowDays: selectedTeam.settings?.doneWindowDays ?? 14 },
-                      });
-                      toast.success('Settings saved.');
-                      loadTeams(org.id);
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : 'Failed to save settings');
-                    } finally {
-                      setSavingSettings(false);
-                    }
-                  }}
-                >
-                  {savingSettings ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    'Save'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <AddMemberDialog
-          open={showAddMemberDialog}
-          onOpenChange={setShowAddMemberDialog}
-          orgId={org.id}
-          teamId={selectedTeam.id}
-          availableMembers={availableMembers}
-          onAdded={refreshAfterMemberChange}
-        />
-
-        <DeleteTeamDialog
-          open={!!deleteTarget}
-          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-          orgId={org.id}
-          teamId={deleteTarget?.id ?? ''}
-          teamName={deleteTarget?.name ?? ''}
-          onDeleted={() => {
-            if (selectedTeam?.id === deleteTarget?.id) setSelectedTeam(null);
-            loadTeams(org.id);
-          }}
-        />
-
-        <RenameTeamDialog
-          open={!!renameTarget}
-          onOpenChange={(open) => { if (!open) setRenameTarget(null); }}
-          orgId={org.id}
-          teamId={renameTarget?.id ?? ''}
-          currentName={renameTarget?.name ?? ''}
-          onRenamed={(newName) => {
-            if (selectedTeam?.id === renameTarget?.id) {
-              setSelectedTeam((prev) => prev ? { ...prev, name: newName } : prev);
-            }
-            loadTeams(org.id);
-          }}
-        />
-      </div>
-    );
-  }
-
-  // Team list view
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -430,7 +120,7 @@ export default function TeamsPage() {
             <Card
               key={team.id}
               className="cursor-pointer transition-colors hover:border-primary/50"
-              onClick={() => handleSelectTeam(team)}
+              onClick={() => router.push(`/teams/${team.id}`)}
             >
               <CardHeader>
                 <div className="flex items-center justify-between">

@@ -335,6 +335,10 @@ export async function getTeams(orgId: string): Promise<Team[]> {
   return fetchApi<Team[]>(`/api/organizations/${orgId}/teams`);
 }
 
+export async function getTeam(orgId: string, teamId: string): Promise<Team> {
+  return fetchApi<Team>(`/api/organizations/${orgId}/teams/${teamId}`);
+}
+
 export async function createTeam(orgId: string, data: { name: string; description?: string }): Promise<Team> {
   return fetchApi<Team>(`/api/organizations/${orgId}/teams`, {
     method: "POST",
