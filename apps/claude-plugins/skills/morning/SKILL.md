@@ -41,6 +41,9 @@ echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
 echo "ORG=$TANDEMU_ORG_ID"
 echo "TEAM=$TANDEMU_TEAM_ID"
+echo "TEAM_IDS=$TANDEMU_TEAM_IDS"
+echo "TEAM_NAMES=$TANDEMU_TEAM_NAMES"
+echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 echo "NAME=$TANDEMU_USER_NAME"
 
@@ -126,10 +129,30 @@ If no active task was found, proceed to Step 3.
 
 ### 3. Fetch tasks from Tandemu
 
-Fetch tasks assigned to the current developer (use the config values from setup):
+**If `TEAM_COUNT` > 1**: use AskUserQuestion to let the developer pick which team's tasks to see:
+- Question: "Which team's tasks would you like to see?"
+- Header: "Team"
+- Options: one per team (built from `TANDEMU_TEAM_IDS` and `TANDEMU_TEAM_NAMES` by splitting on `,`), plus an "All teams" option with description "Show tasks from all my teams"
 
+Set `SELECTED_TEAM_ID` from the choice. If "All teams" is selected, set `SELECTED_TEAM_ID=ALL`.
+
+**If `TEAM_COUNT` = 1 or 0**: use `$TANDEMU_TEAM_ID` directly. No prompt.
+
+Fetch tasks assigned to the current developer:
+
+If `SELECTED_TEAM_ID=ALL`, fetch tasks from each team, merge, and deduplicate by task ID:
 ```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&mine=true&sort=priority&order=desc"
+# For each team ID in TANDEMU_TEAM_IDS (comma-separated), fetch and merge
+IFS=',' read -ra TEAM_IDS_ARRAY <<< "$TANDEMU_TEAM_IDS"
+for TID in "${TEAM_IDS_ARRAY[@]}"; do
+  curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TID&mine=true&sort=priority&order=desc"
+done
+# Merge results in Python, deduplicate by task id
+```
+
+Otherwise:
+```bash
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&mine=true&sort=priority&order=desc"
 ```
 
 The response is `{ success, data: Task[] }` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is.
@@ -138,10 +161,10 @@ Filter to tasks that are `todo` or `in_progress` status.
 
 If the developer has assigned tasks, proceed to Step 4 with those.
 
-If no tasks are assigned to the developer, fetch **unassigned todo tasks** that they could pick up:
+If no tasks are assigned to the developer, fetch **unassigned todo tasks** (using the same `SELECTED_TEAM_ID` or all-teams logic):
 
 ```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TANDEMU_TEAM_ID&status=todo&unassigned=true&sort=priority&order=desc"
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&status=todo&unassigned=true&sort=priority&order=desc"
 ```
 
 Tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
@@ -229,6 +252,7 @@ NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
 {
   "taskId": "<task.id>",
+  "teamId": "<SELECTED_TEAM_ID or the team the task was fetched from>",
   "title": "<task.title>",
   "startedAt": "$NOW",
   "repos": ["$REPO_PATH"],

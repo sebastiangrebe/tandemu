@@ -126,18 +126,29 @@ Use the new `$TOKEN` for all subsequent API calls (team fetch, config writing).
 If there is **one organization**, use it directly (no prompt needed).
 If there are **zero organizations**, tell the developer to create one on the dashboard and stop.
 
-Fetch teams for the chosen org:
+Fetch the user's teams (teams they are a member of):
 ```bash
-TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams")
-echo "$TEAMS" | python3 -c "
+# Fetch teams the user belongs to
+MY_TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams/mine")
+
+# Fallback: if user is not assigned to any team yet, fetch all org teams
+if [ -z "$MY_TEAMS" ] || [ "$MY_TEAMS" = "[]" ]; then
+  MY_TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams")
+fi
+
+echo "$MY_TEAMS" | python3 -c "
 import json, sys
-teams = json.load(sys.stdin)['data']
+teams = json.load(sys.stdin)
+# Handle both raw array and {data: [...]} wrapper
+if isinstance(teams, dict):
+    teams = teams.get('data', [])
 if teams:
-    print(f\"TEAM_ID={teams[0]['id']}\")
-    print(f\"TEAM_NAME={teams[0]['name']}\")
+    import json as _j
+    print(f'TEAMS_JSON={_j.dumps([{\"id\": t[\"id\"], \"name\": t[\"name\"]} for t in teams])}')
+    print(f'TEAMS_COUNT={len(teams)}')
 else:
-    print('TEAM_ID=')
-    print('TEAM_NAME=')
+    print('TEAMS_JSON=[]')
+    print('TEAMS_COUNT=0')
 "
 ```
 
@@ -147,15 +158,28 @@ else:
 
 ```bash
 mkdir -p ~/.claude
-cat > ~/.claude/tandemu.json << EOF
-{
-  "auth": { "token": "${TOKEN}" },
-  "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
-  "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
-  "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
-  "api": { "url": "${API_URL}" }
+python3 << 'PYEOF'
+import json, os
+teams_json = os.environ.get("TEAMS_JSON", "[]")
+teams = json.loads(teams_json)
+
+config = {
+  "auth": {"token": os.environ["TOKEN"]},
+  "user": {
+    "id": os.environ["USER_ID"],
+    "email": os.environ["USER_EMAIL"],
+    "name": os.environ["USER_NAME"]
+  },
+  "organization": {"id": os.environ["ORG_ID"], "name": os.environ["ORG_NAME"]},
+  "teams": teams,
+  "api": {"url": os.environ["API_URL"]}
 }
-EOF
+
+config_path = os.path.expanduser("~/.claude/tandemu.json")
+with open(config_path, "w") as f:
+    json.dump(config, f, indent=2)
+print("OK")
+PYEOF
 ```
 
 #### 5b. Fetch setup config from API
@@ -346,7 +370,7 @@ Tandemu installed!
 
 Connected as: <USER_NAME> (<USER_EMAIL>)
 Organization: <ORG_NAME>
-Team: <TEAM_NAME>
+Teams: <comma-separated list of team names from TEAMS_JSON>
 API: <API_URL>
 Telemetry: enabled
 Memory: enabled

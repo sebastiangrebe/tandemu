@@ -27,8 +27,9 @@ export class TelemetryController {
     @Query('sprintId') sprintId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<AIvsManualRatio[]> {
-    return this.telemetryService.getAIvsManualRatio(user.organizationId, sprintId, startDate, endDate);
+    return this.telemetryService.getAIvsManualRatio(user.organizationId, sprintId, startDate, endDate, teamId);
   }
 
   @Get('friction-heatmap')
@@ -36,10 +37,11 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<FrictionEvent[]> {
     const [custom, native] = await Promise.all([
-      this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate),
-      this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate),
+      this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate, teamId),
+      this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate, teamId),
     ]);
     return [...custom, ...native];
   }
@@ -49,8 +51,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getHotFiles(user.organizationId, startDate, endDate);
+    return this.telemetryService.getHotFiles(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('investment-allocation')
@@ -58,8 +61,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getInvestmentAllocation(user.organizationId, startDate, endDate);
+    return this.telemetryService.getInvestmentAllocation(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('ai-effectiveness')
@@ -67,8 +71,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getAIEffectiveness(user.organizationId, startDate, endDate);
+    return this.telemetryService.getAIEffectiveness(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('cost-metrics')
@@ -76,8 +81,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getCostMetrics(user.organizationId, startDate, endDate);
+    return this.telemetryService.getCostMetrics(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('token-usage')
@@ -85,8 +91,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getTokenUsage(user.organizationId, startDate, endDate);
+    return this.telemetryService.getTokenUsage(user.organizationId, startDate, endDate, teamId);
   }
 
   /** Claude Code-specific — will need normalization for Codex/Cursor */
@@ -95,8 +102,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<ToolUsageStat[]> {
-    return this.telemetryService.getToolUsageStats(user.organizationId, startDate, endDate);
+    return this.telemetryService.getToolUsageStats(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('developer-stats')
@@ -104,8 +112,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<DeveloperStat[]> {
-    const stats = await this.telemetryService.getDeveloperStats(user.organizationId, startDate, endDate);
+    const stats = await this.telemetryService.getDeveloperStats(user.organizationId, startDate, endDate, teamId);
 
     const userIds = [...new Set(stats.map((s) => s.userId))];
     if (userIds.length > 0) {
@@ -128,8 +137,9 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<TaskVelocityEntry[]> {
-    return this.telemetryService.getTaskVelocity(user.organizationId, startDate, endDate);
+    return this.telemetryService.getTaskVelocity(user.organizationId, startDate, endDate, teamId);
   }
 
   @Get('timesheets')
@@ -138,12 +148,14 @@ export class TelemetryController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('userId') userId?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<TimesheetEntry[]> {
     const entries = await this.telemetryService.getTimesheets({
       organizationId: user.organizationId,
       startDate: startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       endDate: endDate || new Date().toISOString(),
       userId,
+      teamId,
     });
 
     const userIds = [...new Set(entries.map((e) => e.userId))];
@@ -167,6 +179,7 @@ export class TelemetryController {
     @CurrentUser() user: RequestUser,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
   ): Promise<InsightsMetrics> {
     // Fetch org settings for ROI assumptions
     const orgResult = await this.db.query<{ settings: OrgSettings }>(
@@ -189,7 +202,7 @@ export class TelemetryController {
     }
 
     const metrics = await this.telemetryService.getInsightsMetrics(
-      user.organizationId, startDate, endDate, settings,
+      user.organizationId, startDate, endDate, settings, teamId,
     );
 
     return { ...metrics, orgMemoriesShared };

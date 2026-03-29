@@ -164,6 +164,7 @@ export async function getMembers(orgId: string): Promise<Membership[]> {
 export interface TelemetryFilter {
   startDate?: string;
   endDate?: string;
+  teamId?: string;
 }
 
 function buildParams(filter?: TelemetryFilter): string {
@@ -171,6 +172,7 @@ function buildParams(filter?: TelemetryFilter): string {
   const p = new URLSearchParams();
   if (filter.startDate) p.set('startDate', filter.startDate);
   if (filter.endDate) p.set('endDate', filter.endDate);
+  if (filter.teamId) p.set('teamId', filter.teamId);
   const s = p.toString();
   return s ? `?${s}` : '';
 }

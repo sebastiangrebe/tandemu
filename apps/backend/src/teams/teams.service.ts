@@ -34,6 +34,17 @@ export class TeamsService {
     return result.rows.map((row) => this.mapTeam(row));
   }
 
+  async findByUserId(orgId: string, userId: string): Promise<Team[]> {
+    const result = await this.db.query<TeamRow>(
+      `SELECT t.* FROM teams t
+       INNER JOIN team_members tm ON tm.team_id = t.id
+       WHERE t.organization_id = $1 AND tm.user_id = $2
+       ORDER BY t.created_at ASC`,
+      [orgId, userId],
+    );
+    return result.rows.map((row) => this.mapTeam(row));
+  }
+
   async findOne(teamId: string): Promise<Team> {
     const result = await this.db.query<TeamRow>(
       `SELECT * FROM teams WHERE id = $1`,

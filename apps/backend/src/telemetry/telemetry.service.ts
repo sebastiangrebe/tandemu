@@ -33,6 +33,7 @@ export interface TimesheetQuery {
   readonly startDate: string;
   readonly endDate: string;
   readonly userId?: string;
+  readonly teamId?: string;
 }
 
 export interface FinishTaskInput {
@@ -52,6 +53,7 @@ export interface FinishTaskInput {
   readonly changedFilesList: string[];
   readonly category?: string;
   readonly labels?: string[];
+  readonly teamId?: string;
 }
 
 export interface FinishTaskResult {
@@ -233,6 +235,7 @@ export class TelemetryService implements OnModuleDestroy {
               attributes: [
                 { key: 'user_id', value: { stringValue: userId } },
                 { key: 'task_id', value: { stringValue: taskId } },
+                { key: 'team_id', value: { stringValue: input.teamId ?? '' } },
                 { key: 'status', value: { stringValue: 'completed' } },
                 { key: 'ai_lines', value: { stringValue: String(aiLines) } },
                 { key: 'manual_lines', value: { stringValue: String(manualLines) } },
@@ -270,8 +273,8 @@ export class TelemetryService implements OnModuleDestroy {
               name: 'tandemu.lines_of_code',
               sum: {
                 dataPoints: [
-                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: aiLines, attributes: [{ key: 'type', value: { stringValue: 'ai' } }, { key: 'task_id', value: { stringValue: taskId } }] },
-                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: manualLines, attributes: [{ key: 'type', value: { stringValue: 'manual' } }, { key: 'task_id', value: { stringValue: taskId } }] },
+                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: aiLines, attributes: [{ key: 'type', value: { stringValue: 'ai' } }, { key: 'task_id', value: { stringValue: taskId } }, { key: 'team_id', value: { stringValue: input.teamId ?? '' } }] },
+                  { startTimeUnixNano: startNs.toString(), timeUnixNano: endNs.toString(), asDouble: manualLines, attributes: [{ key: 'type', value: { stringValue: 'manual' } }, { key: 'task_id', value: { stringValue: taskId } }, { key: 'team_id', value: { stringValue: input.teamId ?? '' } }] },
                 ],
                 aggregationTemporality: 2,
                 isMonotonic: true,
@@ -448,6 +451,7 @@ export class TelemetryService implements OnModuleDestroy {
     sprintId?: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<AIvsManualRatio[]> {
     try {
       const params: Record<string, string> = { organizationId };
@@ -460,6 +464,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const query = `
         SELECT
@@ -473,6 +479,7 @@ export class TelemetryService implements OnModuleDestroy {
         WHERE ResourceAttributes['organization_id'] = {organizationId: String}
           AND MetricName = 'tandemu.lines_of_code'
           ${dateFilter}
+          ${teamFilter}
         GROUP BY organization_id
       `;
 
@@ -509,7 +516,7 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
-  async getFrictionHeatmap(organizationId: string, startDate?: string, endDate?: string): Promise<FrictionEvent[]> {
+  async getFrictionHeatmap(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<FrictionEvent[]> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -521,6 +528,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -535,6 +544,7 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND (SeverityText = 'prompt_loop' OR SeverityText = 'error')
             ${dateFilter}
+            ${teamFilter}
           ORDER BY Timestamp DESC
           LIMIT 1000
         `,
@@ -593,6 +603,10 @@ export class TelemetryService implements OnModuleDestroy {
         chQuery += ` AND SpanAttributes['user_id'] = {userId: String}`;
         params['userId'] = query.userId;
       }
+      if (query.teamId) {
+        chQuery += ` AND SpanAttributes['team_id'] = {teamId: String}`;
+        params['teamId'] = query.teamId;
+      }
 
       chQuery += ` GROUP BY userId, date ORDER BY date DESC`;
 
@@ -625,6 +639,7 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<DeveloperStat[]> {
     try {
       const params: Record<string, string> = { organizationId };
@@ -637,6 +652,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -650,6 +667,7 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND SpanName = 'task_session'
             ${dateFilter}
+            ${teamFilter}
           GROUP BY userId
           ORDER BY sessions DESC
         `,
@@ -682,6 +700,7 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<TaskVelocityEntry[]> {
     try {
       const params: Record<string, string> = { organizationId };
@@ -694,6 +713,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -706,6 +727,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND SpanName = 'task_session'
             AND SpanAttributes['status'] = 'completed'
             ${dateFilter}
+            ${teamFilter}
           GROUP BY week
           ORDER BY week ASC
         `,
@@ -733,12 +755,15 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<Array<{ filePath: string; changeCount: number; taskCount: number; developerCount: number }>> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
       if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -752,6 +777,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND SpanName = 'task_session'
             AND SpanAttributes['changed_files'] != ''
             ${dateFilter}
+            ${teamFilter}
           GROUP BY file_path
           ORDER BY change_count DESC
           LIMIT 20
@@ -776,12 +802,15 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<Array<{ category: string; taskCount: number; totalHours: number }>> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
       if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -794,6 +823,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND SpanName = 'task_session'
             AND SpanAttributes['task_category'] != ''
             ${dateFilter}
+            ${teamFilter}
           GROUP BY category
         `,
         query_params: params,
@@ -815,12 +845,15 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<Array<{ filePath: string; aiTouchCount: number }>> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
       if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -832,6 +865,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND SpanName = 'task_session'
             AND SpanAttributes['ai_files'] != ''
             ${dateFilter}
+            ${teamFilter}
           GROUP BY file_path
           ORDER BY ai_touch_count DESC
           LIMIT 20
@@ -854,12 +888,15 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<Array<{ date: string; totalCost: number }>> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
       if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -870,6 +907,7 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND MetricName = 'claude_code.cost.usage'
             ${dateFilter}
+            ${teamFilter}
           GROUP BY date
           ORDER BY date ASC
         `,
@@ -891,12 +929,15 @@ export class TelemetryService implements OnModuleDestroy {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    teamId?: string,
   ): Promise<Array<{ tokenType: string; model: string; totalTokens: number }>> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
       if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -908,6 +949,7 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND MetricName = 'claude_code.token.usage'
             ${dateFilter}
+            ${teamFilter}
           GROUP BY token_type, model
         `,
         query_params: params,
@@ -929,7 +971,7 @@ export class TelemetryService implements OnModuleDestroy {
    * Tool usage stats from Claude Code's native tool_result events.
    * Shows which tools the team uses, success rates, and avg duration.
    */
-  async getToolUsageStats(organizationId: string, startDate?: string, endDate?: string): Promise<ToolUsageStat[]> {
+  async getToolUsageStats(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<ToolUsageStat[]> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -941,6 +983,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -955,6 +999,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND LogAttributes['event.name'] = 'tool_result'
             AND LogAttributes['tool_name'] != ''
             ${dateFilter}
+            ${teamFilter}
           GROUP BY toolName
           ORDER BY totalCalls DESC
         `,
@@ -992,7 +1037,7 @@ export class TelemetryService implements OnModuleDestroy {
    * Will need normalization layer for Codex (codex.tool.call) and Cursor (REST API).
    * Failed tool calls grouped by file path — augments custom friction logs.
    */
-  async getNativeFriction(organizationId: string, startDate?: string, endDate?: string): Promise<FrictionEvent[]> {
+  async getNativeFriction(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<FrictionEvent[]> {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1004,6 +1049,8 @@ export class TelemetryService implements OnModuleDestroy {
         dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
         params.endDate = endDate;
       }
+      const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
 
       const resultSet = await this.client.query({
         query: `
@@ -1024,6 +1071,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND LogAttributes['event.name'] = 'tool_result'
             AND LogAttributes['success'] = 'false'
             ${dateFilter}
+            ${teamFilter}
           GROUP BY session_id, user_id, repository_path
           HAVING repository_path != '' AND error_count >= 1
           ORDER BY error_count DESC
@@ -1158,6 +1206,7 @@ export class TelemetryService implements OnModuleDestroy {
     startDate?: string,
     endDate?: string,
     settings?: OrgSettings,
+    teamId?: string,
   ): Promise<InsightsMetrics> {
     const hourlyRate = settings?.developerHourlyRate ?? 75;
     const secsPerLine = settings?.aiLineTimeEstimateSeconds ?? 120;
@@ -1167,10 +1216,15 @@ export class TelemetryService implements OnModuleDestroy {
     let dateFilter = '';
     if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
     if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+    const metricsTeamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
+    const tracesTeamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+    const logsTeamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
+    if (teamId) params.teamId = teamId;
 
     // Build a previous-period date filter for friction trend comparison
     let prevDateFilter = '';
     const prevParams: Record<string, string> = { organizationId };
+    if (teamId) prevParams.teamId = teamId;
     if (startDate && endDate) {
       const start = new Date(startDate).getTime();
       const end = new Date(endDate).getTime();
@@ -1197,6 +1251,7 @@ export class TelemetryService implements OnModuleDestroy {
             WHERE ResourceAttributes['organization_id'] = {organizationId: String}
               AND MetricName IN ('claude_code.cost.usage', 'tandemu.lines_of_code')
               ${dateFilter}
+              ${metricsTeamFilter}
             GROUP BY date
             ORDER BY date ASC
           `,
@@ -1213,6 +1268,7 @@ export class TelemetryService implements OnModuleDestroy {
               AND SpanName = 'task_session'
               AND SpanAttributes['status'] = 'completed'
               ${dateFilter.replace(/TimeUnix/g, 'Timestamp')}
+              ${tracesTeamFilter}
           `,
           query_params: params,
           format: 'JSONEachRow',
@@ -1240,6 +1296,7 @@ export class TelemetryService implements OnModuleDestroy {
               AND (SeverityText IN ('prompt_loop', 'error')
                    OR (LogAttributes['event.name'] = 'tool_result' AND LogAttributes['success'] = 'false'))
               ${dateFilter.replace(/TimeUnix/g, 'Timestamp')}
+              ${logsTeamFilter}
           `,
           query_params: params,
           format: 'JSONEachRow',
@@ -1255,6 +1312,7 @@ export class TelemetryService implements OnModuleDestroy {
                   AND (SeverityText IN ('prompt_loop', 'error')
                        OR (LogAttributes['event.name'] = 'tool_result' AND LogAttributes['success'] = 'false'))
                   ${prevDateFilter}
+                  ${logsTeamFilter}
               `,
               query_params: prevParams,
               format: 'JSONEachRow',
