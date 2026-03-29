@@ -204,7 +204,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 WORKTREE_DIR="${REPO_ROOT}/.worktrees/<task.id>"
 
 # Ensure .worktrees is gitignored
-grep -q '^\\.worktrees' "${REPO_ROOT}/.gitignore" 2>/dev/null || echo '.worktrees' >> "${REPO_ROOT}/.gitignore"
+grep -q '^\\.worktrees' "${REPO_ROOT}/.gitignore" 2>/dev/null || printf '\n.worktrees\n' >> "${REPO_ROOT}/.gitignore"
 
 # Fetch latest and create worktree with new branch
 git fetch origin "$DEFAULT_BRANCH" 2>/dev/null || true
