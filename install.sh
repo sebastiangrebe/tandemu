@@ -477,12 +477,20 @@ settings["env"] = env
 perms = settings.get("permissions", {})
 allow = perms.get("allow", [])
 api_host = "${OTEL_HOST}"
+home = os.path.expanduser("~")
 tandemu_perms = [
     "Edit(~/.claude/tandemu*)",
     "Write(~/.claude/tandemu*)",
     "Bash(cat > ~/.claude/tandemu*)",
     "Bash(rm ~/.claude/tandemu*)",
     "Bash(rm -f ~/.claude/tandemu*)",
+    "Bash(rm -f ~/.claude/tandemu-active-task.json)",
+    f"Edit({home}/.claude/tandemu*)",
+    f"Write({home}/.claude/tandemu*)",
+    f"Bash(cat > {home}/.claude/tandemu*)",
+    f"Bash(rm {home}/.claude/tandemu*)",
+    f"Bash(rm -f {home}/.claude/tandemu*)",
+    f"Bash(rm -f {home}/.claude/tandemu-active-task.json)",
     f"Bash(curl*{api_host}:3001*)",
     f"Bash(curl*{api_host}:4318*)",
 ]

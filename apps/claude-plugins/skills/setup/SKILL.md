@@ -212,9 +212,13 @@ tandemu_perms = [
     "Bash(cat > ~/.claude/tandemu*)",
     "Bash(rm ~/.claude/tandemu*)",
     "Bash(rm -f ~/.claude/tandemu*)",
+    "Bash(rm -f ~/.claude/tandemu-active-task.json)",
+    f"Edit({home}/.claude/tandemu*)",
+    f"Write({home}/.claude/tandemu*)",
     f"Bash(cat > {home}/.claude/tandemu*)",
     f"Bash(rm {home}/.claude/tandemu*)",
     f"Bash(rm -f {home}/.claude/tandemu*)",
+    f"Bash(rm -f {home}/.claude/tandemu-active-task.json)",
     f"Bash(curl*{api_url}*)",
 ]
 for p in tandemu_perms:
