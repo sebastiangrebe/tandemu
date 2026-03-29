@@ -80,8 +80,9 @@ The `GET /api/telemetry/friction-heatmap` endpoint combines both.
 - Store observations after `/finish` (coding patterns, decisions, corrections)
 
 ### Dashboard pages
-- **Dashboard** (`/`) — KPI cards (sessions, AI ratio, lines, cycle time, tool success), activity chart, AI ratio donut, tool usage bar, developer leaderboard, velocity chart, hot files, investment allocation, AI effectiveness, cost metrics
-- **Activity** (`/activity`) — Stats cards, activity chart (taller), session log table with developer names
+- **Dashboard** (`/`) — KPI cards (sessions, AI ratio, lines, cycle time, tool success), AI ratio donut, tool usage bar, velocity chart, investment allocation
+- **Activity** (`/activity`) — Stats cards, activity chart (taller), AI adoption leaderboard, hot files, AI effectiveness, session log table
+- **Insights** (`/insights`) — Productivity multiplier, capacity freed, cost per task, throughput chart, cost efficiency chart, token usage, Tandemu impact KPIs, AI adoption leaderboard (per-developer ranked by AI%)
 - **Friction Map** (`/friction-map`) — Severity cards, file-level friction list
 - **AI Memory** (`/memory`) — Memory dashboard with 4 self-loading sections (see below)
 - All pages have team + time range filters via URL params (`?range=30d&team=...`)

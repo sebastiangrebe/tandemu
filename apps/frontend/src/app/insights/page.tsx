@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Zap, Clock, DollarSign, Brain, TrendingDown, Share2, Info, Settings } from 'lucide-react';
-import { getInsightsMetrics, getMemoryStats, getTokenUsage } from '@/lib/api';
-import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
+import { getInsightsMetrics, getMemoryStats, getTokenUsage, getDeveloperStats } from '@/lib/api';
+import type { InsightsMetrics, TokenUsageEntry, DeveloperStat } from '@/lib/api';
+import { DeveloperLeaderboard } from '@/components/charts/developer-leaderboard';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
 import { TokenUsageChart } from '@/components/charts/token-usage-chart';
@@ -25,6 +26,7 @@ export default function InsightsPage() {
   const [data, setData] = useState<InsightsMetrics | null>(null);
   const [orgMemoryCount, setOrgMemoryCount] = useState(0);
   const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
+  const [devStats, setDevStats] = useState<DeveloperStat[]>([]);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate, teamId } = useFilterParams();
 
@@ -34,15 +36,17 @@ export default function InsightsPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate, teamId };
-        const [insights, memStats, tokens] = await Promise.allSettled([
+        const [insights, memStats, tokens, devs] = await Promise.allSettled([
           getInsightsMetrics(f),
           getMemoryStats(),
           getTokenUsage(f),
+          getDeveloperStats(f),
         ]);
         if (cancelled) return;
         if (insights.status === 'fulfilled') setData(insights.value);
         if (memStats.status === 'fulfilled') setOrgMemoryCount(memStats.value.org);
         if (tokens.status === 'fulfilled') setTokenData(tokens.value);
+        if (devs.status === 'fulfilled') setDevStats(devs.value);
       } catch {
         // Non-critical
       } finally {
@@ -253,6 +257,15 @@ export default function InsightsPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Section 3: AI Adoption */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">AI Adoption</h2>
+            <p className="text-sm text-muted-foreground">
+              Per-developer AI usage — who&apos;s leveraging AI and who could benefit from more adoption.
+            </p>
+            <DeveloperLeaderboard data={devStats} />
           </div>
         </>
       )}
