@@ -32,6 +32,9 @@ export class MemoryOpsProcessor extends WorkerHost {
       case 'clean-stale-drafts':
         await this.cleanStaleDrafts();
         break;
+      case 'cleanup-user-memories':
+        await this.cleanupUserMemories(job.data.userId, job.data.organizationId);
+        break;
     }
   }
 
@@ -108,6 +111,21 @@ export class MemoryOpsProcessor extends WorkerHost {
       throw new Error(`MCP tool call ${toolName} failed: ${res.status}`);
     }
     this.logger.debug(`MCP tool call ${toolName} completed`);
+  }
+
+  private async cleanupUserMemories(userId: string, organizationId: string): Promise<void> {
+    try {
+      const deleted = await this.memoryService.deleteAllUserMemories(userId);
+      this.logger.log(`Deleted ${deleted} personal memories for user ${userId}`);
+
+      const ownerId = await this.organizationsService.getOwnerId(organizationId);
+      const reassigned = await this.memoryService.reassignUserOrgMemories(organizationId, userId, ownerId);
+      if (reassigned > 0) {
+        this.logger.log(`Reassigned ${reassigned} org memories from user ${userId} to owner ${ownerId}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to cleanup memories for user ${userId}: ${err}`);
+    }
   }
 
   private async cleanStaleDrafts(): Promise<void> {

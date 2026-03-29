@@ -183,7 +183,7 @@ export class OrganizationsService {
     );
     const removed = (result.rowCount ?? 0) > 0;
     if (removed) {
-      this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
+      this.eventEmitter.emit('organization.member_removed', { organizationId: orgId, userId });
     }
     return removed;
   }
@@ -260,6 +260,17 @@ export class OrganizationsService {
       ...DEFAULT_ORG_SETTINGS,
       ...org.settings,
     };
+  }
+
+  async getOwnerId(orgId: string): Promise<string> {
+    const result = await this.db.query<{ user_id: string }>(
+      `SELECT user_id FROM memberships WHERE organization_id = $1 AND role = 'owner' LIMIT 1`,
+      [orgId],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException('Organization owner not found');
+    }
+    return result.rows[0]!.user_id;
   }
 
   async getAllOrgIds(): Promise<string[]> {

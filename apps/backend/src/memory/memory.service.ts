@@ -296,4 +296,58 @@ export class MemoryService {
       this.logger.warn(`Failed to delete memory ${memoryId}: ${err}`);
     }
   }
+
+  /**
+   * Fetch all memories for a user_id, using REST API with MCP fallback.
+   */
+  private async getAllMemories(userId: string): Promise<Array<Record<string, unknown>>> {
+    const memories = await this.getMemoriesRest(userId);
+    if (memories.length === 0) {
+      const mcpResult = await this.callMcpTool('get_memories', {
+        user_id: userId,
+        filters: { user_id: userId },
+      });
+      memories.push(...this.extractMcpMemories(mcpResult));
+    }
+    return memories;
+  }
+
+  /**
+   * Delete all personal memories for a user.
+   */
+  async deleteAllUserMemories(userId: string): Promise<number> {
+    const memories = await this.getAllMemories(userId);
+    let deleted = 0;
+    for (const mem of memories) {
+      await this.deleteMemory(String(mem.id));
+      deleted++;
+    }
+    return deleted;
+  }
+
+  /**
+   * Reassign org memories authored by a user to a new owner.
+   */
+  async reassignUserOrgMemories(
+    orgId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<number> {
+    const memories = await this.getAllMemories(orgId);
+    let reassigned = 0;
+    for (const mem of memories) {
+      const metadata = (mem.metadata ?? {}) as Record<string, unknown>;
+      if (metadata.author_id !== fromUserId) continue;
+      try {
+        await this.callMcpTool('update_memory', {
+          memory_id: String(mem.id),
+          metadata: { author_id: toUserId },
+        });
+        reassigned++;
+      } catch (err) {
+        this.logger.warn(`Failed to reassign memory ${mem.id}: ${err}`);
+      }
+    }
+    return reassigned;
+  }
 }
