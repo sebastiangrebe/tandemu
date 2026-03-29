@@ -65,6 +65,8 @@ export interface OrgSettings {
   readonly aiLineTimeEstimateSeconds?: number;
   /** Currency code. Default: 'USD' */
   readonly currency?: string;
+  /** Days to keep draft org memories before cleanup. Default: 30 */
+  readonly draftRetentionDays?: number;
 }
 
 export interface TeamSettings {

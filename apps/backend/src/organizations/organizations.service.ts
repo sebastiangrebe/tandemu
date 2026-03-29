@@ -7,10 +7,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service.js';
 import type {
   Organization,
+  OrgSettings,
   CreateOrganizationDto,
   UpdateOrganizationDto,
   Membership,
 } from '@tandemu/types';
+
+const DEFAULT_ORG_SETTINGS: Required<OrgSettings> = {
+  developerHourlyRate: 75,
+  aiLineTimeEstimateSeconds: 120,
+  currency: 'USD',
+  draftRetentionDays: 30,
+};
 
 @Injectable()
 export class OrganizationsService {
@@ -244,6 +252,19 @@ export class OrganizationsService {
       name: row.name,
       role: row.role.toUpperCase(),
     }));
+  }
+
+  async getSettings(orgId: string): Promise<Required<OrgSettings>> {
+    const org = await this.findOne(orgId);
+    return {
+      ...DEFAULT_ORG_SETTINGS,
+      ...org.settings,
+    };
+  }
+
+  async getAllOrgIds(): Promise<string[]> {
+    const result = await this.db.query<{ id: string }>('SELECT id FROM organizations');
+    return result.rows.map((r) => r.id);
   }
 
   private mapOrg(row: {

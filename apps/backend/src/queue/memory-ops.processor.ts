@@ -2,13 +2,19 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { MemoryService } from '../memory/memory.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
+import { TasksService } from '../integrations/tasks.service.js';
 import type { MemoryOpsJobData } from './queue.types.js';
 
 @Processor('memory-ops')
 export class MemoryOpsProcessor extends WorkerHost {
   private readonly logger = new Logger(MemoryOpsProcessor.name);
 
-  constructor(private readonly memoryService: MemoryService) {
+  constructor(
+    private readonly memoryService: MemoryService,
+    private readonly organizationsService: OrganizationsService,
+    private readonly tasksService: TasksService,
+  ) {
     super();
   }
 
@@ -22,6 +28,9 @@ export class MemoryOpsProcessor extends WorkerHost {
         break;
       case 'mcp-tool-call':
         await this.mcpToolCall(job.data.toolName, job.data.args, job.data.userId);
+        break;
+      case 'clean-stale-drafts':
+        await this.cleanStaleDrafts();
         break;
     }
   }
@@ -99,5 +108,34 @@ export class MemoryOpsProcessor extends WorkerHost {
       throw new Error(`MCP tool call ${toolName} failed: ${res.status}`);
     }
     this.logger.debug(`MCP tool call ${toolName} completed`);
+  }
+
+  private async cleanStaleDrafts(): Promise<void> {
+    const orgIds = await this.organizationsService.getAllOrgIds();
+    this.logger.log(`Running stale draft cleanup for ${orgIds.length} org(s)`);
+
+    for (const orgId of orgIds) {
+      try {
+        const settings = await this.organizationsService.getSettings(orgId);
+        const staleDays = settings.draftRetentionDays;
+
+        const taskStatusLookup = async (taskId: string): Promise<string | undefined> => {
+          try {
+            const tasks = await this.tasksService.getTasks(orgId, {});
+            const task = tasks.find((t) => t.id === taskId);
+            return task?.status;
+          } catch {
+            return undefined;
+          }
+        };
+
+        const result = await this.memoryService.cleanStaleDrafts(orgId, staleDays, taskStatusLookup);
+        if (result.promoted > 0 || result.deleted > 0) {
+          this.logger.log(`Org ${orgId}: promoted ${result.promoted}, deleted ${result.deleted} stale drafts`);
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to clean stale drafts for org ${orgId}: ${err}`);
+      }
+    }
   }
 }

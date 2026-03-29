@@ -202,4 +202,98 @@ export class MemoryService {
       return [];
     }
   }
+
+  /**
+   * Clean up stale draft org memories older than `staleDays`.
+   * - Task done → promote to published
+   * - Task cancelled or draft too old → delete
+   */
+  async cleanStaleDrafts(
+    orgId: string,
+    staleDays: number,
+    taskStatusLookup: (taskId: string) => Promise<string | undefined>,
+  ): Promise<{ promoted: number; deleted: number }> {
+    let promoted = 0;
+    let deleted = 0;
+
+    const memories = await this.getMemoriesRest(orgId);
+    if (memories.length === 0) {
+      // Try MCP fallback for OSS
+      const mcpResult = await this.callMcpTool('get_memories', {
+        user_id: orgId,
+        filters: { user_id: orgId },
+      });
+      const parsed = this.extractMcpMemories(mcpResult);
+      memories.push(...parsed);
+    }
+
+    const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
+
+    for (const mem of memories) {
+      const metadata = (mem.metadata ?? {}) as Record<string, unknown>;
+      if (metadata.status !== 'draft') continue;
+
+      // Check age — Mem0 stores created_at on the memory object
+      const createdAt = mem.created_at ?? mem.createdAt ?? (metadata as any).created_at;
+      if (createdAt && new Date(String(createdAt)) > cutoff) continue;
+
+      const taskId = metadata.taskId as string | undefined;
+      const memoryId = String(mem.id);
+
+      if (taskId) {
+        const taskStatus = await taskStatusLookup(taskId);
+        if (taskStatus === 'done') {
+          await this.promoteMemory(memoryId);
+          promoted++;
+          continue;
+        }
+        if (taskStatus === 'cancelled' || new Date(String(createdAt)) <= cutoff) {
+          await this.deleteMemory(memoryId);
+          deleted++;
+          continue;
+        }
+      } else {
+        // No task linked — delete if old
+        await this.deleteMemory(memoryId);
+        deleted++;
+      }
+    }
+
+    return { promoted, deleted };
+  }
+
+  private extractMcpMemories(result: unknown): Array<Record<string, unknown>> {
+    const r = result as { result?: { content?: Array<{ text?: string }> } };
+    const text = r?.result?.content?.[0]?.text;
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed.memories && Array.isArray(parsed.memories)) return parsed.memories;
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async promoteMemory(memoryId: string): Promise<void> {
+    try {
+      await this.callMcpTool('update_memory', {
+        memory_id: memoryId,
+        metadata: { status: 'published' },
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to promote memory ${memoryId}: ${err}`);
+    }
+  }
+
+  private async deleteMemory(memoryId: string): Promise<void> {
+    try {
+      await this.callMcpTool('delete_memory', {
+        memory_id: memoryId,
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to delete memory ${memoryId}: ${err}`);
+    }
+  }
 }

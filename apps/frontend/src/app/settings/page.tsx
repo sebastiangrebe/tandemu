@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard, Lightbulb } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { toast } from 'sonner';
@@ -63,6 +63,10 @@ export default function SettingsPage() {
   const [editSecsPerLine, setEditSecsPerLine] = useState(120);
   const [savingROI, setSavingROI] = useState(false);
 
+  // Memory settings
+  const [editDraftRetention, setEditDraftRetention] = useState(30);
+  const [savingMemory, setSavingMemory] = useState(false);
+
   // Invite dialog
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
@@ -74,6 +78,7 @@ export default function SettingsPage() {
       const s = (activeOrg as any).settings;
       if (s?.developerHourlyRate) setEditHourlyRate(s.developerHourlyRate);
       if (s?.aiLineTimeEstimateSeconds) setEditSecsPerLine(s.aiLineTimeEstimateSeconds);
+      if (s?.draftRetentionDays) setEditDraftRetention(s.draftRetentionDays);
 
       const [memberList, invites, teamList] = await Promise.all([
         getMembers(activeOrg.id),
@@ -255,6 +260,65 @@ export default function SettingsPage() {
               disabled={savingROI}
             >
               {savingROI ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </>
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {/* Memory Settings */}
+      {org && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Memory Settings</CardTitle>
+                <CardDescription>Configure how AI memory drafts are managed.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-w-xs space-y-2">
+              <label className="text-sm font-medium">Draft Retention (days)</label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={editDraftRetention}
+                onChange={(e) => setEditDraftRetention(Number(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Draft org memories older than this are automatically cleaned up. Drafts linked to completed tasks are promoted instead.
+              </p>
+            </div>
+          </CardContent>
+          <CardFooter className="border-t px-6 py-4 flex justify-end">
+            <Button
+              onClick={async () => {
+                if (!org) return;
+                setSavingMemory(true);
+                try {
+                  const updated = await updateOrganization(org.id, {
+                    settings: { draftRetentionDays: editDraftRetention },
+                  });
+                  setOrg(updated);
+                  toast.success('Memory settings saved.');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+                } finally {
+                  setSavingMemory(false);
+                }
+              }}
+              disabled={savingMemory}
+            >
+              {savingMemory ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
                 <>

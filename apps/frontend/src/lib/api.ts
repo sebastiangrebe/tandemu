@@ -320,7 +320,7 @@ export async function createOrganization(data: { name: string; slug: string }): 
   });
 }
 
-export async function updateOrganization(orgId: string, data: { name?: string; slug?: string; settings?: { developerHourlyRate?: number; aiLineTimeEstimateSeconds?: number; currency?: string } }): Promise<Organization> {
+export async function updateOrganization(orgId: string, data: { name?: string; slug?: string; settings?: { developerHourlyRate?: number; aiLineTimeEstimateSeconds?: number; currency?: string; draftRetentionDays?: number } }): Promise<Organization> {
   return fetchApi<Organization>(`/api/organizations/${orgId}`, {
     method: "PATCH",
     body: JSON.stringify(data),

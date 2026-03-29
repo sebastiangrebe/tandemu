@@ -23,10 +23,15 @@ export interface McpToolCallJob {
   readonly userId: string;
 }
 
+export interface CleanStaleDraftsJob {
+  readonly type: 'clean-stale-drafts';
+}
+
 export type MemoryOpsJobData =
   | PromoteMemoryJob
   | DeleteMemoryUpstreamJob
-  | McpToolCallJob;
+  | McpToolCallJob
+  | CleanStaleDraftsJob;
 
 // ── telemetry queue ──
 
