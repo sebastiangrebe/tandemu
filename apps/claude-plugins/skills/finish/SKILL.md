@@ -217,7 +217,7 @@ Extract `prUrl`, `prNumber`, and `commitSha` from the output. These will be incl
 
 ```
 metadata: {
-  repo: "<repo root path>",
+  repo: "<owner/repo from GitHub remote, e.g. 'sebastiangrebe/tandemu'>",
   files: ["<relevant file paths>"],
   category: "<architecture|pattern|gotcha|preference|style|dependency|decision>",
   taskId: "<taskId from active task>",
@@ -229,7 +229,7 @@ metadata: {
 }
 ```
 
-Use the active task's `repos` array for the repo path, the `url` field for `taskUrl`, and the `changedFilesList` from the telemetry payload for relevant files.
+For `repo`, derive the `owner/repo` from the git remote: `git remote get-url origin | sed 's#.*github.com[:/]##;s#\\.git$##'`. Use the active task's `url` field for `taskUrl`, and the `changedFilesList` from the telemetry payload for relevant files.
 
 **Store shared org memories** (pass `app_id: "org"` in the add_memory call — visible to all team members after task completes):
 - What was accomplished: "Completed <taskId> — <brief description of what was built/fixed>" (category: `decision`)

@@ -387,6 +387,24 @@ export class MemoryController {
           if (!metadata.source) {
             metadata.source = 'mcp';
           }
+          // Normalize repo to owner/name format (e.g. "sebastiangrebe/tandemu").
+          // Callers may pass a local path (/Users/.../Git/tandemu), a GitHub URL
+          // (https://github.com/owner/repo.git), or already-normalized owner/repo.
+          if (typeof metadata.repo === 'string' && metadata.repo) {
+            const raw = metadata.repo.replace(/\/+$/, '').replace(/\.git$/, '');
+            const ghMatch = raw.match(/github\.com\/([^/]+\/[^/]+)/);
+            if (ghMatch) {
+              // GitHub URL → owner/repo
+              metadata.repo = ghMatch[1];
+            } else if (raw.includes('/') && !raw.startsWith('/')) {
+              // Already looks like owner/repo — keep as-is
+            } else {
+              // Local path — can't derive owner, store just the repo name.
+              // The /finish skill and CLAUDE.md should pass owner/repo instead.
+              const segments = raw.split('/').filter(Boolean);
+              metadata.repo = segments[segments.length - 1] ?? metadata.repo;
+            }
+          }
         }
       }
     }

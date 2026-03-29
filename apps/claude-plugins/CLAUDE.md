@@ -106,7 +106,7 @@ When calling `add_memory`, always include structured metadata so the dashboard c
 
 ```
 metadata: {
-  repo: "<repo root path from git rev-parse --show-toplevel>",
+  repo: "<owner/repo from GitHub remote, e.g. 'sebastiangrebe/tandemu'. Get it with: git remote get-url origin | sed 's#.*github.com[:/]##;s#\\.git$##'>",
   files: ["<relevant file paths, if applicable>"],
   category: "<one of: architecture, pattern, gotcha, preference, style, dependency, decision>",
   taskId: "<current task ID from ~/.claude/tandemu-active-task.json, if available>",

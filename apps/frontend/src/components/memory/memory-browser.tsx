@@ -115,10 +115,18 @@ interface RepoGroup {
   memories: MemoryEntry[];
 }
 
+function repoBasename(repo: string): string {
+  if (!repo || repo === 'Uncategorized') return repo;
+  // Normalize both local paths (/Users/.../Git/tandemu) and GitHub refs (owner/repo)
+  // to just the repo name for grouping
+  const segments = repo.replace(/\/+$/, '').split('/').filter(Boolean);
+  return segments[segments.length - 1] ?? repo;
+}
+
 function groupByRepo(memories: MemoryEntry[]): RepoGroup[] {
   const map = new Map<string, MemoryEntry[]>();
   for (const mem of memories) {
-    const repo = mem.metadata.repo ?? 'Uncategorized';
+    const repo = repoBasename(mem.metadata.repo ?? 'Uncategorized');
     const list = map.get(repo);
     if (list) list.push(mem);
     else map.set(repo, [mem]);
@@ -398,7 +406,7 @@ export function MemoryBrowser() {
                 <button onClick={() => toggleRepo(group.repo)} className="flex items-center gap-2 text-sm font-medium hover:text-foreground transition-colors mb-3 group">
                   {expandedRepos.has(group.repo) ? <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />}
                   <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-mono text-xs">{group.repo === 'Uncategorized' ? 'Uncategorized' : group.repo.split('/').slice(-2).join('/')}</span>
+                  <span className="font-mono text-xs">{group.repo}</span>
                   <Badge variant="secondary" className="text-[10px] h-5">{group.memories.length}</Badge>
                 </button>
                 {expandedRepos.has(group.repo) && (
