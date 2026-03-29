@@ -24,8 +24,17 @@ source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --sho
 
 # If --team is specified, override $TANDEMU_TEAM_ID here
 
-YESTERDAY=$(date -u -v-1d +%Y-%m-%dT00:00:00Z 2>/dev/null || date -u -d "yesterday" +%Y-%m-%dT00:00:00Z)
-NOW=$(date -u +%Y-%m-%dT23:59:59Z)
+# Use local time (not UTC) so date boundaries match the developer's day
+YESTERDAY=$(date -v-1d +%Y-%m-%dT00:00:00Z 2>/dev/null || date -d "yesterday" +%Y-%m-%dT00:00:00Z)
+NOW=$(date +%Y-%m-%dT23:59:59Z)
+
+# Local time context for accurate relative dates
+echo "---LOCAL_TIME---"
+echo "TZ=$(date +%Z)"
+echo "OFFSET=$(date +%z)"
+echo "LOCAL_NOW=$(date '+%Y-%m-%d %H:%M %Z')"
+echo "LOCAL_TODAY=$(date +%Y-%m-%d)"
+echo "LOCAL_YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' +%Y-%m-%d)"
 
 echo "---MEMBERS---"
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/organizations/$TANDEMU_ORG_ID/teams/$TANDEMU_TEAM_ID/members"
@@ -64,6 +73,7 @@ If the config load fails, tell the developer: "Tandemu is not configured. Run in
 - **Todo**: tasks with `status: todo`. Show at most 10, and mention how many more exist.
 - Do NOT use the word "sprint" in the report. Use "this week" or "recently" instead.
 - Ignore tasks with `status: done` that were completed more than 7 days ago — they are not relevant to a standup.
+- **Timezone handling**: When categorizing tasks as "done today", "done yesterday", or "done this week", convert `updatedAt` timestamps to the developer's local timezone (using LOCAL_TODAY, LOCAL_YESTERDAY, and OFFSET from setup) before comparing dates. Do not compare raw UTC timestamps against local day boundaries.
 
 **Report structure:**
 

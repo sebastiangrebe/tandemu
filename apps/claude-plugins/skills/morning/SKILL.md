@@ -54,6 +54,14 @@ REPO=$(git rev-parse --show-toplevel 2>/dev/null)
 echo "REPO=$REPO"
 echo "STATUS=$(git status --short)"
 
+# Local time context for accurate relative dates
+echo "---LOCAL_TIME---"
+echo "TZ=$(date +%Z)"
+echo "OFFSET=$(date +%z)"
+echo "LOCAL_NOW=$(date '+%Y-%m-%d %H:%M %Z')"
+echo "LOCAL_TODAY=$(date +%Y-%m-%d)"
+echo "LOCAL_YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' +%Y-%m-%d)"
+
 # Refresh memory index for this repo
 REPO_NAME=$(basename "$REPO" 2>/dev/null || echo "unknown")
 echo "---MEMORY_INDEX---"
@@ -82,7 +90,7 @@ If the config load fails, tell the developer: "Tandemu is not configured. Run in
 If the active task JSON was returned (not "NONE"):
 
 - Extract `taskId`, `title`, `startedAt`, `repos` from it.
-- Calculate how long ago the task was started.
+- Calculate how long ago the task was started. **Use LOCAL_TODAY and LOCAL_YESTERDAY from setup to determine if the task was started "today" or "yesterday". Convert `startedAt` to the developer's local timezone (using the OFFSET from setup) before comparing dates. Do not rely on elapsed hours alone — a task started at 11 PM yesterday is "yesterday", not "11h ago".**
 - Tell the developer: "You have an active task: **<title>** (started <relative time ago>)"
 - Use AskUserQuestion:
   - Question: "You're currently working on **<title>**. What would you like to do?"

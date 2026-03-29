@@ -95,6 +95,13 @@ echo "API=$TANDEMU_API"
 # Active task metadata
 echo "---ACTIVE_TASK---"
 cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+
+# Local time context for accurate relative dates
+echo "---LOCAL_TIME---"
+echo "TZ=$(date +%Z)"
+echo "OFFSET=$(date +%z)"
+echo "LOCAL_NOW=$(date '+%Y-%m-%d %H:%M %Z')"
+echo "LOCAL_TODAY=$(date +%Y-%m-%d)"
 ```
 
 Extract `taskId`, `title`, `startedAt`, `repos`, `category`, `labels` from the active task.
@@ -178,7 +185,7 @@ If you can't determine which status to use, skip this step silently.
 rm -f ~/.claude/tandemu-active-task.json
 ```
 
-Tell the developer (using values from the backend response):
+Tell the developer (using values from the backend response). **When reporting duration and times, use the developer's local timezone (from LOCAL_TIME setup) — say "started today at 2 PM" or "started yesterday", not raw UTC timestamps.**
 
 ```
 Task completed: <title>

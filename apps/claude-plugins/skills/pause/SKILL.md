@@ -30,6 +30,13 @@ echo "USER=$TANDEMU_USER_ID"
 echo "---ACTIVE_TASK---"
 cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
 
+# Local time context for accurate relative dates
+echo "---LOCAL_TIME---"
+echo "TZ=$(date +%Z)"
+echo "OFFSET=$(date +%z)"
+echo "LOCAL_NOW=$(date '+%Y-%m-%d %H:%M %Z')"
+echo "LOCAL_TODAY=$(date +%Y-%m-%d)"
+
 # OTEL endpoint
 echo "---OTEL---"
 python3 -c "
@@ -130,6 +137,8 @@ rm -f ~/.claude/tandemu-active-task.json
 ```
 
 ### 6. Confirm
+
+**When reporting duration, use the developer's local timezone (from LOCAL_TIME setup) — say "started today at 2 PM" or "worked on since yesterday", not raw UTC timestamps or misleading elapsed-time-only descriptions.**
 
 ```
 Task paused: <title>
