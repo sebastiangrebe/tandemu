@@ -26,9 +26,12 @@ echo "API=$TANDEMU_API"
 echo "ORG=$TANDEMU_ORG_ID"
 echo "USER=$TANDEMU_USER_ID"
 
-# Active task
+# Active task (branch-keyed)
+BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
+TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
-cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+echo "TASK_FILE=$TASK_FILE"
+cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Local time context for accurate relative dates
 echo "---LOCAL_TIME---"
@@ -132,8 +135,10 @@ If you can't determine which status to use, skip this step silently.
 
 ### 5. Clear active task
 
+Pausing keeps the worktree alive so the developer can resume later. Only the task file is cleared:
+
 ```bash
-rm -f ~/.claude/tandemu-active-task.json
+rm -f "$TASK_FILE"
 ```
 
 ### 6. Confirm

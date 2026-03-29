@@ -92,9 +92,12 @@ echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
 
-# Active task metadata
+# Active task metadata (branch-keyed)
+BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
+TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
-cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+echo "TASK_FILE=$TASK_FILE"
+cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Local time context for accurate relative dates
 echo "---LOCAL_TIME---"
@@ -179,11 +182,29 @@ curl -sf -X PATCH "$TANDEMU_API/api/tasks/<taskId>" \
 
 If you can't determine which status to use, skip this step silently.
 
-#### 4d. Clear active task
+#### 4d. Clear active task and clean up worktree
 
 ```bash
-rm -f ~/.claude/tandemu-active-task.json
+# Read worktree path before clearing
+WORKTREE_DIR=$(python3 -c "import json; print(json.load(open('$TASK_FILE')).get('worktree',''))" 2>/dev/null)
+
+# Clear the branch-keyed task file
+rm -f "$TASK_FILE"
 ```
+
+If the task is **Done** and there's a worktree path, clean it up:
+
+```bash
+if [ -n "$WORKTREE_DIR" ] && [ -d "$WORKTREE_DIR" ]; then
+  MAIN_DIR=$(git rev-parse --git-common-dir 2>/dev/null | sed 's/\/.git$//')
+  BRANCH_NAME=$(git branch --show-current 2>/dev/null)
+  cd "$MAIN_DIR"
+  git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
+  git branch -d "$BRANCH_NAME" 2>/dev/null || true
+fi
+```
+
+If the task is **Coming back later**, keep the worktree and task file intact.
 
 Tell the developer (using values from the backend response). **When reporting duration and times, use the developer's local timezone (from LOCAL_TIME setup) — say "started today at 2 PM" or "started yesterday", not raw UTC timestamps.**
 
@@ -277,9 +298,11 @@ Task complete! Here's your updated board:
 Would you like to start another task?
 ```
 
-### 7. Switch back to main
+### 7. Return to main checkout
 
-If the developer is done with the task:
+If the developer is done and the worktree was cleaned up in Step 4d, the session is already back in the main checkout directory. No additional `git checkout` needed — the worktree removal handled it.
+
+If no worktree was used (legacy or already on a branch), fall back to:
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')

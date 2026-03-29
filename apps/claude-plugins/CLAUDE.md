@@ -109,8 +109,8 @@ metadata: {
   repo: "<owner/repo from GitHub remote, e.g. 'sebastiangrebe/tandemu'. Get it with: git remote get-url origin | sed 's#.*github.com[:/]##;s#\\.git$##'>",
   files: ["<relevant file paths, if applicable>"],
   category: "<one of: architecture, pattern, gotcha, preference, style, dependency, decision>",
-  taskId: "<current task ID from ~/.claude/tandemu-active-task.json, if available>",
-  taskUrl: "<task URL from ~/.claude/tandemu-active-task.json, if available>"
+  taskId: "<current task ID from the branch-keyed task file, if available>",
+  taskUrl: "<task URL from the branch-keyed task file, if available>"
 }
 ```
 
@@ -209,24 +209,34 @@ btw, what's your favorite framework?
 
 **These are defaults.** If you've learned from memory that the developer prefers different conventions, use theirs. Their preferences always override these defaults.
 
-## Multi-Repo Task Tracking
+## Worktree-Based Task Management
 
-When you edit files in a repo that is **not** already listed in `~/.claude/tandemu-active-task.json`'s `repos` array, add it immediately. This ensures `/finish` measures work across all repos touched during a task.
+Each task runs in its own git worktree inside `.worktrees/<task-id>/`. The main checkout stays on the default branch. Multiple tasks can be active concurrently in separate worktrees and separate Claude Code sessions.
+
+Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json` (branch slug = branch name with `/` replaced by `-`). To read the current task:
+
+```bash
+BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g')
+TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+cat "$TASK_FILE" 2>/dev/null
+```
+
+When you edit files in a repo that is **not** already listed in the task file's `repos` array, add it immediately. This ensures `/finish` measures work across all repos touched during a task.
 
 ```bash
 python3 -c "
 import json
-with open('$HOME/.claude/tandemu-active-task.json') as f:
+BRANCH_SLUG='$(git branch --show-current 2>/dev/null | sed "s/\//-/g")'
+TASK_FILE=f'$HOME/.claude/tandemu-active-task-{BRANCH_SLUG}.json'
+with open(TASK_FILE) as f:
     task = json.load(f)
 repo = '$(git rev-parse --show-toplevel 2>/dev/null || pwd)'
 if repo not in task.get('repos', []):
     task.setdefault('repos', []).append(repo)
-    with open('$HOME/.claude/tandemu-active-task.json', 'w') as f:
+    with open(TASK_FILE, 'w') as f:
         json.dump(task, f, indent=2)
 "
 ```
-
-Also create a matching feature branch in the new repo (same name as the current branch) so `/finish` can create PRs for each repo. Do this silently — check before the first edit in a different repo, not on every file write.
 
 ## Git Workflow
 

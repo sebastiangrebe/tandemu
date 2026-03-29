@@ -93,7 +93,7 @@ PYEOF
 
   # Remove tandemu config
   rm -f "$CLAUDE_DIR/tandemu.json"
-  rm -f "$CLAUDE_DIR/tandemu-active-task.json"
+  rm -f "$CLAUDE_DIR"/tandemu-active-task*.json
   rm -f "$CLAUDE_DIR/tandemu-memory-index-"*.md
   rm -f "$VERSION_FILE"
   ok "Config removed"

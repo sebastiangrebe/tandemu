@@ -27,8 +27,8 @@ tandemu/
 ### Developer setup
 Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/plugin install tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
 
-### Single active task enforcement
-`~/.claude/tandemu-active-task.json` tracks the one active task across all Claude Code windows. `/morning` checks it before allowing a new task. Must `/pause` or `/finish` to switch.
+### Worktree-per-task
+Each task gets its own git worktree inside `.worktrees/<task-id>/`. Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can run concurrently in separate worktrees and Claude Code sessions. `/morning` creates the worktree, `/finish` cleans it up.
 
 ### Task status sync is dynamic
 No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id` with `{ statusName, assigneeEmail, provider }`. Any combination of fields is accepted in a single call.
@@ -128,7 +128,7 @@ docker exec -i tandemu-postgres-1 psql -U tandemu -d tandemu \
   -c "TRUNCATE users, memberships, organizations, teams, team_members, invites, integrations, integration_project_mappings CASCADE;"
 
 # Clean state:
-rm -f ~/.claude/tandemu-active-task.json ~/.claude/tandemu.json
+rm -f ~/.claude/tandemu-active-task*.json ~/.claude/tandemu.json
 
 # Run:
 npx playwright test full-flow

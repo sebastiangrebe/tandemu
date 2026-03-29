@@ -22,7 +22,8 @@ echo "TEAM=$TANDEMU_TEAM_ID"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 
 echo "---ACTIVE_TASK---"
-cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
+cat "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" 2>/dev/null || echo "NONE"
 ```
 
 ### 2. Get task details

@@ -323,10 +323,11 @@ test.describe.serial('Tandemu E2E: Full Setup Flow', () => {
     // Morning should fetch and present tasks
     expect(output).toMatch(/SGS-\d+|Implement|tasks/);
 
-    // Check that the active task file was written
-    const activeTaskPath = path.join(HOME, '.claude', 'tandemu-active-task.json');
-    if (fs.existsSync(activeTaskPath)) {
-      const activeTask = JSON.parse(fs.readFileSync(activeTaskPath, 'utf-8'));
+    // Check that the active task file was written (branch-keyed)
+    // Morning creates a worktree + branch, so the file is keyed by the branch slug
+    const taskFiles = fs.readdirSync(path.join(HOME, '.claude')).filter(f => f.startsWith('tandemu-active-task-'));
+    if (taskFiles.length > 0) {
+      const activeTask = JSON.parse(fs.readFileSync(path.join(HOME, '.claude', taskFiles[0]!), 'utf-8'));
       expect(activeTask.taskId).toBeTruthy();
       expect(activeTask.startedAt).toBeTruthy();
       expect(activeTask.repos).toBeInstanceOf(Array);
@@ -355,8 +356,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
   });
 
   test('run /finish skill — measures work and sends telemetry', async () => {
-    // Ensure active task file exists for /finish to measure
-    const activeTaskPath = path.join(HOME, '.claude', 'tandemu-active-task.json');
+    // Ensure active task file exists for /finish to measure (branch-keyed)
+    const branchSlug = 'feat-test-task'; // matches the branch created in the simulate work test
+    const activeTaskPath = path.join(HOME, '.claude', `tandemu-active-task-${branchSlug}.json`);
     if (!fs.existsSync(activeTaskPath)) {
       // Write one manually since /morning might not have completed in non-interactive mode
       const now = new Date();

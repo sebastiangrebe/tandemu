@@ -44,9 +44,32 @@ echo "TEAM=$TANDEMU_TEAM_ID"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 echo "NAME=$TANDEMU_USER_NAME"
 
-# Check for active task
+# Check for active task (branch-keyed)
+BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
+TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
-cat ~/.claude/tandemu-active-task.json 2>/dev/null || echo "NONE"
+echo "TASK_FILE=$TASK_FILE"
+echo "BRANCH_SLUG=$BRANCH_SLUG"
+
+# Legacy migration: move old single file to branch-keyed
+OLD_FILE="$HOME/.claude/tandemu-active-task.json"
+if [ -f "$OLD_FILE" ] && [ ! -f "$TASK_FILE" ] && [ "$BRANCH_SLUG" != "main" ] && [ "$BRANCH_SLUG" != "unknown" ]; then
+  mv "$OLD_FILE" "$TASK_FILE"
+elif [ -f "$OLD_FILE" ]; then
+  rm -f "$OLD_FILE"
+fi
+
+cat "$TASK_FILE" 2>/dev/null || echo "NONE"
+
+# Check if we're inside a worktree
+echo "---WORKTREE---"
+GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null)
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+if [ "$GIT_COMMON" != "$GIT_DIR" ]; then
+  echo "IN_WORKTREE=true"
+else
+  echo "IN_WORKTREE=false"
+fi
 
 # Git state
 echo "---GIT---"
@@ -100,7 +123,7 @@ If the active task JSON was returned (not "NONE"):
     - Label: "Pause and pick another", Description: "Run /pause first to switch tasks"
 
 - If they choose **Continue here**:
-  - If the current repo is not already in the `repos` array, add it by reading, modifying, and rewriting `~/.claude/tandemu-active-task.json`.
+  - If the current repo is not already in the `repos` array, add it by reading, modifying, and rewriting the branch-keyed task file (`$TASK_FILE`).
   - Check if a branch for the task already exists, if not create one.
   - Skip to the readiness summary (Step 6).
 - If they choose **Pause and pick another**: tell the developer to run `/pause` first, then `/morning` again. Stop here.
@@ -163,28 +186,42 @@ If **Bring to new branch**: do nothing — changes will carry over when creating
 
 If the working tree is clean, skip this step.
 
-#### 5b. Create a feature branch
+#### 5b. Create a worktree and feature branch
 
-Detect the repo's default branch dynamically (supports main, master, develop, or whatever the remote uses):
+**If already in a worktree** (detected in setup via `IN_WORKTREE=true`), skip worktree creation — the developer is resuming work. Just ensure the branch and task file exist.
+
+**If on the main checkout**, create a worktree for the new task:
+
+Detect the repo's default branch dynamically:
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 if [ -z "$DEFAULT_BRANCH" ]; then
-  # Fallback: check which common branch names exist on the remote
   DEFAULT_BRANCH=$(git branch -r 2>/dev/null | sed 's/^[* ]*//' | grep -E '^origin/(main|master|develop)$' | head -1 | sed 's@^origin/@@')
 fi
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 ```
 
-Then switch and create the feature branch:
+Create the worktree:
 
 ```bash
-git checkout "$DEFAULT_BRANCH"
-git pull origin "$DEFAULT_BRANCH" 2>/dev/null || true
-git checkout -b feat/<task.id>-<short-kebab-description>
+BRANCH_NAME="feat/<task.id>-<short-kebab-description>"
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+WORKTREE_DIR="${REPO_ROOT}/.worktrees/<task.id>"
+
+# Ensure .worktrees is gitignored
+grep -q '^\\.worktrees' "${REPO_ROOT}/.gitignore" 2>/dev/null || echo '.worktrees' >> "${REPO_ROOT}/.gitignore"
+
+# Fetch latest and create worktree with new branch
+git fetch origin "$DEFAULT_BRANCH" 2>/dev/null || true
+mkdir -p "${REPO_ROOT}/.worktrees"
+git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" "origin/$DEFAULT_BRANCH"
+
+# cd into worktree — session continues here
+cd "$WORKTREE_DIR"
 ```
 
-- Write the active task file. Infer the task category from labels:
+- Write the branch-keyed active task file. Infer the task category from labels:
   - Labels containing "bug", "fix", "hotfix" → `bugfix`
   - Labels containing "feature", "enhancement" → `feature`
   - Labels containing "debt", "refactor", "chore" → `tech_debt`
@@ -192,9 +229,10 @@ git checkout -b feat/<task.id>-<short-kebab-description>
   - Default → `other`
 
 ```bash
+BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
 REPO_PATH=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > ~/.claude/tandemu-active-task.json << EOF
+cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
 {
   "taskId": "<task.id>",
   "title": "<task.title>",
@@ -203,7 +241,8 @@ cat > ~/.claude/tandemu-active-task.json << EOF
   "provider": "<task.provider>",
   "url": "<task.url>",
   "category": "<inferred category>",
-  "labels": [<task.labels as JSON array>]
+  "labels": [<task.labels as JSON array>],
+  "worktree": "$WORKTREE_DIR"
 }
 EOF
 ```
@@ -258,6 +297,7 @@ Show the readiness summary:
 
 ```
 Ready to work on: <task title>
+Worktree: .worktrees/<task.id>/
 Branch: feat/<task.id>-<description>
 Task: <task.url>
 Related files:
@@ -283,5 +323,6 @@ If they choose **Manual**: say "All yours — let me know what you need." and st
 - The developer may have multiple repos and sessions open — this skill only manages the current repo
 - Always let the developer choose — never auto-assign
 - If they select "Other", ask what they want to work on and create a branch for it
-- The active task file at `~/.claude/tandemu-active-task.json` is shared across all Claude Code windows — only one task can be active at a time
-- **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write `~/.claude/tandemu-active-task.json` — do NOT use the Edit or Write tools for this file
+- Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can be active concurrently in separate worktrees.
+- Each task gets its own git worktree inside `.worktrees/<task.id>/`. The main checkout stays on the default branch.
+- **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write task files — do NOT use the Edit or Write tools for these files

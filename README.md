@@ -95,6 +95,41 @@ Run the install script to configure Claude Code with Tandemu skills and memory:
 
 Same result as the plugin setup, but as a bash script. Useful for scripted onboarding or CI/CD.
 
+## How It Works
+
+### Task workflow
+
+```
+/morning  →  creates worktree + branch  →  work  →  /finish  →  cleans up worktree
+```
+
+1. **`/morning`** — Fetches tasks from your ticket system, you pick one. Creates a git worktree in `.worktrees/<task-id>/` with a new feature branch and switches into it. The main checkout stays on `main`.
+2. **Work** — Code normally. Tandemu tracks session time, AI vs manual lines, and friction in the background.
+3. **`/finish`** — Measures work, sends telemetry, updates the ticket, creates a PR if needed, and removes the worktree.
+4. **`/pause`** — Pauses the task, keeps the worktree for later. Resume by opening that worktree and running `/morning`.
+
+### Multiple tasks in parallel
+
+Each task lives in its own worktree. Open multiple Claude Code sessions to work on multiple tasks simultaneously:
+
+```
+~/project/                          ← main checkout (stays on main)
+~/project/.worktrees/SGS-61/        ← task 1 (session A)
+~/project/.worktrees/SGS-100/       ← task 2 (session B)
+```
+
+Task state is stored in branch-keyed files (`~/.claude/tandemu-active-task-{branch-slug}.json`), so sessions never conflict.
+
+### Available skills
+
+| Skill | Description |
+|-------|-------------|
+| `/morning` | Pick a task and start working |
+| `/finish` | Complete task, measure work, send telemetry |
+| `/pause` | Pause current task for later |
+| `/create` | Create a new task in the ticket system |
+| `/standup` | Generate a team standup report |
+
 ### Managing your installation
 
 ```bash
@@ -156,7 +191,7 @@ except: pass
 "
 
 # 4. Remove Tandemu config, skills, lib, memory index, and MCP
-rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task.json ~/.claude/tandemu-version.txt
+rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task*.json ~/.claude/tandemu-version.txt
 rm -f ~/.claude/tandemu-memory-index-*.md
 rm -f ~/.claude/CLAUDE.md ~/.claude/lib/tandemu-env.sh
 rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,setup}
