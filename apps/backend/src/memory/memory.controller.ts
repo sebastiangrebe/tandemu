@@ -1372,9 +1372,13 @@ export class MemoryController {
         })
       : allMemories;
 
-    // Group by folder (2-level deep) with category breakdown
-    const folders = new Map<string, { categories: Map<string, string[]>; count: number; recent: string[] }>();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Fetch memory IDs accessed in the last 30 days for tiered display
+    const accessedIds = await this.telemetryService.getAccessedMemoryIds(user.organizationId, 30);
+
+    // Group by folder (2-level deep) with tiered entries
+    interface MemEntry { category: string; snippet: string }
+    const folders = new Map<string, { frequent: MemEntry[]; recent: MemEntry[]; staleCount: number; total: number }>();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     for (const mem of filtered) {
       const metadata = mem.metadata as Record<string, unknown> | null;
@@ -1383,7 +1387,7 @@ export class MemoryController {
       const category = (metadata?.category as string) ?? 'uncategorized';
       const content = (mem.memory as string) ?? (mem.content as string) ?? '';
       const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
-      const snippet = content;
+      const memId = String(mem.id ?? '');
 
       // Derive folder from first file path (2 directory segments deep)
       let folder = 'general';
@@ -1393,40 +1397,43 @@ export class MemoryController {
       }
 
       if (!folders.has(folder)) {
-        folders.set(folder, { categories: new Map(), count: 0, recent: [] });
+        folders.set(folder, { frequent: [], recent: [], staleCount: 0, total: 0 });
       }
       const entry = folders.get(folder)!;
-      entry.count++;
+      entry.total++;
 
-      if (!entry.categories.has(category)) {
-        entry.categories.set(category, []);
-      }
-      entry.categories.get(category)!.push(snippet);
+      const snippet = content.length > 80 ? content.slice(0, 80) + '...' : content;
+      const memEntry: MemEntry = { category, snippet };
 
-      if (createdAt > sevenDaysAgo) {
-        entry.recent.push(snippet);
+      if (accessedIds.has(memId)) {
+        entry.frequent.push(memEntry);
+      } else if (createdAt > thirtyDaysAgo) {
+        entry.recent.push(memEntry);
+      } else {
+        entry.staleCount++;
       }
     }
 
     // Build markdown index
     const lines: string[] = [
       `# Memory Index`,
-      `> ${filtered.length} memories for ${repo || 'all repos'}. Use \`search_memories\` to get full content.`,
+      `> ${filtered.length} memories for ${repo || 'all repos'}. Use \`search_memories\` for deeper recall.`,
       '',
     ];
 
-    // Sort folders by memory count (most first)
-    const sortedFolders = [...folders.entries()].sort((a, b) => b[1].count - a[1].count);
+    // Sort folders by total memory count (most first)
+    const sortedFolders = [...folders.entries()].sort((a, b) => b[1].total - a[1].total);
 
     for (const [folder, data] of sortedFolders) {
-      lines.push(`## ${folder} (${data.count})`);
-      for (const [category, snippets] of data.categories) {
-        for (const s of snippets) {
-          lines.push(`- **${category}**: ${s}`);
-        }
+      lines.push(`## ${folder} (${data.total})`);
+      for (const e of data.frequent) {
+        lines.push(`- **${e.category}**: ${e.snippet}`);
       }
-      if (data.recent.length > 0 && data.recent.length < data.count) {
-        lines.push(`- _${data.recent.length} new this week_`);
+      for (const e of data.recent) {
+        lines.push(`- **${e.category}**: ${e.snippet}`);
+      }
+      if (data.staleCount > 0) {
+        lines.push(`- _+${data.staleCount} older memories — search to recall_`);
       }
       lines.push('');
     }

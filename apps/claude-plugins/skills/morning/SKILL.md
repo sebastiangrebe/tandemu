@@ -229,6 +229,7 @@ curl -sf -X PATCH "$TANDEMU_API/api/tasks/<task.id>" \
 If you can't determine which status to use, still send the assignee update without statusName. The endpoint accepts any combination of the fields.
 
 - If the task has a description, summarize what needs to be done
+- **Search memories** for context relevant to the task: use `search_memories` with the task title and description. The memory index (loaded at setup) shows what's known — if it doesn't cover the modules this task touches, search beyond it. Include any relevant gotchas, architecture decisions, or patterns in the readiness summary.
 - Search the codebase for files relevant to the task title/description
 - List the related files
 
