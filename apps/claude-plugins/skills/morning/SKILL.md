@@ -87,22 +87,16 @@ echo "LOCAL_YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' 
 
 # Refresh memory index for this repo
 REPO_NAME=$(basename "$REPO" 2>/dev/null || echo "unknown")
+PROJECT_DIR=$(pwd | sed 's/\//-/g')
+MEMORY_DIR="$HOME/.claude/projects/${PROJECT_DIR}/memory"
 echo "---MEMORY_INDEX---"
-ETAG=$(cat ~/.claude/tandemu-memory-index-${REPO_NAME}.etag 2>/dev/null || echo "")
-INDEX_RESPONSE=$(curl -sf -w "\n%{http_code}" \
-  -H "Authorization: Bearer $TANDEMU_TOKEN" \
-  -H "If-None-Match: $ETAG" \
-  "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null || echo -e "\n000")
-HTTP_CODE=$(echo "$INDEX_RESPONSE" | tail -1)
-if [ "$HTTP_CODE" = "200" ]; then
-  echo "$INDEX_RESPONSE" | sed '$d' > ~/.claude/tandemu-memory-index-${REPO_NAME}.md
-  RESPONSE_ETAG=$(curl -sI -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null | grep -i etag | tr -d '\r' | awk '{print $2}')
-  echo "$RESPONSE_ETAG" > ~/.claude/tandemu-memory-index-${REPO_NAME}.etag
+INDEX=$(curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null)
+if [ -n "$INDEX" ]; then
+  mkdir -p "$MEMORY_DIR"
+  echo "$INDEX" > "$MEMORY_DIR/tandemu-index.md"
   echo "REFRESHED"
-elif [ "$HTTP_CODE" = "304" ]; then
-  echo "UNCHANGED"
 else
-  echo "SKIPPED (status: $HTTP_CODE)"
+  echo "SKIPPED"
 fi
 ```
 

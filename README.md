@@ -193,6 +193,7 @@ except: pass
 # 4. Remove Tandemu config, skills, lib, memory index, and MCP
 rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task*.json ~/.claude/tandemu-version.txt
 rm -f ~/.claude/tandemu-memory-index-*.md
+find ~/.claude/projects -name "tandemu-index.md" -delete 2>/dev/null || true
 rm -f ~/.claude/CLAUDE.md ~/.claude/lib/tandemu-env.sh
 rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,setup}
 python3 -c "

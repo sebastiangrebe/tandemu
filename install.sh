@@ -95,6 +95,8 @@ PYEOF
   rm -f "$CLAUDE_DIR/tandemu.json"
   rm -f "$CLAUDE_DIR"/tandemu-active-task*.json
   rm -f "$CLAUDE_DIR/tandemu-memory-index-"*.md
+  # Clean up memory index from Claude's memory folders
+  find "$CLAUDE_DIR/projects" -name "tandemu-index.md" -delete 2>/dev/null || true
   rm -f "$VERSION_FILE"
   ok "Config removed"
 
@@ -493,6 +495,7 @@ perms["allow"] = allow
 settings["permissions"] = perms
 
 # SessionStart hook to pull memory index on new sessions
+# Outputs to stdout (injected into Claude's context) AND writes to memory/ folder
 api_url = f"{api_host}:3001"
 hooks = settings.get("hooks", {})
 hooks["SessionStart"] = [
@@ -501,7 +504,7 @@ hooks["SessionStart"] = [
         "hooks": [
             {
                 "type": "command",
-                "command": f"bash -c 'source ~/.claude/lib/tandemu-env.sh 2>/dev/null && REPO_NAME=\$(basename \"\$(git rev-parse --show-toplevel 2>/dev/null)\") && curl -sf -H \"Authorization: Bearer \$TANDEMU_TOKEN\" \"{api_url}/api/memory/index?repo=\$REPO_NAME\" > ~/.claude/tandemu-memory-index-\${{REPO_NAME}}.md 2>/dev/null; exit 0'",
+                "command": f"bash -c 'source ~/.claude/lib/tandemu-env.sh 2>/dev/null && REPO_NAME=\$(basename \"\$(git rev-parse --show-toplevel 2>/dev/null)\") && INDEX=\$(curl -sf -H \"Authorization: Bearer \$TANDEMU_TOKEN\" \"{api_url}/api/memory/index?repo=\$REPO_NAME\" 2>/dev/null) && if [ -n \"\$INDEX\" ]; then echo \"\$INDEX\"; PROJECT_DIR=\$(pwd | sed \"s/\\//-/g\"); MEMORY_DIR=\"\$HOME/.claude/projects/\${{PROJECT_DIR}}/memory\"; mkdir -p \"\$MEMORY_DIR\"; echo \"\$INDEX\" > \"\$MEMORY_DIR/tandemu-index.md\"; fi; exit 0'",
                 "timeout": 10
             }
         ]
