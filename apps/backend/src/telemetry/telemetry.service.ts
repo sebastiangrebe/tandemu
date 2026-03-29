@@ -987,28 +987,6 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
-  /** Temporary debug: sample raw log attributes from failed tool_result events */
-  async debugToolFailures(organizationId: string): Promise<unknown[]> {
-    try {
-      const resultSet = await this.client.query({
-        query: `
-          SELECT LogAttributes
-          FROM otel_logs
-          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
-            AND LogAttributes['event.name'] = 'tool_result'
-            AND LogAttributes['success'] = 'false'
-          ORDER BY Timestamp DESC
-          LIMIT 5
-        `,
-        query_params: { organizationId },
-        format: 'JSONEachRow',
-      });
-      return resultSet.json();
-    } catch {
-      return [];
-    }
-  }
-
   /**
    * Claude Code-specific — queries native tool_result events for friction.
    * Will need normalization layer for Codex (codex.tool.call) and Cursor (REST API).
@@ -1035,8 +1013,8 @@ export class TelemetryService implements OnModuleDestroy {
             coalesce(
               nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'file_path'), ''),
               nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'path'), ''),
-              nullIf(JSONExtractString(LogAttributes['tool_parameters'], 'command'), ''),
-              LogAttributes['tool_name']
+              nullIf(JSONExtractString(LogAttributes['tool_input'], 'file_path'), ''),
+              nullIf(JSONExtractString(LogAttributes['tool_input'], 'path'), '')
             ) AS repository_path,
             0 AS prompt_loop_count,
             count(*) AS error_count,
@@ -1047,7 +1025,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND LogAttributes['success'] = 'false'
             ${dateFilter}
           GROUP BY session_id, user_id, repository_path
-          HAVING error_count >= 1
+          HAVING repository_path != '' AND error_count >= 1
           ORDER BY error_count DESC
           LIMIT 100
         `,

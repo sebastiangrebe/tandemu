@@ -470,7 +470,8 @@ env.update({
     "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "${OTEL_ENDPOINT}",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
-    "OTEL_RESOURCE_ATTRIBUTES": "organization_id=${ORG_ID}"
+    "OTEL_RESOURCE_ATTRIBUTES": "organization_id=${ORG_ID}",
+    "OTEL_LOG_TOOL_DETAILS": "1"
 })
 settings["env"] = env
 perms = settings.get("permissions", {})

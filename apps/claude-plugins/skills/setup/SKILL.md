@@ -195,7 +195,8 @@ env.update({
     "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
     "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Bearer {otel_key}" if otel_key else "",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
-    "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}"
+    "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}",
+    "OTEL_LOG_TOOL_DETAILS": "1"
 })
 # Remove empty headers entry if no key
 if not otel_key:
