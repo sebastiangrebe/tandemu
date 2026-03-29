@@ -138,38 +138,21 @@ Set `SELECTED_TEAM_ID` from the choice. If "All teams" is selected, set `SELECTE
 
 **If `TEAM_COUNT` = 1 or 0**: use `$TANDEMU_TEAM_ID` directly. No prompt.
 
-Fetch tasks assigned to the current developer:
+Fetch tasks assigned to the current developer in a single call. The API handles multi-team dedup and unassigned fallback server-side:
 
-If `SELECTED_TEAM_ID=ALL`, fetch tasks from each team, merge, and deduplicate by task ID:
 ```bash
-# For each team ID in TANDEMU_TEAM_IDS (comma-separated), fetch and merge
-IFS=',' read -ra TEAM_IDS_ARRAY <<< "$TANDEMU_TEAM_IDS"
-for TID in "${TEAM_IDS_ARRAY[@]}"; do
-  curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$TID&mine=true&sort=priority&order=desc"
-done
-# Merge results in Python, deduplicate by task id
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&mine=true&fallbackUnassigned=true&sort=priority&order=desc"
 ```
 
-Otherwise:
-```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&mine=true&sort=priority&order=desc"
-```
+Use `teamId=all` when "All teams" is selected — the backend fetches from all teams and deduplicates.
 
-The response is `{ success, data: Task[] }` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is.
+The response is a `Task[]` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`, `category`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is.
 
 Filter to tasks that are `todo` or `in_progress` status.
 
-If the developer has assigned tasks, proceed to Step 4 with those.
+If the result set looks like unassigned backlog tasks (no `assigneeEmail` on any), tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
 
-If no tasks are assigned to the developer, fetch **unassigned todo tasks** (using the same `SELECTED_TEAM_ID` or all-teams logic):
-
-```bash
-curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&status=todo&unassigned=true&sort=priority&order=desc"
-```
-
-Tell the developer: "No tasks are assigned to you. Here are unassigned tasks you could pick up:"
-
-If both calls return empty, tell the developer: "No tasks found. Your team may not have a ticket system connected yet — ask your admin to set one up at the Tandemu dashboard (Integrations page)."
+If the response is empty, tell the developer: "No tasks found. Your team may not have a ticket system connected yet — ask your admin to set one up at the Tandemu dashboard (Integrations page)."
 
 ### 4. Let the developer pick a task
 
@@ -240,12 +223,7 @@ git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" "origin/$DEFAULT_BRANCH"
 cd "$WORKTREE_DIR"
 ```
 
-- Write the branch-keyed active task file. Infer the task category from labels:
-  - Labels containing "bug", "fix", "hotfix" → `bugfix`
-  - Labels containing "feature", "enhancement" → `feature`
-  - Labels containing "debt", "refactor", "chore" → `tech_debt`
-  - Labels containing "maintenance", "ops", "infra" → `maintenance`
-  - Default → `other`
+- Write the branch-keyed active task file. Use the `category` field from the API response (the backend infers it from labels).
 
 ```bash
 BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
@@ -260,7 +238,7 @@ cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
   "repos": ["$REPO_PATH"],
   "provider": "<task.provider>",
   "url": "<task.url>",
-  "category": "<inferred category>",
+  "category": "<task.category from API response>",
   "labels": [<task.labels as JSON array>],
   "worktree": "$WORKTREE_DIR"
 }

@@ -6,9 +6,11 @@ import { TasksService } from './tasks.service.js';
 import { GitHubGitService } from './providers/github-git.service.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { TeamsModule } from '../teams/teams.module.js';
+import { forwardRef } from '@nestjs/common';
+import { TelemetryModule } from '../telemetry/telemetry.module.js';
 
 @Module({
-  imports: [AuthModule, TeamsModule],
+  imports: [AuthModule, TeamsModule, forwardRef(() => TelemetryModule)],
   controllers: [IntegrationsController, TasksController],
   providers: [IntegrationsService, TasksService, GitHubGitService],
   exports: [IntegrationsService, TasksService, GitHubGitService],

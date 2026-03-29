@@ -36,10 +36,12 @@ export interface Task {
   readonly provider: IntegrationProvider;
   readonly externalProjectId: string;
   readonly updatedAt: string;
+  readonly category?: TaskCategory;
 }
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
+export type TaskCategory = 'bugfix' | 'feature' | 'tech_debt' | 'maintenance' | 'other';
 
 export interface CreateIntegrationDto {
   readonly provider: IntegrationProvider;
@@ -54,4 +56,53 @@ export interface CreateProjectMappingDto {
   readonly externalProjectId: string;
   readonly externalProjectName?: string;
   readonly config?: Record<string, unknown>;
+}
+
+// ── Standup ──
+
+export interface StandupResponse {
+  readonly team: { id: string; name: string; memberCount: number };
+  readonly summary: {
+    inProgress: number;
+    inReview: number;
+    doneThisWeek: number;
+    todoCount: number;
+  };
+  readonly members: StandupMember[];
+  readonly otherContributors: Array<{
+    assigneeName?: string;
+    assigneeEmail?: string;
+    tasks: Task[];
+  }>;
+  readonly unassigned: Task[];
+  readonly backlog: { tasks: Task[]; totalCount: number };
+  readonly blockers: StandupBlocker[];
+}
+
+export interface StandupMember {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly tasks: {
+    inProgress: Task[];
+    inReview: Task[];
+    recentlyDone: Task[];
+  };
+  readonly telemetry: {
+    activeMinutes: number;
+    sessions: number;
+    aiLines: number;
+    manualLines: number;
+    frictionFiles: Array<{ path: string; count: number }>;
+  };
+}
+
+export interface StandupBlocker {
+  readonly type: 'stalled_review' | 'high_friction';
+  readonly taskId?: string;
+  readonly title?: string;
+  readonly stalledDays?: number;
+  readonly filePath?: string;
+  readonly frictionCount?: number;
+  readonly affectedDevs?: number;
 }
