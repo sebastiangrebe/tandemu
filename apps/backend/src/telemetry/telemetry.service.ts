@@ -987,6 +987,28 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  /** Temporary debug: sample raw log attributes from failed tool_result events */
+  async debugToolFailures(organizationId: string): Promise<unknown[]> {
+    try {
+      const resultSet = await this.client.query({
+        query: `
+          SELECT LogAttributes
+          FROM otel_logs
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND LogAttributes['event.name'] = 'tool_result'
+            AND LogAttributes['success'] = 'false'
+          ORDER BY Timestamp DESC
+          LIMIT 5
+        `,
+        query_params: { organizationId },
+        format: 'JSONEachRow',
+      });
+      return resultSet.json();
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Claude Code-specific — queries native tool_result events for friction.
    * Will need normalization layer for Codex (codex.tool.call) and Cursor (REST API).

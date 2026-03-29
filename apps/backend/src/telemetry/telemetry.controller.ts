@@ -44,6 +44,13 @@ export class TelemetryController {
     return [...custom, ...native];
   }
 
+  @Get('debug/tool-failures')
+  async debugToolFailures(
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.telemetryService.debugToolFailures(user.organizationId);
+  }
+
   @Get('hot-files')
   async getHotFiles(
     @CurrentUser() user: RequestUser,
