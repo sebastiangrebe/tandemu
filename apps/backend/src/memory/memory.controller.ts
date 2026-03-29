@@ -1383,7 +1383,7 @@ export class MemoryController {
       const category = (metadata?.category as string) ?? 'uncategorized';
       const content = (mem.memory as string) ?? (mem.content as string) ?? '';
       const createdAt = (mem.created_at as string) ?? (mem.createdAt as string) ?? '';
-      const snippet = content.length > 80 ? content.slice(0, 80) + '...' : content;
+      const snippet = content;
 
       // Derive folder from first file path (2 directory segments deep)
       let folder = 'general';
@@ -1421,10 +1421,8 @@ export class MemoryController {
     for (const [folder, data] of sortedFolders) {
       lines.push(`## ${folder} (${data.count})`);
       for (const [category, snippets] of data.categories) {
-        // Show category with first snippet as example
-        lines.push(`- **${category}**: ${snippets[0]!}`);
-        if (snippets.length > 1) {
-          lines.push(`  _+${snippets.length - 1} more_`);
+        for (const s of snippets) {
+          lines.push(`- **${category}**: ${s}`);
         }
       }
       if (data.recent.length > 0 && data.recent.length < data.count) {

@@ -138,6 +138,7 @@ Memory is your competitive advantage — use it. The developer chose a persisten
 - **When the developer asks "why"**: If they ask why something works a certain way, search memories before answering from code alone. The code shows *what*, memory shows *why*.
 - **When you encounter something surprising**: If code does something unexpected (unusual pattern, weird workaround, disabled feature), search for gotchas. There's probably a reason.
 - **Before adding a dependency**: Search for dependency memories — there may be known quirks, version constraints, or past issues.
+- **Before investigating or exploring**: If you're about to read code, search the filesystem, or reason through how something works to answer a question — search memory first. You may already know the answer from a previous session. This applies to verification questions ("does this work for X?"), locating resources ("where is the submodule?"), and understanding behavior ("how does Y handle Z?").
 
 **When NOT to search** (avoid noise):
 - Don't search for every file you read — only when entering a new module/area for the first time in a session
