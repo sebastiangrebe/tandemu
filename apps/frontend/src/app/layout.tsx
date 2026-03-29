@@ -61,7 +61,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={cn(jakarta.variable, jetbrains.variable, "font-sans", geist.variable, "dark")} suppressHydrationWarning>
-      <body className="flex flex-col min-h-screen font-sans antialiased">
+      <body className="flex flex-col min-h-screen bg-background font-sans antialiased">
         <ThemeProvider>
           <AuthProvider>
             <TooltipProvider>
