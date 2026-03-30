@@ -108,12 +108,25 @@ PYEOF
 
   # Remove shared lib
   rm -f "$CLAUDE_DIR/lib/tandemu-env.sh"
+  rm -f "$CLAUDE_DIR/lib/tandemu-session-start.sh"
   ok "Shared lib removed"
 
-  # Remove CLAUDE.md if it's Tandemu's
-  if [ -f "$CLAUDE_DIR/CLAUDE.md" ] && grep -q "Tandemu AI Teammate" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null; then
-    rm -f "$CLAUDE_DIR/CLAUDE.md"
-    ok "CLAUDE.md removed"
+  # Remove CLAUDE.md if it's Tandemu's, or strip personality section if user has custom content
+  if [ -f "$CLAUDE_DIR/CLAUDE.md" ]; then
+    if grep -q "Tandemu AI Teammate" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null; then
+      rm -f "$CLAUDE_DIR/CLAUDE.md"
+      ok "CLAUDE.md removed"
+    elif grep -qF "<!-- tandemu:personality:start -->" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null; then
+      # User has their own CLAUDE.md with a Tandemu personality section — strip just that section
+      python3 -c "
+import re
+f = '$CLAUDE_DIR/CLAUDE.md'
+text = open(f).read()
+text = re.sub(r'<!-- tandemu:personality:start -->.*?<!-- tandemu:personality:end -->\n*', '', text, flags=re.DOTALL)
+open(f, 'w').write(text.strip() + '\n')
+"
+      ok "Personality section removed from CLAUDE.md"
+    fi
   fi
 
   # Clean MCP config from ~/.mcp.json
@@ -495,8 +508,7 @@ for p in tandemu_perms:
 perms["allow"] = allow
 settings["permissions"] = perms
 
-# SessionStart hook to pull memory index on new sessions
-# Outputs to stdout (injected into Claude's context) AND writes to memory/ folder
+# SessionStart hook: updates personality in ~/.claude/CLAUDE.md (global) and outputs repo memory index
 api_url = f"{api_host}:3001"
 hooks = settings.get("hooks", {})
 hooks["SessionStart"] = [
@@ -505,8 +517,8 @@ hooks["SessionStart"] = [
         "hooks": [
             {
                 "type": "command",
-                "command": f"bash -c 'source ~/.claude/lib/tandemu-env.sh 2>/dev/null && REPO_NAME=\$(basename \"\$(git rev-parse --show-toplevel 2>/dev/null)\") && INDEX=\$(curl -sf -H \"Authorization: Bearer \$TANDEMU_TOKEN\" \"{api_url}/api/memory/index?repo=\$REPO_NAME\" 2>/dev/null) && if [ -n \"\$INDEX\" ]; then echo \"\$INDEX\"; PROJECT_DIR=\$(pwd | sed \"s/\\//-/g\"); MEMORY_DIR=\"\$HOME/.claude/projects/\${{PROJECT_DIR}}/memory\"; mkdir -p \"\$MEMORY_DIR\"; echo \"\$INDEX\" > \"\$MEMORY_DIR/tandemu-index.md\"; fi; exit 0'",
-                "timeout": 10
+                "command": "bash ~/.claude/lib/tandemu-session-start.sh",
+                "timeout": 15
             }
         ]
     }

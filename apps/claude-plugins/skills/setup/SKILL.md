@@ -248,8 +248,7 @@ for p in tandemu_perms:
 perms["allow"] = allow
 settings["permissions"] = perms
 
-# SessionStart hook to pull memory index on new sessions
-# Outputs to stdout (injected into Claude's context) AND writes to memory/ folder
+# SessionStart hook: updates personality in ~/.claude/CLAUDE.md (global) and outputs repo memory index
 hooks = settings.get("hooks", {})
 hooks["SessionStart"] = [
     {
@@ -257,8 +256,8 @@ hooks["SessionStart"] = [
         "hooks": [
             {
                 "type": "command",
-                "command": f"bash -c 'source ~/.claude/lib/tandemu-env.sh 2>/dev/null && REPO_NAME=$(basename \"$(git rev-parse --show-toplevel 2>/dev/null)\") && INDEX=$(curl -sf -H \"Authorization: Bearer $TANDEMU_TOKEN\" \"{api_url}/api/memory/index?repo=$REPO_NAME\" 2>/dev/null) && if [ -n \"$INDEX\" ]; then echo \"$INDEX\"; PROJECT_DIR=$(pwd | sed \"s/\\//-/g\"); MEMORY_DIR=\"$HOME/.claude/projects/${{PROJECT_DIR}}/memory\"; mkdir -p \"$MEMORY_DIR\"; echo \"$INDEX\" > \"$MEMORY_DIR/tandemu-index.md\"; fi; exit 0'",
-                "timeout": 10
+                "command": "bash ~/.claude/lib/tandemu-session-start.sh",
+                "timeout": 15
             }
         ]
     }
