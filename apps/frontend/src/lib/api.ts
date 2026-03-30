@@ -260,6 +260,7 @@ export async function getInvestmentAllocation(filter?: TelemetryFilter): Promise
 
 export interface AIEffectivenessEntry {
   filePath: string;
+  repo: string;
   aiTouchCount: number;
 }
 

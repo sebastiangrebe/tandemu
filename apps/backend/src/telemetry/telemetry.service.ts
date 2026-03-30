@@ -903,6 +903,7 @@ export class TelemetryService implements OnModuleDestroy {
         query: `
           SELECT
             arrayJoin(splitByChar(',', SpanAttributes['ai_files'])) AS file_path,
+            any(SpanAttributes['repo']) AS repo,
             count(*) AS ai_touch_count
           FROM otel_traces
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
@@ -912,15 +913,16 @@ export class TelemetryService implements OnModuleDestroy {
             ${teamFilter}
           GROUP BY file_path
           ORDER BY ai_touch_count DESC
-          LIMIT 20
+          LIMIT 50
         `,
         query_params: params,
         format: 'JSONEachRow',
       });
 
-      const rows = await resultSet.json<{ file_path: string; ai_touch_count: number }>();
+      const rows = await resultSet.json<{ file_path: string; repo: string; ai_touch_count: number }>();
       return rows.map((r) => ({
         filePath: r.file_path,
+        repo: r.repo || '',
         aiTouchCount: Number(r.ai_touch_count),
       }));
     } catch {

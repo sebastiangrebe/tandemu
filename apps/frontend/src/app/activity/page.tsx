@@ -11,6 +11,7 @@ import { AIEffectivenessChart } from '@/components/charts/ai-effectiveness-chart
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ActivitySkeleton } from '@/components/ui/skeleton-helpers';
 import { InstallBanner } from '@/components/install-banner';
+import { FullscreenCard } from '@/components/ui/fullscreen-card';
 
 function formatDuration(minutes: number): string {
   if (minutes < 1) return '<1m';
@@ -147,8 +148,12 @@ export default function ActivityPage() {
 
           <DeveloperLeaderboard data={devStats} />
 
-          <HotFilesChart data={hotFiles} />
-          <AIEffectivenessChart data={aiEffectiveness} />
+          <FullscreenCard>
+            <HotFilesChart data={hotFiles} />
+          </FullscreenCard>
+          <FullscreenCard>
+            <AIEffectivenessChart data={aiEffectiveness} />
+          </FullscreenCard>
         </>
       )}
     </div>
