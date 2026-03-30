@@ -45,14 +45,21 @@ export class TelemetryController {
       this.telemetryService.getKnownRepos(user.organizationId),
     ]);
 
+    // Extract directory names from owner/repo slugs and map back to full slug
+    // e.g. "sebastiangrebe/tandemu" → match on "/tandemu/" in the path
+    const repoMap = new Map<string, string>(); // dirName → full slug
+    for (const slug of knownRepos) {
+      const dirName = slug.includes('/') ? slug.split('/').pop()! : slug;
+      repoMap.set(dirName, slug);
+    }
     // Sort longest-first so "tandemu-website" matches before "tandemu"
-    const repos = knownRepos.sort((a, b) => b.length - a.length);
+    const dirNames = [...repoMap.keys()].sort((a, b) => b.length - a.length);
 
     return [...custom, ...native].map((event) => {
-      for (const repo of repos) {
-        const idx = event.repositoryPath.indexOf(`/${repo}/`);
+      for (const dirName of dirNames) {
+        const idx = event.repositoryPath.indexOf(`/${dirName}/`);
         if (idx !== -1) {
-          return { ...event, repo, repositoryPath: event.repositoryPath.slice(idx + repo.length + 2) };
+          return { ...event, repo: repoMap.get(dirName)!, repositoryPath: event.repositoryPath.slice(idx + dirName.length + 2) };
         }
       }
       return event;
