@@ -286,7 +286,7 @@ export default function FrictionMapPage() {
                 <XCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-400">{highCount}</div>
+                <div className="text-2xl font-bold">{highCount}</div>
                 <p className="text-xs text-muted-foreground mt-1">paths need attention</p>
               </CardContent>
             </Card>
@@ -296,7 +296,7 @@ export default function FrictionMapPage() {
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-400">{mediumCount}</div>
+                <div className="text-2xl font-bold">{mediumCount}</div>
                 <p className="text-xs text-muted-foreground mt-1">paths to monitor</p>
               </CardContent>
             </Card>
@@ -306,7 +306,7 @@ export default function FrictionMapPage() {
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-emerald-400">{lowCount}</div>
+                <div className="text-2xl font-bold">{lowCount}</div>
                 <p className="text-xs text-muted-foreground mt-1">paths running smoothly</p>
               </CardContent>
             </Card>
@@ -316,7 +316,7 @@ export default function FrictionMapPage() {
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-violet-400">{totalErrors + totalLoops}</div>
+                <div className="text-2xl font-bold">{totalErrors + totalLoops}</div>
                 <p className="text-xs text-muted-foreground mt-1">{totalErrors} errors, {totalLoops} loops</p>
               </CardContent>
             </Card>
