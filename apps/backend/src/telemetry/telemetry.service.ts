@@ -618,6 +618,26 @@ export class TelemetryService implements OnModuleDestroy {
   }
 
 
+  async getKnownRepos(organizationId: string): Promise<string[]> {
+    try {
+      const resultSet = await this.client.query({
+        query: `
+          SELECT DISTINCT SpanAttributes['repo'] AS repo
+          FROM otel_traces
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND SpanName = 'task_session'
+            AND SpanAttributes['repo'] != ''
+        `,
+        query_params: { organizationId },
+        format: 'JSONEachRow',
+      });
+      const rows = await resultSet.json<{ repo: string }>();
+      return rows.map((r) => r.repo);
+    } catch {
+      return [];
+    }
+  }
+
   async getTimesheets(query: TimesheetQuery): Promise<TimesheetEntry[]> {
     try {
       // Query task_session spans for timesheet data

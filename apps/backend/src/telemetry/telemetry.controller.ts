@@ -39,11 +39,24 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
     @Query('teamId') teamId?: string,
   ): Promise<FrictionEvent[]> {
-    const [custom, native] = await Promise.all([
+    const [custom, native, knownRepos] = await Promise.all([
       this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate, teamId),
       this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate, teamId),
+      this.telemetryService.getKnownRepos(user.organizationId),
     ]);
-    return [...custom, ...native];
+
+    // Sort longest-first so "tandemu-website" matches before "tandemu"
+    const repos = knownRepos.sort((a, b) => b.length - a.length);
+
+    return [...custom, ...native].map((event) => {
+      for (const repo of repos) {
+        const idx = event.repositoryPath.indexOf(`/${repo}/`);
+        if (idx !== -1) {
+          return { ...event, repo, repositoryPath: event.repositoryPath.slice(idx + repo.length + 2) };
+        }
+      }
+      return event;
+    });
   }
 
   @Get('hot-files')
