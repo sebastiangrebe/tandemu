@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Calendar, TrendingUp } from "lucide-react";
 import { getTimesheets, getDeveloperStats, getHotFiles, getAIEffectiveness, type TimesheetEntry, type DeveloperStat, type HotFile, type AIEffectivenessEntry } from '@/lib/api';
 import { ActivityChart } from '@/components/charts/activity-chart';
@@ -112,49 +112,34 @@ export default function ActivityPage() {
         <>
           {/* Stats */}
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Active Time</p>
-                    <p className="text-3xl font-bold text-violet-400 mt-1">{formatDuration(totalMinutes)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">this period</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                    <Clock className="h-5 w-5 text-violet-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Active Time</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatDuration(totalMinutes)}</div>
+                <p className="text-xs text-muted-foreground mt-1">this period</p>
               </CardContent>
             </Card>
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Sessions</p>
-                    <p className="text-3xl font-bold text-blue-400 mt-1">{totalSessions}</p>
-                    <p className="text-xs text-muted-foreground mt-1">task completions</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <Calendar className="h-5 w-5 text-blue-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Sessions</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalSessions}</div>
+                <p className="text-xs text-muted-foreground mt-1">task completions</p>
               </CardContent>
             </Card>
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Avg per Developer</p>
-                    <p className="text-3xl font-bold text-emerald-400 mt-1">{formatDuration(avgPerDev)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">average active time</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <TrendingUp className="h-5 w-5 text-emerald-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Avg per Developer</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatDuration(avgPerDev)}</div>
+                <p className="text-xs text-muted-foreground mt-1">average active time</p>
               </CardContent>
             </Card>
           </div>

@@ -114,94 +114,64 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Sessions</p>
-                <p className="text-3xl font-bold text-violet-400 mt-1">{totalSessions}</p>
-                <p className="text-xs text-muted-foreground mt-1">{formatDuration(totalMinutes)} active time</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                <Activity className="h-5 w-5 text-violet-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Sessions</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalSessions}</div>
+            <p className="text-xs text-muted-foreground mt-1">{formatDuration(totalMinutes)} active time</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">AI Code Ratio</p>
-                <p className="text-3xl font-bold text-blue-400 mt-1">{aiRatio}%</p>
-                <p className="text-xs text-muted-foreground mt-1">{totalAi.toLocaleString()} AI / {totalManual.toLocaleString()} manual</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <Brain className="h-5 w-5 text-blue-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">AI Code Ratio</CardTitle>
+            <Brain className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{aiRatio}%</div>
+            <p className="text-xs text-muted-foreground mt-1">{totalAi.toLocaleString()} AI / {totalManual.toLocaleString()} manual</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Developers</p>
-                <p className="text-3xl font-bold text-emerald-400 mt-1">{developerIds.size}</p>
-                <p className="text-xs text-muted-foreground mt-1">with recorded sessions</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-emerald-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Developers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{developerIds.size}</div>
+            <p className="text-xs text-muted-foreground mt-1">with recorded sessions</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Lines of Code</p>
-                <p className="text-3xl font-bold text-amber-400 mt-1">{totalLines.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">across all sessions</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                <Code2 className="h-5 w-5 text-amber-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Lines of Code</CardTitle>
+            <Code2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalLines.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">across all sessions</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Cycle Time</p>
-                <p className="text-3xl font-bold text-pink-400 mt-1">{formatDuration(avgSessionDuration)}</p>
-                <p className="text-xs text-muted-foreground mt-1">per task completion</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-pink-500/10 flex items-center justify-center">
-                <Timer className="h-5 w-5 text-pink-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Cycle Time</CardTitle>
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatDuration(avgSessionDuration)}</div>
+            <p className="text-xs text-muted-foreground mt-1">per task completion</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent" />
-          <CardContent className="relative pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Tool Success Rate</p>
-                <p className="text-3xl font-bold text-cyan-400 mt-1">{totalToolCalls > 0 ? `${overallToolSuccess}%` : '—'}</p>
-                <p className="text-xs text-muted-foreground mt-1">{totalToolCalls.toLocaleString()} total tool calls</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                <Wrench className="h-5 w-5 text-cyan-400" />
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Tool Success Rate</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalToolCalls > 0 ? `${overallToolSuccess}%` : '—'}</div>
+            <p className="text-xs text-muted-foreground mt-1">{totalToolCalls.toLocaleString()} total tool calls</p>
           </CardContent>
         </Card>
       </div>

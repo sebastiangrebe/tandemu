@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Zap, Clock, DollarSign, Info, Settings } from 'lucide-react';
 import { getInsightsMetrics, getTokenUsage } from '@/lib/api';
 import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
@@ -112,50 +112,41 @@ export default function InsightsPage() {
 
             {/* Hero KPI Cards */}
             <div className="grid gap-4 md:grid-cols-3">
-              <Card className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
-                <CardContent className="relative pt-6 pb-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/15">
-                      <Zap className="h-4 w-4 text-emerald-400" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">Productivity Multiplier</p>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Productivity Multiplier</CardTitle>
+                  <Zap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
                     {data.productivityMultiplier !== null ? `${data.productivityMultiplier}x` : data.totalAILines > 0 ? '100%' : '-'}
-                  </p>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">total output / manual-only output</p>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-                <CardContent className="relative pt-6 pb-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/15">
-                      <Clock className="h-4 w-4 text-blue-400" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">Capacity Freed</p>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Capacity Freed</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
                     {data.capacityFreedHours > 0 ? `${data.capacityFreedHours}h` : '-'}
-                  </p>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">hours of manual work handled by AI</p>
                 </CardContent>
               </Card>
 
-              <Card className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent" />
-                <CardContent className="relative pt-6 pb-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/15">
-                      <DollarSign className="h-4 w-4 text-amber-400" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">Cost per Task</p>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Cost per Task</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
                     {formatCurrency(data.costPerTask, data.assumptions.currency)}
-                  </p>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">AI cost per completed task</p>
                 </CardContent>
               </Card>

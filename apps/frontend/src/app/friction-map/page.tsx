@@ -280,64 +280,44 @@ export default function FrictionMapPage() {
         <>
           {/* KPI cards */}
           <div className="grid gap-4 md:grid-cols-4">
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">High Friction</p>
-                    <p className="text-3xl font-bold text-red-400 mt-1">{highCount}</p>
-                    <p className="text-xs text-muted-foreground mt-1">paths need attention</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                    <XCircle className="h-5 w-5 text-red-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">High Friction</CardTitle>
+                <XCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-400">{highCount}</div>
+                <p className="text-xs text-muted-foreground mt-1">paths need attention</p>
               </CardContent>
             </Card>
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Medium Friction</p>
-                    <p className="text-3xl font-bold text-yellow-400 mt-1">{mediumCount}</p>
-                    <p className="text-xs text-muted-foreground mt-1">paths to monitor</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                    <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Medium Friction</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-400">{mediumCount}</div>
+                <p className="text-xs text-muted-foreground mt-1">paths to monitor</p>
               </CardContent>
             </Card>
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Low Friction</p>
-                    <p className="text-3xl font-bold text-emerald-400 mt-1">{lowCount}</p>
-                    <p className="text-xs text-muted-foreground mt-1">paths running smoothly</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Low Friction</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-emerald-400">{lowCount}</div>
+                <p className="text-xs text-muted-foreground mt-1">paths running smoothly</p>
               </CardContent>
             </Card>
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent" />
-              <CardContent className="relative pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Events</p>
-                    <p className="text-3xl font-bold text-violet-400 mt-1">{totalErrors + totalLoops}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{totalErrors} errors, {totalLoops} loops</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 text-violet-400" />
-                  </div>
-                </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Events</CardTitle>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-violet-400">{totalErrors + totalLoops}</div>
+                <p className="text-xs text-muted-foreground mt-1">{totalErrors} errors, {totalLoops} loops</p>
               </CardContent>
             </Card>
           </div>

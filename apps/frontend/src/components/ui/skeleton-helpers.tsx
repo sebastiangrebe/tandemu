@@ -18,24 +18,6 @@ export function CardSkeleton() {
   );
 }
 
-/** KPI card with gradient background matching the redesigned style */
-function GradientCardSkeleton() {
-  return (
-    <Card className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-muted/30 to-transparent" />
-      <CardContent className="relative pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-16 mt-2" />
-            <Skeleton className="h-3 w-28 mt-2" />
-          </div>
-          <Skeleton className="h-10 w-10 rounded-lg" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export function ChartSkeleton({ height = 220 }: { height?: number }) {
   return (
@@ -138,7 +120,7 @@ export function ActivitySkeleton() {
   );
 }
 
-/** Insights: 3 gradient KPIs + 4 inline stats + 2 charts + token chart */
+/** Insights: 3 KPIs + 4 inline stats + 2 charts + token chart */
 export function InsightsSkeleton() {
   return (
     <div className="space-y-6">
@@ -148,7 +130,7 @@ export function InsightsSkeleton() {
       <Skeleton className="h-5 w-32" />
       {/* Hero KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => <GradientCardSkeleton key={i} />)}
+        {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
       </div>
       {/* Throughput stats */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -171,12 +153,12 @@ export function InsightsSkeleton() {
   );
 }
 
-/** Friction Map: 4 gradient KPI cards + file tree browser */
+/** Friction Map: 4 KPI cards + file tree browser */
 export function FrictionSkeleton() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <GradientCardSkeleton key={i} />)}
+        {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
       </div>
       <FileBrowserSkeleton rows={8} />
     </div>
@@ -272,13 +254,13 @@ export function SettingsSkeleton() {
   );
 }
 
-/** Memory: 4 gradient KPI cards + 2 charts + 2 insight cards + browser + knowledge gaps */
+/** Memory: 4 KPI cards + 2 charts + 2 insight cards + browser + knowledge gaps */
 export function MemorySkeleton() {
   return (
     <div className="space-y-6">
-      {/* KPI row — gradient style */}
+      {/* KPI row */}
       <div className="grid gap-4 md:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <GradientCardSkeleton key={i} />)}
+        {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
       </div>
       {/* Charts row */}
       <div className="grid gap-4 md:grid-cols-2">
