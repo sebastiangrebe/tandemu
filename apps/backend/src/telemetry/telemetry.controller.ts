@@ -56,13 +56,19 @@ export class TelemetryController {
     const dirNames = [...repoMap.keys()].sort((a, b) => b.length - a.length);
 
     return [...custom, ...native].map((event) => {
+      let path = event.repositoryPath;
+      let repo = event.repo;
       for (const dirName of dirNames) {
-        const idx = event.repositoryPath.indexOf(`/${dirName}/`);
+        const idx = path.indexOf(`/${dirName}/`);
         if (idx !== -1) {
-          return { ...event, repo: repoMap.get(dirName)!, repositoryPath: event.repositoryPath.slice(idx + dirName.length + 2) };
+          repo = repoMap.get(dirName)!;
+          path = path.slice(idx + dirName.length + 2);
+          break;
         }
       }
-      return event;
+      // Strip .worktrees/<task-id>/ prefix from worktree paths
+      path = path.replace(/^\.worktrees\/[^/]+\//, '');
+      return { ...event, repo, repositoryPath: path };
     });
   }
 
