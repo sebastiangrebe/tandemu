@@ -95,10 +95,6 @@ const allNavItems = [
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
-import { Crisp } from 'crisp-sdk-web';
-
-const CRISP_WEBSITE_ID = process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID;
-
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -107,8 +103,11 @@ export function Header() {
 
   // Load Crisp chat (SaaS only)
   useEffect(() => {
-    if (!CRISP_WEBSITE_ID) return;
-    Crisp.configure(CRISP_WEBSITE_ID);
+    const crispId = process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID;
+    if (!crispId) return;
+    import('crisp-sdk-web').then(({ Crisp }) => {
+      Crisp.configure(crispId);
+    });
   }, []);
 
   const [commandOpen, setCommandOpen] = useState(false);
@@ -374,8 +373,10 @@ export function Header() {
                     )}
                     {theme === "dark" ? "Light mode" : "Dark mode"}
                   </DropdownMenuItem>
-                  {CRISP_WEBSITE_ID && (
-                    <DropdownMenuItem onClick={() => Crisp.chat.open()}>
+                  {process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID && (
+                    <DropdownMenuItem onClick={() => {
+                      import('crisp-sdk-web').then(({ Crisp }) => Crisp.chat.open());
+                    }}>
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Support
                     </DropdownMenuItem>

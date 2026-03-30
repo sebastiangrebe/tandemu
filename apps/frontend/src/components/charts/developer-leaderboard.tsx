@@ -64,7 +64,7 @@ export function DeveloperLeaderboard({ data }: DeveloperLeaderboardProps) {
               <TableHead className="text-right">Sessions</TableHead>
               <TableHead className="text-right">Active Time</TableHead>
               <TableHead className="text-right">Total Lines</TableHead>
-              <TableHead className="w-full">AI Adoption</TableHead>
+              <TableHead>AI Adoption</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -85,7 +85,7 @@ export function DeveloperLeaderboard({ data }: DeveloperLeaderboardProps) {
                   <TableCell className="text-right">{total.toLocaleString()}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${aiPct}%`, backgroundColor: tier.color }} />
                       </div>
                       <span className={`text-sm font-medium ${tier.textClass}`}>{aiPct}%</span>
