@@ -48,17 +48,29 @@ export class TelemetryController {
     // Sort repos longest-first so "tandemu-website" matches before "tandemu"
     const sortedRepos = knownRepos.sort((a, b) => b.length - a.length);
 
+    // Build a set of all repo names — known from spans + inferred from paths
+    const allRepoNames = new Set(sortedRepos);
+    const allPaths = [...custom, ...native].map((e) => e.repositoryPath);
+    for (const p of allPaths) {
+      // Infer repo names from paths containing common project markers
+      const match = p.match(/\/([^/]+)\/(?:apps|packages|src|lib|node_modules)\//);
+      if (match) allRepoNames.add(match[1]);
+    }
+    // Re-sort longest-first after adding inferred names
+    const allRepos = [...allRepoNames].sort((a, b) => b.length - a.length);
+
     const normalize = (event: FrictionEvent): FrictionEvent => {
       const absPath = event.repositoryPath;
-      for (const repo of sortedRepos) {
+      for (const repo of allRepos) {
         const idx = absPath.indexOf(`/${repo}/`);
         if (idx !== -1) {
           return { ...event, repo, repositoryPath: absPath.slice(idx + repo.length + 2) };
         }
       }
-      // Fallback: return filename only
-      const lastSlash = absPath.lastIndexOf('/');
-      return { ...event, repo: '', repositoryPath: lastSlash >= 0 ? absPath.slice(lastSlash + 1) : absPath };
+      // Fallback: keep the path as-is but try to extract a reasonable relative path
+      // Strip common home directory prefixes
+      const cleaned = absPath.replace(/^\/(?:Users|home)\/[^/]+\//, '');
+      return { ...event, repo: '', repositoryPath: cleaned };
     };
 
     return [...custom, ...native].map(normalize);
