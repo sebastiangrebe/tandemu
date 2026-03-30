@@ -44,34 +44,20 @@ function computeSeverity(score: number): "low" | "medium" | "high" {
   return "low";
 }
 
-function extractRepo(fullPath: string): { repo: string; shortPath: string } {
-  // Try to extract repo name from common patterns
-  const gitMatch = fullPath.match(/\/([^/]+)\/(apps|packages|src|lib)\//);
-  if (gitMatch) {
-    const repoIdx = fullPath.indexOf(gitMatch[1]);
-    return {
-      repo: gitMatch[1],
-      shortPath: fullPath.slice(repoIdx + gitMatch[1].length + 1),
-    };
-  }
-  // Fallback: use last 3 segments
-  const parts = fullPath.split('/');
-  if (parts.length > 3) {
-    return { repo: parts[parts.length - 3], shortPath: parts.slice(-3).join('/') };
-  }
-  return { repo: 'unknown', shortPath: fullPath };
-}
-
 function aggregateFriction(events: FrictionEvent[]): FrictionItem[] {
-  const map = new Map<string, { promptLoopCount: number; errorCount: number; sessions: Set<string> }>();
+  const key = (e: FrictionEvent) => `${e.repo}::${e.repositoryPath}`;
+  const map = new Map<string, { repo: string; path: string; promptLoopCount: number; errorCount: number; sessions: Set<string> }>();
   for (const event of events) {
-    const existing = map.get(event.repositoryPath);
+    const k = key(event);
+    const existing = map.get(k);
     if (existing) {
       existing.promptLoopCount += event.promptLoopCount;
       existing.errorCount += event.errorCount;
       existing.sessions.add(event.sessionId);
     } else {
-      map.set(event.repositoryPath, {
+      map.set(k, {
+        repo: event.repo,
+        path: event.repositoryPath,
         promptLoopCount: event.promptLoopCount,
         errorCount: event.errorCount,
         sessions: new Set([event.sessionId]),
@@ -79,14 +65,13 @@ function aggregateFriction(events: FrictionEvent[]): FrictionItem[] {
     }
   }
 
-  return Array.from(map.entries())
-    .map(([path, data]) => {
-      const { repo, shortPath } = extractRepo(path);
+  return Array.from(map.values())
+    .map((data) => {
       const score = computeScore(data.promptLoopCount, data.errorCount);
       return {
-        path,
-        shortPath,
-        repo,
+        path: data.path,
+        shortPath: data.path,
+        repo: data.repo,
         promptLoopCount: data.promptLoopCount,
         errorCount: data.errorCount,
         sessions: data.sessions.size,

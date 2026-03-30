@@ -45,6 +45,7 @@ export interface FrictionEvent {
   readonly sessionId: string;
   readonly userId: string;
   readonly repositoryPath: string;
+  readonly repo: string;
   readonly promptLoopCount: number;
   readonly errorCount: number;
   readonly timestamp: string;
