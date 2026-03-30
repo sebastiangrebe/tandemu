@@ -39,38 +39,37 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
     @Query('teamId') teamId?: string,
   ): Promise<FrictionEvent[]> {
-    const [custom, native, knownRepos] = await Promise.all([
+    const [custom, native, fileRepoMap] = await Promise.all([
       this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate, teamId),
       this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate, teamId),
-      this.telemetryService.getKnownRepos(user.organizationId),
+      this.telemetryService.getFileRepoMap(user.organizationId),
     ]);
 
-    // Sort repos longest-first so "tandemu-website" matches before "tandemu"
-    const sortedRepos = knownRepos.sort((a, b) => b.length - a.length);
-
-    // Build a set of all repo names — known from spans + inferred from paths
-    const allRepoNames = new Set(sortedRepos);
-    const allPaths = [...custom, ...native].map((e) => e.repositoryPath);
-    for (const p of allPaths) {
-      // Infer repo names from paths containing common project markers
-      const match = p.match(/\/([^/]+)\/(?:apps|packages|src|lib|node_modules)\//);
-      if (match) allRepoNames.add(match[1]);
-    }
-    // Re-sort longest-first after adding inferred names
-    const allRepos = [...allRepoNames].sort((a, b) => b.length - a.length);
+    // Build repo → set of known relative paths for quick lookup
+    const reposByFile = fileRepoMap;
 
     const normalize = (event: FrictionEvent): FrictionEvent => {
       const absPath = event.repositoryPath;
-      for (const repo of allRepos) {
+
+      // Try to match the absolute path suffix against known relative file paths
+      for (const [relPath, repo] of reposByFile) {
+        if (absPath.endsWith('/' + relPath)) {
+          const prefix = absPath.slice(0, absPath.length - relPath.length);
+          return { ...event, repo, repositoryPath: relPath };
+        }
+      }
+
+      // Fallback: try to find repo name in the absolute path using unique repo names
+      const knownRepos = [...new Set(reposByFile.values())].sort((a, b) => b.length - a.length);
+      for (const repo of knownRepos) {
         const idx = absPath.indexOf(`/${repo}/`);
         if (idx !== -1) {
           return { ...event, repo, repositoryPath: absPath.slice(idx + repo.length + 2) };
         }
       }
-      // Fallback: keep the path as-is but try to extract a reasonable relative path
-      // Strip common home directory prefixes
-      const cleaned = absPath.replace(/^\/(?:Users|home)\/[^/]+\//, '');
-      return { ...event, repo: '', repositoryPath: cleaned };
+
+      // Last resort: return path as-is
+      return { ...event, repo: '', repositoryPath: absPath };
     };
 
     return [...custom, ...native].map(normalize);
