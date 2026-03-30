@@ -132,6 +132,32 @@ export class IntegrationsService {
     }
   }
 
+  async createOrUpdate(orgId: string, dto: CreateIntegrationDto): Promise<Integration> {
+    const encryptedToken = this.encryptToken(dto.accessToken);
+    const encryptedRefresh = dto.refreshToken ? this.encryptToken(dto.refreshToken) : null;
+
+    const result = await this.db.query<IntegrationRow>(
+      `INSERT INTO integrations (organization_id, provider, access_token, refresh_token, external_workspace_id, external_workspace_name, encryption_key_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (organization_id, provider)
+       DO UPDATE SET access_token = EXCLUDED.access_token, refresh_token = EXCLUDED.refresh_token,
+                     external_workspace_id = COALESCE(EXCLUDED.external_workspace_id, integrations.external_workspace_id),
+                     external_workspace_name = COALESCE(EXCLUDED.external_workspace_name, integrations.external_workspace_name),
+                     encryption_key_version = EXCLUDED.encryption_key_version, updated_at = now()
+       RETURNING *`,
+      [
+        orgId,
+        dto.provider,
+        encryptedToken,
+        encryptedRefresh,
+        dto.externalWorkspaceId ?? null,
+        dto.externalWorkspaceName ?? null,
+        this.keyVersion,
+      ],
+    );
+    return mapIntegration(result.rows[0]!);
+  }
+
   async findAll(orgId: string): Promise<Array<Integration & { maskedToken: string }>> {
     const result = await this.db.query<IntegrationRow>(
       `SELECT * FROM integrations WHERE organization_id = $1`,

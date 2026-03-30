@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ import {
   deleteProjectMapping,
   getTeams,
   getSubProjects,
+  getGitHubOAuthIntegrationUrl,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Integration, IntegrationProjectMapping } from '@/lib/api';
@@ -141,11 +143,36 @@ function getProviderMeta(providerId: string) {
   return PROVIDERS.find((p) => p.id === providerId);
 }
 
-export default function IntegrationsPage() {
-  const { currentOrg: authOrg } = useAuth();
+function IntegrationsPageInner() {
+  const { currentOrg: authOrg, user } = useAuth();
+  const searchParams = useSearchParams();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Handle GitHub OAuth callback
+  const oauthHandled = useRef(false);
+  useEffect(() => {
+    if (oauthHandled.current) return;
+    const githubStatus = searchParams.get('github');
+    if (githubStatus) {
+      oauthHandled.current = true;
+      if (githubStatus === 'connected') {
+        toast.success('GitHub connected successfully via OAuth.');
+      } else if (githubStatus === 'error') {
+        const errorType = searchParams.get('error');
+        toast.error(
+          errorType === 'account_mismatch'
+            ? 'GitHub account mismatch. Use the same GitHub account you signed up with.'
+            : 'Failed to connect GitHub. Please try again or use manual setup.',
+        );
+      }
+      // Clean URL
+      window.history.replaceState({}, '', '/integrations');
+    }
+  }, [searchParams]);
+
+  const hasGitHubOAuth = user?.oauthProviders?.includes('github') ?? false;
 
   // Org + teams for mappings
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -554,19 +581,46 @@ export default function IntegrationsPage() {
                       )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setConnectProvider(provider.id);
-                      setConnectToken('');
-                      setConnectWorkspace('');
-                      setShowToken(false);
-                    }}
-                  >
-                    <Plug className="h-3.5 w-3.5 mr-2" />
-                    Connect
-                  </Button>
+                  {provider.id === 'github' && hasGitHubOAuth ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          window.location.href = getGitHubOAuthIntegrationUrl('/integrations');
+                        }}
+                      >
+                        <SiGithub size={14} className="mr-2" />
+                        Connect with GitHub
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setConnectProvider(provider.id);
+                          setConnectToken('');
+                          setConnectWorkspace('');
+                          setShowToken(false);
+                        }}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Manual setup
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setConnectProvider(provider.id);
+                        setConnectToken('');
+                        setConnectWorkspace('');
+                        setShowToken(false);
+                      }}
+                    >
+                      <Plug className="h-3.5 w-3.5 mr-2" />
+                      Connect
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -855,5 +909,21 @@ export default function IntegrationsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function IntegrationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
+          <p className="text-muted-foreground">Connect your ticket system and map projects to teams.</p>
+        </div>
+        <IntegrationsSkeleton />
+      </div>
+    }>
+      <IntegrationsPageInner />
+    </Suspense>
   );
 }

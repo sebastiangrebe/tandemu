@@ -10,6 +10,7 @@ interface AuthUser {
   email: string;
   name: string;
   role?: string;
+  oauthProviders?: string[];
 }
 
 interface AuthContextType {

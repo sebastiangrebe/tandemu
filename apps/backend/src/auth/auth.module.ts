@@ -28,6 +28,6 @@ import { GithubOAuthService } from './strategies/github.strategy.js';
       inject: [AuthService, ConfigService],
     },
   ],
-  exports: [AuthService, CliAuthService, JwtAuthGuard],
+  exports: [AuthService, CliAuthService, JwtAuthGuard, GithubOAuthService],
 })
 export class AuthModule {}
