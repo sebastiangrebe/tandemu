@@ -618,40 +618,6 @@ export class TelemetryService implements OnModuleDestroy {
   }
 
 
-  /**
-   * Returns a map of relative file path → repo name, built from task_session spans.
-   * Used to resolve absolute friction paths to their repo.
-   */
-  async getFileRepoMap(organizationId: string): Promise<Map<string, string>> {
-    try {
-      const resultSet = await this.client.query({
-        query: `
-          SELECT
-            SpanAttributes['repo'] AS repo,
-            SpanAttributes['changed_files'] AS changed_files
-          FROM otel_traces
-          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
-            AND SpanName = 'task_session'
-            AND SpanAttributes['repo'] != ''
-            AND SpanAttributes['changed_files'] != ''
-        `,
-        query_params: { organizationId },
-        format: 'JSONEachRow',
-      });
-      const rows = await resultSet.json<{ repo: string; changed_files: string }>();
-      const map = new Map<string, string>();
-      for (const row of rows) {
-        for (const file of row.changed_files.split(',')) {
-          const trimmed = file.trim();
-          if (trimmed) map.set(trimmed, row.repo);
-        }
-      }
-      return map;
-    } catch {
-      return new Map();
-    }
-  }
-
   async getTimesheets(query: TimesheetQuery): Promise<TimesheetEntry[]> {
     try {
       // Query task_session spans for timesheet data

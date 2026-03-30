@@ -39,40 +39,11 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
     @Query('teamId') teamId?: string,
   ): Promise<FrictionEvent[]> {
-    const [custom, native, fileRepoMap] = await Promise.all([
+    const [custom, native] = await Promise.all([
       this.telemetryService.getFrictionHeatmap(user.organizationId, startDate, endDate, teamId),
       this.telemetryService.getNativeFriction(user.organizationId, startDate, endDate, teamId),
-      this.telemetryService.getFileRepoMap(user.organizationId),
     ]);
-
-    // Build repo → set of known relative paths for quick lookup
-    const reposByFile = fileRepoMap;
-
-    const normalize = (event: FrictionEvent): FrictionEvent => {
-      const absPath = event.repositoryPath;
-
-      // Try to match the absolute path suffix against known relative file paths
-      for (const [relPath, repo] of reposByFile) {
-        if (absPath.endsWith('/' + relPath)) {
-          const prefix = absPath.slice(0, absPath.length - relPath.length);
-          return { ...event, repo, repositoryPath: relPath };
-        }
-      }
-
-      // Fallback: try to find repo name in the absolute path using unique repo names
-      const knownRepos = [...new Set(reposByFile.values())].sort((a, b) => b.length - a.length);
-      for (const repo of knownRepos) {
-        const idx = absPath.indexOf(`/${repo}/`);
-        if (idx !== -1) {
-          return { ...event, repo, repositoryPath: absPath.slice(idx + repo.length + 2) };
-        }
-      }
-
-      // Last resort: return path as-is
-      return { ...event, repo: '', repositoryPath: absPath };
-    };
-
-    return [...custom, ...native].map(normalize);
+    return [...custom, ...native];
   }
 
   @Get('hot-files')
