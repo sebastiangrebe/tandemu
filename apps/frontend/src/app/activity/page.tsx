@@ -8,7 +8,6 @@ import { ActivityChart } from '@/components/charts/activity-chart';
 import { DeveloperLeaderboard } from '@/components/charts/developer-leaderboard';
 import { HotFilesChart } from '@/components/charts/hot-files-chart';
 import { AIEffectivenessChart } from '@/components/charts/ai-effectiveness-chart';
-import { SessionTable } from '@/components/charts/session-table';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ActivitySkeleton } from '@/components/ui/skeleton-helpers';
 import { InstallBanner } from '@/components/install-banner';
@@ -152,8 +151,6 @@ export default function ActivityPage() {
             <HotFilesChart data={hotFiles} />
             <AIEffectivenessChart data={aiEffectiveness} />
           </div>
-
-          <SessionTable data={data} />
         </>
       )}
     </div>

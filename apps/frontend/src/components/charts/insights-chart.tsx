@@ -40,7 +40,7 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={260}>
-          <AreaChart data={chartData}>
+          <AreaChart data={chartData} margin={{ top: 10 }}>
             <defs>
               <linearGradient id="colorAILines" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
@@ -101,7 +101,7 @@ export function CostEfficiencyChart({ data }: CostEfficiencyChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={260}>
-          <AreaChart data={chartData}>
+          <AreaChart data={chartData} margin={{ top: 10 }}>
             <defs>
               <linearGradient id="colorCostEff" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />

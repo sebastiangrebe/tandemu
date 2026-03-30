@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Link from 'next/link';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -74,7 +75,11 @@ export function DeveloperLeaderboard({ data }: DeveloperLeaderboardProps) {
               return (
                 <TableRow key={dev.userId}>
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                  <TableCell className="font-medium">{dev.userName || dev.userId.slice(0, 8)}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/developer/${dev.userId}`} className="hover:underline">
+                      {dev.userName || dev.userId.slice(0, 8)}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right">{dev.sessions}</TableCell>
                   <TableCell className="text-right">{formatDuration(dev.activeMinutes)}</TableCell>
                   <TableCell className="text-right">{total.toLocaleString()}</TableCell>

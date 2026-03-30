@@ -8,7 +8,7 @@ import {
 import { TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { AIvsManualRatio } from '@tandemu/types';
 
-const AI_COLORS = ['#4ade80', '#27272a'];
+const AI_COLORS = ['#4ade80', '#71717a'];
 
 interface AIRatioChartProps {
   data: AIvsManualRatio[];

@@ -166,6 +166,7 @@ export interface TelemetryFilter {
   startDate?: string;
   endDate?: string;
   teamId?: string;
+  userId?: string;
 }
 
 function buildParams(filter?: TelemetryFilter): string {
@@ -174,6 +175,7 @@ function buildParams(filter?: TelemetryFilter): string {
   if (filter.startDate) p.set('startDate', filter.startDate);
   if (filter.endDate) p.set('endDate', filter.endDate);
   if (filter.teamId) p.set('teamId', filter.teamId);
+  if (filter.userId) p.set('userId', filter.userId);
   const s = p.toString();
   return s ? `?${s}` : '';
 }
