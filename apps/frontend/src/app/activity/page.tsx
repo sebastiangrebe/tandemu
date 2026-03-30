@@ -147,10 +147,8 @@ export default function ActivityPage() {
 
           <DeveloperLeaderboard data={devStats} />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <HotFilesChart data={hotFiles} />
-            <AIEffectivenessChart data={aiEffectiveness} />
-          </div>
+          <HotFilesChart data={hotFiles} />
+          <AIEffectivenessChart data={aiEffectiveness} />
         </>
       )}
     </div>

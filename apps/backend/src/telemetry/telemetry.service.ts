@@ -247,9 +247,13 @@ export class TelemetryService implements OnModuleDestroy {
     const endNs = BigInt(now.getTime()) * 1_000_000n;
 
     const changedFiles = input.changedFilesList.join(',');
-    const aiFilesList = usedNativeAttribution
-      ? (await this.getNativeAIAttribution(organizationId, input.startedAt, now.toISOString()).catch(() => ({ aiFilePaths: [] as string[], totalNativeAiLines: 0 }))).aiFilePaths.join(',')
-      : '';
+    let aiFilesList: string;
+    if (usedNativeAttribution) {
+      aiFilesList = (await this.getNativeAIAttribution(organizationId, input.startedAt, now.toISOString()).catch(() => ({ aiFilePaths: [] as string[], totalNativeAiLines: 0 }))).aiFilePaths.join(',');
+    } else {
+      // Fallback: if AI lines > 0, attribute all changed files as AI-touched
+      aiFilesList = aiLines > 0 ? input.changedFilesList.join(',') : '';
+    }
 
     // Queue trace span
     this.telemetryQueue.add('otlp-trace', {
