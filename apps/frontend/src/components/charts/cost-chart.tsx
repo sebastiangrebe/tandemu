@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { AXIS_TICK, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 import type { CostEntry } from '@/lib/api';
 
 interface CostChartProps {
@@ -56,11 +57,12 @@ export function CostChart({ data }: CostChartProps) {
                 <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${v}`} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${v}`} />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cost']}
             />
             <Area type="monotone" dataKey="cost" stroke="#60a5fa" fill="url(#colorCostGrad)" strokeWidth={2} />

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import { AXIS_TICK, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 
 const CATEGORY_HEX: Record<string, string> = {
   architecture: '#3b82f6',
@@ -56,13 +57,14 @@ export function MemoryCategoryChart({ categories }: MemoryCategoryChartProps) {
               type="category"
               dataKey="name"
               width={90}
-              tick={{ fontSize: 12, fill: 'var(--ts)' }}
+              tick={AXIS_TICK}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               cursor={{ fill: 'rgba(255,255,255,0.03)' }}
             />
             <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>

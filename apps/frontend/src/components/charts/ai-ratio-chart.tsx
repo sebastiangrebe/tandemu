@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { AIvsManualRatio } from '@tandemu/types';
 
 const AI_COLORS = ['#4ade80', '#27272a'];
@@ -48,10 +49,12 @@ export function AIRatioChart({ data }: AIRatioChartProps) {
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number) => value.toLocaleString()}
             />
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
+            <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>

@@ -5,6 +5,7 @@ import {
   AreaChart, Area, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { AXIS_TICK, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 import type { TimesheetEntry } from '@/lib/api';
 
 interface ActivityChartProps {
@@ -60,11 +61,12 @@ export function ActivityChart({ data, startDate, endDate, height = 220 }: Activi
                 <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={30} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={30} />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
             />
             <Area type="monotone" dataKey="hours" name="Hours" stroke="#4ade80" fill="url(#colorHoursGrad)" strokeWidth={2} />
             <Bar dataKey="sessions" name="Sessions" fill="#4ade80" opacity={0.3} radius={[2, 2, 0, 0]} />

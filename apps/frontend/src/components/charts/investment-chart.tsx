@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 import type { InvestmentAllocation } from '@/lib/api';
 
 interface InvestmentChartProps {
@@ -69,7 +70,9 @@ export function InvestmentChart({ data }: InvestmentChartProps) {
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number, _name: string, props: { payload?: { tasks: number } }) => [
                 `${value}h (${props.payload?.tasks ?? 0} tasks)`,
                 'Time',

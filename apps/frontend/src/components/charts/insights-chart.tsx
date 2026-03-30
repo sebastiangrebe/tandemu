@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { AXIS_TICK, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { InsightsDaily } from '@/lib/api';
 
 interface ThroughputChartProps {
@@ -50,13 +51,14 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
                 <stop offset="95%" stopColor="#a1a1aa" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={50} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={50} />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
             />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
             <Area type="monotone" dataKey="aiLines" name="AI Lines" stroke="#60a5fa" fill="url(#colorAILines)" strokeWidth={2} />
             <Area type="monotone" dataKey="manualLines" name="Manual Lines" stroke="#a1a1aa" fill="url(#colorManualLines)" strokeWidth={2} />
           </AreaChart>
@@ -106,17 +108,18 @@ export function CostEfficiencyChart({ data }: CostEfficiencyChartProps) {
                 <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${v}`} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${v}`} />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number, name: string) => [
                 name === 'cost' ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`,
                 name === 'cost' ? 'Daily Cost' : 'Cost/Line',
               ]}
             />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
             <Area type="monotone" dataKey="cost" name="Daily Cost" stroke="#f87171" fill="url(#colorCostEff)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>

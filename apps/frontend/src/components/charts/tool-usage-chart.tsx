@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import { AXIS_TICK, AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 import type { ToolUsageStat } from '@/lib/api';
 
 interface ToolUsageChartProps {
@@ -48,18 +49,19 @@ export function ToolUsageChart({ data }: ToolUsageChartProps) {
       <CardContent>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
-            <XAxis type="number" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
+            <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false} />
             <YAxis
               type="category"
               dataKey="name"
-              tick={{ fontSize: 11, fill: 'var(--tt)' }}
+              tick={AXIS_TICK_SM}
               axisLine={false}
               tickLine={false}
               width={100}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number, _name: string, props: { payload?: { successRate: number } }) => [
                 `${value.toLocaleString()} calls (${props.payload?.successRate ?? 0}% success)`,
                 'Usage',

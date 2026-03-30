@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { AXIS_TICK, AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { TokenUsageEntry } from '@/lib/api';
 
 interface TokenUsageChartProps {
@@ -66,7 +67,7 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
             <XAxis
               type="number"
-              tick={{ fontSize: 12, fill: 'var(--tt)' }}
+              tick={AXIS_TICK}
               axisLine={false}
               tickLine={false}
               tickFormatter={formatTokens}
@@ -74,17 +75,18 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
             <YAxis
               type="category"
               dataKey="model"
-              tick={{ fontSize: 11, fill: 'var(--tt)' }}
+              tick={AXIS_TICK_SM}
               axisLine={false}
               tickLine={false}
               width={120}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: 'var(--ts)' }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
               formatter={(value: number) => [formatTokens(value), undefined]}
             />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
+            <Legend wrapperStyle={LEGEND_STYLE} />
             {tokenTypes.map((type) => (
               <Bar
                 key={type}
