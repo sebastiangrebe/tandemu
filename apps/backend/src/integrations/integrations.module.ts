@@ -1,5 +1,6 @@
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { IntegrationsController } from './integrations.controller.js';
+import { IntegrationOAuthController } from './integration-oauth.controller.js';
 import { TasksController } from './tasks.controller.js';
 import { IntegrationsService } from './integrations.service.js';
 import { TasksService } from './tasks.service.js';
@@ -11,7 +12,7 @@ import { TelemetryModule } from '../telemetry/telemetry.module.js';
 
 @Module({
   imports: [AuthModule, TeamsModule, forwardRef(() => TelemetryModule)],
-  controllers: [IntegrationsController, TasksController],
+  controllers: [IntegrationsController, IntegrationOAuthController, TasksController],
   providers: [IntegrationsService, TasksService, GitHubGitService],
   exports: [IntegrationsService, TasksService, GitHubGitService],
 })

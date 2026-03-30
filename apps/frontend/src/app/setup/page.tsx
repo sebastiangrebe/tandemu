@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { LoadingScreen } from '@/components/loading-screen';
 import {
   createOrganization,
   createInvite,
   createTeam,
+  createIntegration,
   switchOrg,
+  getGitHubOAuthIntegrationUrl,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +24,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   LayoutDashboard,
   Clock,
   Flame,
@@ -33,7 +44,14 @@ import {
   Mail,
   Trash2,
   ChevronsUpDown,
+  Check,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
+import { SiGithub, SiJira, SiLinear, SiClickup, SiAsana } from '@icons-pack/react-simple-icons';
+import Image from 'next/image';
 import { toast } from 'sonner';
 
 function generateSlug(name: string): string {
@@ -60,7 +78,82 @@ const STEPS = [
   { description: 'Set up your workspace' },
   { description: 'Create your teams' },
   { description: 'Invite your team' },
+  { description: 'Connect your tools' },
 ];
+
+const SETUP_PROVIDERS = [
+  {
+    id: 'github',
+    name: 'GitHub',
+    description: 'Issue tracking and PR history',
+    icon: SiGithub,
+    workspaceLabel: 'Organization',
+    workspacePlaceholder: 'my-org (leave blank for personal repos)',
+    workspaceRequired: false,
+    helpText: 'Create a personal access token at github.com/settings/tokens with repo scope.',
+    helpUrl: 'https://github.com/settings/tokens',
+    supportsOAuth: true,
+  },
+  {
+    id: 'jira',
+    name: 'Jira',
+    description: 'Sync issues and sprints',
+    icon: SiJira,
+    iconColor: '#2684FF',
+    workspaceLabel: 'Site URL',
+    workspacePlaceholder: 'mycompany.atlassian.net',
+    workspaceRequired: true,
+    helpText: 'Create an API token at id.atlassian.net/manage-profile/security/api-tokens.',
+    helpUrl: 'https://id.atlassian.net/manage-profile/security/api-tokens',
+  },
+  {
+    id: 'linear',
+    name: 'Linear',
+    description: 'Import issues and projects',
+    icon: SiLinear,
+    iconColor: '#5E6AD2',
+    workspaceLabel: 'Workspace',
+    workspacePlaceholder: 'Derived from token (leave blank)',
+    workspaceRequired: false,
+    helpText: 'Create a personal API key at linear.app/settings/api',
+    helpUrl: 'https://linear.app/settings/api',
+  },
+  {
+    id: 'clickup',
+    name: 'ClickUp',
+    description: 'Connect tasks and spaces',
+    icon: SiClickup,
+    iconColor: '#7B68EE',
+    workspaceLabel: 'Workspace ID',
+    workspacePlaceholder: 'Auto-detected from token',
+    workspaceRequired: false,
+    helpText: 'Create a personal API token at app.clickup.com/settings/apps',
+    helpUrl: 'https://app.clickup.com/settings/apps',
+  },
+  {
+    id: 'asana',
+    name: 'Asana',
+    description: 'Sync tasks and projects',
+    icon: SiAsana,
+    iconColor: '#F06A6A',
+    workspaceLabel: 'Workspace GID',
+    workspacePlaceholder: 'Your Asana workspace GID',
+    workspaceRequired: true,
+    helpText: 'Create a personal access token at app.asana.com/0/developer-console',
+    helpUrl: 'https://app.asana.com/0/developer-console',
+  },
+  {
+    id: 'monday',
+    name: 'Monday.com',
+    description: 'Connect boards and items',
+    iconImage: '/monday.svg',
+    workspaceLabel: 'Workspace',
+    workspacePlaceholder: 'Not required (leave blank)',
+    workspaceRequired: false,
+    helpText: 'Create an API token in your Monday.com admin panel under Developers',
+    helpUrl: 'https://monday.com/developers/apps',
+  },
+] as const;
 
 const sidebarNav = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -265,12 +358,76 @@ function InvitesPreview({
   );
 }
 
+// --- Preview: Integrations ---
+
+function IntegrationsPreview({ connectedProviders }: { connectedProviders: string[] }) {
+  return (
+    <div className="h-[540px] rounded-xl border border-border bg-background shadow-lg overflow-hidden flex flex-col">
+      <div className="px-5 py-4 border-b border-border">
+        <p className="text-sm font-semibold">Integrations</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{connectedProviders.length} connected</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {SETUP_PROVIDERS.map((provider) => {
+          const isConnected = connectedProviders.includes(provider.id);
+          return (
+            <div key={provider.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                {'iconImage' in provider ? (
+                  <Image src={provider.iconImage} alt={provider.name} width={16} height={16} />
+                ) : (
+                  <provider.icon size={16} color={'iconColor' in provider ? provider.iconColor : undefined} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{provider.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{provider.description}</p>
+              </div>
+              {isConnected ? (
+                <div className="flex items-center gap-1 text-xs text-green-500">
+                  <Check className="h-3.5 w-3.5" />
+                  Connected
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">Not connected</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Main ---
 
-export default function SetupPage() {
+function SetupPageInner() {
   const { user, isLoading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState(0);
+
+  // Handle GitHub OAuth return on setup page
+  const oauthHandled = useRef(false);
+  useEffect(() => {
+    if (oauthHandled.current) return;
+    const githubStatus = searchParams.get('github');
+    const stepParam = searchParams.get('step');
+    if (githubStatus && stepParam === '3') {
+      oauthHandled.current = true;
+      if (githubStatus === 'connected') {
+        setStep(3);
+        setOrgCreated(true);
+        setConnectedProviders((prev) => prev.includes('github') ? prev : [...prev, 'github']);
+        toast.success('GitHub connected successfully!');
+      } else {
+        setStep(3);
+        setOrgCreated(true);
+        toast.error('Failed to connect GitHub. Try manual setup.');
+      }
+      window.history.replaceState({}, '', '/setup');
+    }
+  }, [searchParams]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Step 1: Organization
@@ -288,6 +445,18 @@ export default function SetupPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('MEMBER');
   const [inviteTeamId, setInviteTeamId] = useState('none');
+
+  // Step 4: Integrations
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [setupConnectProvider, setSetupConnectProvider] = useState<string | null>(null);
+  const [setupConnectToken, setSetupConnectToken] = useState('');
+  const [setupConnectWorkspace, setSetupConnectWorkspace] = useState('');
+  const [setupShowToken, setSetupShowToken] = useState(false);
+  const [setupConnecting, setSetupConnecting] = useState(false);
+  const [setupConnectError, setSetupConnectError] = useState('');
+  const [orgCreated, setOrgCreated] = useState(false);
+
+  const hasGitHubOAuth = user?.oauthProviders?.includes('github') ?? false;
 
   const handleOrgNameChange = (value: string) => {
     setOrgName(value);
@@ -336,12 +505,12 @@ export default function SetupPage() {
     try {
       // 1. Create org
       const org = await createOrganization({ name: orgName.trim(), slug: orgSlug.trim() });
-      const orgId = org.id;
+      const newOrgId = org.id;
 
       // 2. Switch org context to get OWNER token before creating teams/invites
-      const { accessToken } = await switchOrg(orgId);
+      const { accessToken } = await switchOrg(newOrgId);
       localStorage.setItem('tandemu_token', accessToken);
-      localStorage.setItem('tandemu_current_org', orgId);
+      localStorage.setItem('tandemu_current_org', newOrgId);
 
       // 3. Create teams
       const teamIdMap: Record<string, string> = {};
@@ -349,7 +518,7 @@ export default function SetupPage() {
 
       for (let i = 0; i < teams.length; i++) {
         try {
-          const team = await createTeam(orgId, { name: teams[i].name, description: teams[i].description || undefined });
+          const team = await createTeam(newOrgId, { name: teams[i].name, description: teams[i].description || undefined });
           teamIdMap[`team-${i}`] = team.id;
         } catch (err) {
           errors.push(`Team "${teams[i].name}": ${err instanceof Error ? err.message : 'failed'}`);
@@ -360,7 +529,7 @@ export default function SetupPage() {
       for (const inv of invites) {
         try {
           const realTeamId = inv.teamId !== 'none' ? teamIdMap[inv.teamId] : undefined;
-          await createInvite(orgId, { email: inv.email, role: inv.role, teamId: realTeamId });
+          await createInvite(newOrgId, { email: inv.email, role: inv.role, teamId: realTeamId });
         } catch (err) {
           errors.push(`Invite "${inv.email}": ${err instanceof Error ? err.message : 'failed'}`);
         }
@@ -370,12 +539,44 @@ export default function SetupPage() {
         toast.error(`Setup completed with errors:\n${errors.join('\n')}`);
       }
 
-      window.location.href = '/';
+      // Move to step 4 instead of redirecting
+      setOrgCreated(true);
+      setStep(3);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Setup failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSetupConnect = async () => {
+    if (!setupConnectProvider || !setupConnectToken.trim()) return;
+    const provider = SETUP_PROVIDERS.find((p) => p.id === setupConnectProvider);
+    setSetupConnecting(true);
+    setSetupConnectError('');
+    try {
+      await createIntegration({
+        provider: setupConnectProvider,
+        accessToken: setupConnectToken.trim(),
+        externalWorkspaceId: setupConnectWorkspace.trim() || undefined,
+        externalWorkspaceName: setupConnectWorkspace.trim() || undefined,
+      });
+      setConnectedProviders((prev) => [...prev, setupConnectProvider!]);
+      setSetupConnectProvider(null);
+      setSetupConnectToken('');
+      setSetupConnectWorkspace('');
+      setSetupShowToken(false);
+      setSetupConnectError('');
+      toast.success(`${provider?.name ?? setupConnectProvider} connected!`);
+    } catch (err) {
+      setSetupConnectError(err instanceof Error ? err.message : 'Failed to connect');
+    } finally {
+      setSetupConnecting(false);
+    }
+  };
+
+  const handleFinish = () => {
+    window.location.href = '/';
   };
 
   if (authLoading) {
@@ -513,10 +714,86 @@ export default function SetupPage() {
               </div>
             )}
 
+            {/* Step 4: Connect your tools */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Connect your ticket system to sync tasks. You can also do this later from the Integrations page.
+                </p>
+                <div className="space-y-2">
+                  {SETUP_PROVIDERS.map((provider) => {
+                    const isConnected = connectedProviders.includes(provider.id);
+                    return (
+                      <div
+                        key={provider.id}
+                        className="flex items-center gap-3 rounded-lg border border-border px-4 py-3"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          {'iconImage' in provider ? (
+                            <Image src={provider.iconImage} alt={provider.name} width={16} height={16} />
+                          ) : (
+                            <provider.icon size={16} color={'iconColor' in provider ? provider.iconColor : undefined} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{provider.name}</p>
+                          <p className="text-xs text-muted-foreground">{provider.description}</p>
+                        </div>
+                        {isConnected ? (
+                          <div className="flex items-center gap-1 text-xs text-green-500 font-medium">
+                            <Check className="h-3.5 w-3.5" />
+                            Connected
+                          </div>
+                        ) : provider.id === 'github' && hasGitHubOAuth ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                window.location.href = getGitHubOAuthIntegrationUrl('/setup?step=3&github=connected');
+                              }}
+                            >
+                              <SiGithub size={14} className="mr-1.5" />
+                              Connect
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs text-muted-foreground"
+                              onClick={() => {
+                                setSetupConnectProvider(provider.id);
+                                setSetupConnectToken('');
+                                setSetupConnectWorkspace('');
+                                setSetupShowToken(false);
+                              }}
+                            >
+                              Manual
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSetupConnectProvider(provider.id);
+                              setSetupConnectToken('');
+                              setSetupConnectWorkspace('');
+                              setSetupShowToken(false);
+                            }}
+                          >
+                            Connect
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Navigation */}
             <Separator className="mt-8 mb-6" />
             <div className="flex items-center gap-3">
-              {step > 0 && (
+              {step > 0 && step < 3 && (
                 <Button variant="outline" onClick={() => setStep(step - 1)} disabled={isSubmitting}>Back</Button>
               )}
               <div className="flex-1" />
@@ -529,7 +806,7 @@ export default function SetupPage() {
                     Continue
                   </Button>
                 </>
-              ) : (
+              ) : step === 2 ? (
                 <Button onClick={handleComplete} disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
@@ -537,9 +814,18 @@ export default function SetupPage() {
                       Setting up...
                     </>
                   ) : (
-                    'Complete Setup'
+                    'Continue'
                   )}
                 </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={handleFinish}>
+                    Skip
+                  </Button>
+                  <Button onClick={handleFinish}>
+                    {connectedProviders.length > 0 ? 'Finish Setup' : 'Go to Dashboard'}
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -551,9 +837,134 @@ export default function SetupPage() {
             {step === 0 && <DashboardPreview orgName={orgName} userName={user.name} />}
             {step === 1 && <TeamsPreview teams={teams} onRemove={removeTeam} />}
             {step === 2 && <InvitesPreview invites={invites} user={user} teams={teams} onRemove={removeInvite} />}
+            {step === 3 && <IntegrationsPreview connectedProviders={connectedProviders} />}
           </div>
         </div>
       </div>
+
+      {/* Manual Connect Dialog (Step 4) */}
+      <Dialog open={!!setupConnectProvider} onOpenChange={(open) => {
+        if (!open) {
+          setSetupConnectProvider(null);
+          setSetupConnectError('');
+        }
+      }}>
+        <DialogContent>
+          {setupConnectProvider && (() => {
+            const provider = SETUP_PROVIDERS.find((p) => p.id === setupConnectProvider);
+            if (!provider) return null;
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center rounded-lg border bg-muted p-2">
+                      {'iconImage' in provider ? (
+                        <Image src={provider.iconImage} alt={provider.name} width={24} height={24} />
+                      ) : (
+                        <provider.icon size={24} color={'iconColor' in provider ? provider.iconColor : undefined} />
+                      )}
+                    </div>
+                    <div>
+                      <DialogTitle>Connect {provider.name}</DialogTitle>
+                      <DialogDescription>
+                        Provide your API credentials to connect.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex gap-3 rounded-lg border bg-muted/50 p-3">
+                    <Info className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                    <div className="text-sm text-muted-foreground">
+                      <p>{provider.helpText}</p>
+                      <a
+                        href={provider.helpUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
+                      >
+                        Open settings
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+
+                  {setupConnectError && (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      {setupConnectError}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">API Token</label>
+                    <div className="relative">
+                      <Input
+                        type={setupShowToken ? 'text' : 'password'}
+                        value={setupConnectToken}
+                        onChange={(e) => setSetupConnectToken(e.target.value)}
+                        placeholder="Paste your token here"
+                        className="pr-10"
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSetupShowToken(!setupShowToken)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {setupShowToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">
+                      {provider.workspaceLabel}
+                      {!provider.workspaceRequired && (
+                        <span className="text-muted-foreground font-normal ml-1">(optional)</span>
+                      )}
+                    </label>
+                    <Input
+                      value={setupConnectWorkspace}
+                      onChange={(e) => setSetupConnectWorkspace(e.target.value)}
+                      placeholder={provider.workspacePlaceholder}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSetupConnectProvider(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSetupConnect}
+                    disabled={
+                      setupConnecting ||
+                      !setupConnectToken.trim() ||
+                      (provider.workspaceRequired && !setupConnectWorkspace.trim())
+                    }
+                  >
+                    {setupConnecting ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <>
+                        <Plug className="h-4 w-4 mr-2" />
+                        Connect
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+export default function SetupPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <SetupPageInner />
+    </Suspense>
   );
 }

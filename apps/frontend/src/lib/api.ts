@@ -91,6 +91,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role?: string;
+  oauthProviders?: string[];
 }
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
@@ -457,6 +458,14 @@ export async function createIntegration(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function getGitHubOAuthIntegrationUrl(returnUrl = '/integrations'): string {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('tandemu_token') : null;
+  const url = new URL(`${API_URL}/api/integrations/github/oauth`);
+  if (token) url.searchParams.set('token', token);
+  url.searchParams.set('return_url', returnUrl);
+  return url.toString();
 }
 
 export async function deleteIntegration(provider: string): Promise<void> {

@@ -146,7 +146,23 @@ export class AuthService {
     }
   }
 
-  async getMe(userId: string): Promise<{ id: string; email: string; name: string; avatarUrl: string | null; createdAt: string; updatedAt: string }> {
+  async getOAuthProviderUserId(userId: string, provider: string): Promise<string | null> {
+    const result = await this.db.query<{ provider_user_id: string }>(
+      'SELECT provider_user_id FROM oauth_accounts WHERE user_id = $1 AND provider = $2',
+      [userId, provider],
+    );
+    return result.rows[0]?.provider_user_id ?? null;
+  }
+
+  async getOAuthProviders(userId: string): Promise<string[]> {
+    const result = await this.db.query<{ provider: string }>(
+      'SELECT DISTINCT provider FROM oauth_accounts WHERE user_id = $1',
+      [userId],
+    );
+    return result.rows.map((r) => r.provider);
+  }
+
+  async getMe(userId: string): Promise<{ id: string; email: string; name: string; avatarUrl: string | null; createdAt: string; updatedAt: string; oauthProviders: string[] }> {
     const result = await this.db.query<{
       id: string;
       email: string;
@@ -164,6 +180,7 @@ export class AuthService {
     }
 
     const user = result.rows[0]!;
+    const oauthProviders = await this.getOAuthProviders(userId);
     return {
       id: user.id,
       email: user.email,
@@ -171,6 +188,7 @@ export class AuthService {
       avatarUrl: user.avatar_url,
       createdAt: user.created_at.toISOString(),
       updatedAt: user.updated_at.toISOString(),
+      oauthProviders,
     };
   }
 

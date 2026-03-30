@@ -28,6 +28,7 @@ export class GithubOAuthService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly callbackUrl: string;
+  private readonly integrationCallbackUrl: string;
 
   constructor(
     private readonly authService: AuthService,
@@ -37,6 +38,7 @@ export class GithubOAuthService {
     this.clientId = configService.get<string>('oauth.github.clientId')!;
     this.clientSecret = configService.get<string>('oauth.github.clientSecret')!;
     this.callbackUrl = `${appUrl}/api/auth/github/callback`;
+    this.integrationCallbackUrl = `${appUrl}/api/integrations/github/oauth/callback`;
   }
 
   getAuthorizationUrl(state: string): string {
@@ -47,6 +49,52 @@ export class GithubOAuthService {
       state,
     });
     return `https://github.com/login/oauth/authorize?${params.toString()}`;
+  }
+
+  getIntegrationAuthorizationUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      redirect_uri: this.integrationCallbackUrl,
+      scope: 'repo,user:email',
+      state,
+    });
+    return `https://github.com/login/oauth/authorize?${params.toString()}`;
+  }
+
+  async exchangeCodeForToken(code: string): Promise<{ accessToken: string; githubUserId: string }> {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        code,
+        redirect_uri: this.integrationCallbackUrl,
+      }),
+    });
+
+    const tokenData = (await tokenRes.json()) as GithubTokenResponse;
+    if (tokenData.error || !tokenData.access_token) {
+      throw new Error(tokenData.error_description ?? tokenData.error ?? 'Failed to obtain access token');
+    }
+
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${tokenData.access_token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'Tandemu',
+      },
+    });
+
+    if (!userRes.ok) {
+      throw new Error('Failed to fetch GitHub user profile');
+    }
+
+    const user = (await userRes.json()) as GithubUser;
+    return { accessToken: tokenData.access_token, githubUserId: String(user.id) };
   }
 
   async exchangeCodeAndAuthenticate(code: string): Promise<{
