@@ -66,13 +66,13 @@ cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Collect task IDs from ALL active task files (other sessions/worktrees)
 echo "---OTHER_ACTIVE_TASKS---"
-for f in "$HOME"/.claude/tandemu-active-task-*.json; do
+for f in "$HOME"/.claude/tandemu-active-task-*.json 2>/dev/null; do
   [ -f "$f" ] || continue
   # Skip the current branch's task file
   [ "$f" = "$TASK_FILE" ] && continue
   TASK_ID=$(python3 -c "import json; print(json.load(open('$f')).get('taskId',''))" 2>/dev/null)
   [ -n "$TASK_ID" ] && echo "$TASK_ID"
-done
+done || true
 
 # Check if we're inside a worktree
 echo "---WORKTREE---"
