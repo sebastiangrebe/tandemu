@@ -93,7 +93,7 @@ function groupByFolder(items: FrictionItem[]): FrictionFolder[] {
     .map(([name, folderItems]) => {
       const totalScore = folderItems.reduce((s, i) => s + i.score, 0);
       return {
-        name,
+        name: name || 'Uncategorized',
         items: folderItems.sort((a, b) => b.score - a.score),
         totalScore,
         severity: computeSeverity(totalScore / folderItems.length),
