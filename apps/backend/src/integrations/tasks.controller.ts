@@ -355,13 +355,13 @@ export class TasksController {
   async updateTask(
     @CurrentUser() user: RequestUser,
     @Param('taskId') taskId: string,
-    @Body() body: { statusName?: string; assigneeEmail?: string; priority?: string; provider: IntegrationProvider },
+    @Body() body: { statusName?: string; assigneeEmail?: string; priority?: string; description?: string; provider: IntegrationProvider },
   ): Promise<{ success: boolean }> {
     await this.tasksService.updateTask(
       user.organizationId,
       taskId,
       body.provider,
-      { statusName: body.statusName, assigneeEmail: body.assigneeEmail, priority: body.priority },
+      { statusName: body.statusName, assigneeEmail: body.assigneeEmail, priority: body.priority, description: body.description },
     );
     return { success: true };
   }

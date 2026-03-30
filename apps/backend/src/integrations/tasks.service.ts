@@ -75,7 +75,7 @@ export class TasksService {
     orgId: string,
     taskId: string,
     provider: IntegrationProvider,
-    updates: { statusName?: string; assigneeEmail?: string; priority?: string },
+    updates: { statusName?: string; assigneeEmail?: string; priority?: string; description?: string },
   ): Promise<void> {
     const integration = await this.integrationsService.findOne(orgId, provider);
     const taskProvider = getProvider(provider);
@@ -86,6 +86,7 @@ export class TasksService {
       statusName: updates.statusName,
       assigneeEmail: updates.assigneeEmail,
       priority: updates.priority,
+      description: updates.description,
       config: integration.config,
     });
   }

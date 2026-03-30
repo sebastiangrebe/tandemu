@@ -179,10 +179,11 @@ export class ClickUpProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, priority } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, description } = params;
 
     const body: Record<string, unknown> = {};
     if (statusName) body.status = statusName;
+    if (description) body.description = description;
     if (priority) {
       const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4 };
       const prioNum = prioMap[priority.toLowerCase()];

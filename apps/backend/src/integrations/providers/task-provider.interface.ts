@@ -16,6 +16,7 @@ export interface TaskProviderUpdateParams {
   statusName?: string;
   assigneeEmail?: string;
   priority?: string;
+  description?: string;
   config: Record<string, unknown>;
 }
 

@@ -210,13 +210,15 @@ export class LinearProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, priority } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, description } = params;
 
     const issue = await this.findIssueByIdentifier(accessToken, taskId);
     if (!issue) return;
 
     // Build a single mutation input with all requested changes
     const input: Record<string, string | number> = {};
+
+    if (description) input.description = description;
 
     if (priority) {
       const prioMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4, none: 0 };

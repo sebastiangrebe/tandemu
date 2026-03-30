@@ -184,7 +184,11 @@ export class AsanaProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, priority } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, description } = params;
+
+    if (description) {
+      await asanaFetch(`/tasks/${taskId}`, accessToken, 'PUT', { notes: description });
+    }
 
     if (statusName) {
       const statuses = await this.getTaskStatuses({ accessToken, taskId, config: {} });

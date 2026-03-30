@@ -127,7 +127,7 @@ export class GitHubProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, priority, config } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, description, config } = params;
     const repo = config.repo as string | undefined;
     if (!repo) return;
 
@@ -140,6 +140,7 @@ export class GitHubProvider implements TaskProvider {
       // GitHub uses labels for priority — add a priority label
       body.labels = [`priority:${priority.toLowerCase()}`];
     }
+    if (description) body.body = description;
 
     if (Object.keys(body).length === 0) return;
 

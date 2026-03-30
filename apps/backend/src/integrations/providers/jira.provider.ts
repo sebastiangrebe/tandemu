@@ -164,12 +164,20 @@ export class JiraProvider implements TaskProvider {
   }
 
   async updateTask(params: TaskProviderUpdateParams): Promise<void> {
-    const { accessToken, taskId, statusName, assigneeEmail, priority, config } = params;
+    const { accessToken, taskId, statusName, assigneeEmail, priority, description, config } = params;
     const siteId = config.siteId as string | undefined;
     if (!siteId) return;
 
     const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
     const authHeader = `Basic ${Buffer.from(`${config.email}:${accessToken}`).toString('base64')}`;
+
+    if (description) {
+      await fetch(`${baseUrl}/issue/${taskId}`, {
+        method: 'PUT',
+        headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { description: { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: description }] }] } } }),
+      });
+    }
 
     if (statusName) {
       const statuses = await this.getTaskStatuses({ accessToken, taskId, config });
