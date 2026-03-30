@@ -80,6 +80,13 @@ export class TelemetryService implements OnModuleDestroy {
     this.client = createClient({
       url: clickhouseUrl,
       database: 'otel',
+      request_timeout: 30_000,
+      compression: { request: true, response: true },
+      keep_alive: { enabled: true },
+      clickhouse_settings: {
+        // Skip empty parts when filtering by attributes
+        skip_unavailable_shards: 1,
+      },
     });
 
     // Auto-create memory_access_log table if it doesn't exist
@@ -98,6 +105,31 @@ export class TelemetryService implements OnModuleDestroy {
     }).then((rs) => rs.text()).catch((err) => {
       this.logger.warn(`Failed to create memory_access_log table: ${err}`);
     });
+
+    // Add skip indexes on OTEL tables for common query patterns.
+    // These are idempotent (IF NOT EXISTS) and dramatically reduce scan time
+    // by letting ClickHouse skip data granules that don't match our filters.
+    this.ensureSkipIndexes();
+  }
+
+  private ensureSkipIndexes(): void {
+    const indexes = [
+      // otel_traces: most queries filter by org + SpanName
+      `ALTER TABLE otel_traces ADD INDEX IF NOT EXISTS idx_org_id ResourceAttributes['organization_id'] TYPE bloom_filter(0.01) GRANULARITY 1`,
+      `ALTER TABLE otel_traces ADD INDEX IF NOT EXISTS idx_span_name SpanName TYPE set(100) GRANULARITY 1`,
+      // otel_metrics_sum: ai-ratio queries filter by org + MetricName
+      `ALTER TABLE otel_metrics_sum ADD INDEX IF NOT EXISTS idx_org_id ResourceAttributes['organization_id'] TYPE bloom_filter(0.01) GRANULARITY 1`,
+      `ALTER TABLE otel_metrics_sum ADD INDEX IF NOT EXISTS idx_metric_name MetricName TYPE set(100) GRANULARITY 1`,
+      // otel_logs: tool-usage and friction queries filter by org + event.name
+      `ALTER TABLE otel_logs ADD INDEX IF NOT EXISTS idx_org_id ResourceAttributes['organization_id'] TYPE bloom_filter(0.01) GRANULARITY 1`,
+      `ALTER TABLE otel_logs ADD INDEX IF NOT EXISTS idx_severity SeverityText TYPE set(20) GRANULARITY 1`,
+    ];
+
+    for (const ddl of indexes) {
+      this.client.query({ query: ddl }).then((rs) => rs.text()).catch(() => {
+        // Indexes may fail if tables don't exist yet (first boot before OTEL collector runs)
+      });
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -412,8 +444,8 @@ export class TelemetryService implements OnModuleDestroy {
           AND LogAttributes['tool_name'] IN ('Edit', 'Write', 'NotebookEdit')
           AND LogAttributes['success'] = 'true'
           AND JSONExtractString(LogAttributes['tool_parameters'], 'file_path') != ''
-          AND Timestamp >= parseDateTimeBestEffort({startDate: String})
-          AND Timestamp <= parseDateTimeBestEffort({endDate: String})
+          AND Timestamp >= {startDate: DateTime64(3)}
+          AND Timestamp <= {endDate: DateTime64(3)}
       `,
       query_params: { organizationId, startDate, endDate },
       format: 'JSONEachRow',
@@ -431,8 +463,8 @@ export class TelemetryService implements OnModuleDestroy {
           WHERE ResourceAttributes['organization_id'] = {organizationId: String}
             AND MetricName = 'claude_code.lines_of_code.count'
             AND Attributes['type'] = 'added'
-            AND TimeUnix >= parseDateTimeBestEffort({startDate: String})
-            AND TimeUnix <= parseDateTimeBestEffort({endDate: String})
+            AND TimeUnix >= {startDate: DateTime64(3)}
+            AND TimeUnix <= {endDate: DateTime64(3)}
         `,
         query_params: { organizationId, startDate, endDate },
         format: 'JSONEachRow',
@@ -457,11 +489,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
@@ -521,11 +553,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
@@ -589,8 +621,8 @@ export class TelemetryService implements OnModuleDestroy {
         FROM otel_traces
         WHERE ResourceAttributes['organization_id'] = {organizationId: String}
           AND SpanName = 'task_session'
-          AND Timestamp >= parseDateTimeBestEffort({startDate: String})
-          AND Timestamp <= parseDateTimeBestEffort({endDate: String})
+          AND Timestamp >= {startDate: DateTime64(3)}
+          AND Timestamp <= {endDate: DateTime64(3)}
       `;
 
       const params: Record<string, string> = {
@@ -645,11 +677,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
@@ -706,11 +738,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
@@ -760,8 +792,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -807,8 +839,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -850,8 +882,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -893,8 +925,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -934,8 +966,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -976,11 +1008,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
@@ -1042,11 +1074,11 @@ export class TelemetryService implements OnModuleDestroy {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
       if (startDate) {
-        dateFilter += ` AND Timestamp >= parseDateTimeBestEffort({startDate: String})`;
+        dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
         params.startDate = startDate;
       }
       if (endDate) {
-        dateFilter += ` AND Timestamp <= parseDateTimeBestEffort({endDate: String})`;
+        dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
         params.endDate = endDate;
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
@@ -1214,8 +1246,8 @@ export class TelemetryService implements OnModuleDestroy {
 
     const params: Record<string, string> = { organizationId };
     let dateFilter = '';
-    if (startDate) { dateFilter += ` AND TimeUnix >= parseDateTimeBestEffort({startDate: String})`; params.startDate = startDate; }
-    if (endDate) { dateFilter += ` AND TimeUnix <= parseDateTimeBestEffort({endDate: String})`; params.endDate = endDate; }
+    if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
+    if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
     const metricsTeamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
     const tracesTeamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
     const logsTeamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
@@ -1231,7 +1263,7 @@ export class TelemetryService implements OnModuleDestroy {
       const duration = end - start;
       const prevStart = new Date(start - duration).toISOString();
       const prevEnd = new Date(start).toISOString();
-      prevDateFilter = ` AND Timestamp >= parseDateTimeBestEffort({prevStart: String}) AND Timestamp <= parseDateTimeBestEffort({prevEnd: String})`;
+      prevDateFilter = ` AND Timestamp >= {prevStart: DateTime64(3)} AND Timestamp <= {prevEnd: DateTime64(3)}`;
       prevParams.prevStart = prevStart;
       prevParams.prevEnd = prevEnd;
     }
@@ -1280,8 +1312,8 @@ export class TelemetryService implements OnModuleDestroy {
             SELECT count(*) AS hits
             FROM memory_access_log
             WHERE organization_id = {organizationId: String}
-              ${startDate ? ` AND timestamp >= parseDateTimeBestEffort({startDate: String})` : ''}
-              ${endDate ? ` AND timestamp <= parseDateTimeBestEffort({endDate: String})` : ''}
+              ${startDate ? ` AND timestamp >= {startDate: DateTime64(3)}` : ''}
+              ${endDate ? ` AND timestamp <= {endDate: DateTime64(3)}` : ''}
           `,
           query_params: params,
           format: 'JSONEachRow',

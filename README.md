@@ -140,7 +140,7 @@ Each task runs in its own worktree, so you can work on multiple tasks in paralle
 | | Option | Details |
 |---|---|---|
 | 🏠 | **Self-hosted** | Docker Compose — free and open-source |
-| ☁️ | **Managed cloud** | [app.tandemu.dev](https://app.tandemu.dev) — $10/developer/month |
+| ☁️ | **Managed cloud** | [app.tandemu.dev](https://app.tandemu.dev) — $25/developer/month |
 
 See the [self-hosting guide](https://tandemu.dev/docs/self-hosting/overview) for production deployment instructions.
 

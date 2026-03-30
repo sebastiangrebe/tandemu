@@ -376,7 +376,7 @@ export default function SettingsPage() {
                   }
                 }}
               >
-                Upgrade to Pro — $10/seat/month
+                Upgrade to Pro — $25/seat/month
               </Button>
             ) : (
               <Button

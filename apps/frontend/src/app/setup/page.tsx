@@ -661,7 +661,7 @@ function SetupPageInner() {
                 {process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' ? (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3">
                     <p className="text-sm text-muted-foreground">
-                      Inviting team members requires the Pro plan ($10/seat/month).
+                      Inviting team members requires the Pro plan ($25/seat/month).
                       You can upgrade from the Settings page after setup, or skip this step.
                     </p>
                   </div>

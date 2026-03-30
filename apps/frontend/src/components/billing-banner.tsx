@@ -60,7 +60,7 @@ export function BillingBanner() {
           <div>
             <p className="text-sm font-medium">You&apos;re on the Free plan (1 seat)</p>
             <p className="text-sm text-muted-foreground">
-              Upgrade to Pro for $10/seat/month to add team members and unlock full telemetry.
+              Upgrade to Pro for $25/seat/month to add team members and unlock full telemetry.
             </p>
           </div>
         </div>
