@@ -120,6 +120,7 @@ export async function queryFrictionHeatmap(
     sessionId: "",
     userId: "",
     repositoryPath: row.repository_path,
+    repo: "",
     promptLoopCount: row.event_count,
     errorCount: row.event_count,
     timestamp: row.hour,
