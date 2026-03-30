@@ -1,0 +1,201 @@
+# CLAUDE.md — Tandemu Project
+
+## What Tandemu Is
+
+Tandemu is an AI Teammate platform. Two goals:
+1. Make AI coding personal — persistent memory, personality, learns your coding style
+2. Track AI-native development — telemetry from `/morning` → work → `/finish` lifecycle, surfaced on a dashboard
+
+## Architecture
+
+```
+tandemu/
+  apps/
+    backend/        — NestJS API (Postgres + ClickHouse)
+    frontend/       — Next.js dashboard (shadcn/ui + Recharts)
+    mcp-server/     — MCP memory server (Mem0, currently unused — OpenMemory MCP used instead)
+    claude-plugins/ — Skills, CLAUDE.md personality, hooks
+    e2e/            — Playwright E2E tests
+  packages/
+    types/          — Shared TypeScript types
+    database/       — SQL migrations
+    telemetry/      — OTEL SDK (currently unused — skills send OTLP directly via curl)
+```
+
+## Key Decisions
+
+### Developer setup
+Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/plugin install tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
+
+### Worktree-per-task
+Each task gets its own git worktree inside `.worktrees/<task-id>/`. Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can run concurrently in separate worktrees and Claude Code sessions. `/morning` creates the worktree, `/finish` cleans it up.
+
+### Task status sync is dynamic
+No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id` with `{ statusName, assigneeEmail, provider }`. Any combination of fields is accepted in a single call.
+
+### Telemetry via OTLP from `/finish`
+The `/finish` skill sends a `task_session` span and `tandemu.lines_of_code` metrics to the OTEL collector via curl. This is real OTLP — standard protocol, custom metric names. No fake data.
+
+AI vs manual attribution: commits with `Co-Authored-By: Claude` = AI lines, rest = manual.
+
+### DORA metrics from task completions
+- Deployment frequency = completed tasks per day
+- Lead time = avg task duration (from `duration_seconds` span attribute, NOT ClickHouse Duration)
+- Change failure rate and restore time = not yet implemented (need CI/CD integration)
+
+### Backend queries use `duration_seconds` attribute
+ClickHouse's computed `Duration` from span timestamps is unreliable when skills generate OTLP payloads (nanosecond precision issues). The `/finish` skill sends `duration_seconds` as a string attribute, and the backend reads it with `toFloat64OrZero(SpanAttributes['duration_seconds'])`.
+
+### Friction from two sources
+1. Custom friction logs sent by skills (SeverityText = 'prompt_loop' or 'error')
+2. Native Claude Code `tool_result` events where `success = 'false'` (when OTEL is enabled)
+
+The `GET /api/telemetry/friction-heatmap` endpoint combines both.
+
+### `/morning` filters tasks for the current user
+- First call: `?mine=true` — only tasks assigned to the current user's email
+- Fallback: `?status=todo&unassigned=true` — unassigned backlog tasks
+- Never shows someone else's in-progress work
+
+### `/standup` uses time-based recency, not sprints
+- "Done this week" = tasks with `status: done` AND `updatedAt` within 7 days
+- Tasks matched to team members by `assigneeEmail` ↔ member `email`
+- Unmatched tasks go to "Other Contributors"
+- Backlog capped at 10 items
+
+### Memory via OpenMemory MCP
+- OpenMemory runs as a Docker container (`mem0/openmemory-mcp:latest`) on port 8765
+- Requires a Qdrant vector store (`qdrant/qdrant:latest`) at hostname `mem0_store` on port 6333
+- Claude Code connects via SSE: `http://host:8765/mcp/tandemu/sse/{userId}`
+- Memory scoped per user via the userId in the URL path
+- Setup writes the MCP config to `~/.mcp.json` (migrated from legacy `~/.claude.json`)
+- Requires `OPENAI_API_KEY` env var for embeddings
+
+### CLAUDE.md personality system
+`~/.claude/CLAUDE.md` (installed by `/tandemu:setup` or `install.sh`) instructs Claude to:
+- Search memories at session start (when tools available)
+- Learn coding preferences passively (never ask directly)
+- Use the developer's name when known
+- Include "btw" moments for rapport (~1 in 3 interactions)
+- Store observations after `/finish` (coding patterns, decisions, corrections)
+
+### Dashboard pages
+- **Dashboard** (`/`) — KPI cards (sessions, AI ratio, lines, cycle time, tool success), AI ratio donut, tool usage bar, velocity chart, investment allocation
+- **Activity** (`/activity`) — Stats cards, activity chart (taller), AI adoption leaderboard, hot files, AI effectiveness, session log table
+- **Insights** (`/insights`) — Productivity multiplier, capacity freed, cost per task, throughput chart, cost efficiency chart, token usage, Tandemu impact KPIs, AI adoption leaderboard (per-developer ranked by AI%)
+- **Friction Map** (`/friction-map`) — Severity cards, file-level friction list
+- **AI Memory** (`/memory`) — Memory dashboard with 4 self-loading sections (see below)
+- All pages have team + time range filters via URL params (`?range=30d&team=...`)
+- Old pages (`/ai-insights`, `/dora-metrics`, `/timesheets`) redirect to `/`
+
+### AI Memory dashboard
+The `/memory` page is composed of 4 independent components, each managing its own data fetching and skeleton loading:
+- **MemoryStats** (`components/memory/memory-stats.tsx`) — 4 KPI cards: Total Memories, Personal, Organization, Memory Health (% actively used)
+- **MemoryCharts** (`components/memory/memory-charts.tsx`) — MemoryCategoryChart (horizontal bar, Recharts) + MemoryHealthChart (donut, Recharts)
+- **MemoryInsights** (`components/memory/memory-insights.tsx`) — Knowledge Gaps, Most Referenced, Cleanup Candidates (3 cards in grid). Cleanup opens a dialog to review/delete unused memories. Gaps are scrollable (max-h 200px)
+- **MemoryBrowser** (`components/memory/memory-browser.tsx`) — Segmented scope toggle (Personal/Organization with icons), search with 300ms debounce, category + repo filters, list view (repo-grouped, collapsible) or file tree view. Memory cards have colored left border by category
+
+Memory categories: `architecture`, `pattern`, `gotcha`, `preference`, `style`, `dependency`, `decision`, `uncategorized`
+
+Draft gating: org memories created during a task start as `draft` (visible only to author). Promoted to published when the task completes via `/finish`. Deleted if the task is cancelled.
+
+Knowledge gaps: cross-references git hot files (from ClickHouse telemetry) with memory coverage. Aggregated at folder level (2 segments deep, e.g., `apps/backend`). Surfaced in `/morning` skill and on the memory dashboard.
+
+Usage insights: tracks memory access in ClickHouse (`memory_access_log` table, auto-created in TelemetryService constructor). Surfaces most-referenced and never-accessed memories. Excludes memories created in the last 7 days from cleanup candidates.
+
+Memory metadata enriched during `/finish`: `{ repo, files[], category, taskId }`. Category taxonomy guides what Claude stores.
+
+### ClickUp mapping at folder level
+ClickUp `fetchProjects` returns folders (not individual lists) as mappable entities. `fetchTasks` auto-detects whether the mapped ID is a folder or list — fetches all lists in a folder if it's a folder.
+
+### Settings permissions for Tandemu
+Setup (`/tandemu:setup` or `install.sh`) writes permissions to `~/.claude/settings.json` so skills can:
+- Edit/Write `~/.claude/tandemu*` files without prompting
+- Run curl to the Tandemu API and OTEL collector without prompting
+
+### Team done window
+Teams have a `doneWindowDays` setting (default: 14). When fetching tasks with a `teamId`, done/cancelled tasks older than this window are automatically filtered out.
+
+### Setup wizard team creation bug
+The setup wizard's team creation silently fails because the JWT at that point has `MEMBER` role with no org context, but the teams endpoint requires `OWNER`/`ADMIN`. Workaround: create teams via the Teams page after login.
+
+## Running E2E Tests
+
+```bash
+cd apps/e2e
+
+# Reset DB first:
+docker exec -i tandemu-postgres-1 psql -U tandemu -d tandemu \
+  -c "TRUNCATE users, memberships, organizations, teams, team_members, invites, integrations, integration_project_mappings CASCADE;"
+
+# Clean state:
+rm -f ~/.claude/tandemu-active-task*.json ~/.claude/tandemu.json
+
+# Run:
+npx playwright test full-flow
+```
+
+Tests must run from `apps/e2e/` directory (not repo root) to use the correct Playwright version.
+
+The test temporarily disables CLAUDE.md and MCP during skill runs to prevent session bootstrap from blocking `claude -p` in non-interactive mode.
+
+## Code Style
+
+- TypeScript strict, ESM
+- NestJS (backend): modules, controllers, services, guards
+- Next.js (frontend): App Router, shadcn/ui (Radix base), Recharts
+- Prettier: 2-space indent, single quotes, trailing commas
+- Commits: Conventional Commits with `Co-Authored-By: Claude <noreply@anthropic.com>`
+
+## API Endpoints
+
+### Tasks
+- `GET /api/tasks?teamId=&mine=true&status=&unassigned=true&sort=priority&order=desc&excludeDone=true` — fetch tasks (sort: `priority`|`updatedAt`, order: `asc`|`desc`, excludeDone removes all done/cancelled). When `teamId` is set and `excludeDone` is not, done tasks are filtered by the team's `doneWindowDays` setting (default: 14 days).
+- `GET /api/tasks/:taskId/statuses?provider=linear` — available statuses
+- `PATCH /api/tasks/:taskId` — update task `{statusName?, assigneeEmail?, provider}`
+
+### Memory
+- `GET /api/memory/list?scope=personal|org|all&limit=50&offset=0` — list memories (server-side paginated)
+- `GET /api/memory/search?query=&scope=personal|org` — semantic search
+- `GET /api/memory/stats` — counts by scope and category breakdown
+- `PATCH /api/memory/:id` — update content/metadata `{content?, metadata?}`
+- `DELETE /api/memory/:id` — delete memory
+- `POST /api/memory/:id/approve` — promote draft org memory (OWNER/ADMIN only)
+- `GET /api/memory/file-tree?scope=personal|org` — hierarchical tree from `metadata.files[]` paths
+- `GET /api/memory/gaps?startDate=&endDate=` — knowledge gaps (hot files vs memory coverage)
+- `GET /api/memory/usage-insights?scope=all|personal|org&days=30` — top used, least used, never accessed
+
+### Telemetry
+- `GET /api/telemetry/ai-ratio?startDate=&endDate=` — AI vs manual lines
+- `GET /api/telemetry/friction-heatmap?startDate=&endDate=` — friction events
+- `GET /api/telemetry/dora-metrics?periodStart=&periodEnd=` — DORA metrics
+- `GET /api/telemetry/timesheets?startDate=&endDate=` — session timesheets (resolves user names from Postgres)
+- `GET /api/telemetry/tool-usage` — Claude Code tool usage stats
+- `GET /api/telemetry/session-quality` — session success/failure ratios
+- `GET /api/telemetry/developer-stats?startDate=&endDate=` — per-developer session/line metrics
+- `GET /api/telemetry/task-velocity?startDate=&endDate=` — task duration trends by week
+- `GET /api/telemetry/hot-files?startDate=&endDate=` — most-changed files
+- `GET /api/telemetry/investment-allocation?startDate=&endDate=` — time by task category (feature/bugfix/debt)
+- `GET /api/telemetry/ai-effectiveness?startDate=&endDate=` — AI line survival by file
+- `GET /api/telemetry/cost-metrics?startDate=&endDate=` — engineering cost estimates
+
+### Auth
+- `POST /api/auth/register` — register
+- `POST /api/auth/login` — login
+- `GET /api/auth/me` — current user
+- `POST /api/auth/cli/initiate` — start CLI auth flow
+- `POST /api/auth/cli/authorize` — authorize CLI
+- `GET /api/auth/cli/status?code=` — poll CLI auth status
+
+## Docker Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| postgres | 5432 | Relational data |
+| clickhouse | 8123 | Telemetry analytics |
+| redis | 6379 | Cache |
+| otel-collector | 4317/4318 | Telemetry ingestion |
+| backend | 3001 | API |
+| frontend | 3000 | Dashboard |
+| mem0_store | 6333 | Qdrant vector store for memory |
+| openmemory | 8765 | MCP memory server |

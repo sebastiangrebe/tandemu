@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "tandemu-memory": {
+      "command": "node",
+      "args": ["../mcp-server/dist/index.js"],
+      "env": {
+        "MEM0_MODE": "local",
+        "MEM0_USER_ID": ""
+      }
+    }
+  }
+}
