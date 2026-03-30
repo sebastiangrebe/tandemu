@@ -112,6 +112,11 @@ export class TelemetryService implements OnModuleDestroy {
     this.ensureSkipIndexes();
   }
 
+  /** Strip trailing 'Z' so ClickHouse DateTime64(3) typed params accept ISO dates */
+  private static dt(iso: string): string {
+    return iso.endsWith('Z') ? iso.slice(0, -1) : iso;
+  }
+
   private ensureSkipIndexes(): void {
     const indexes = [
       // otel_traces: most queries filter by org + SpanName
@@ -447,7 +452,7 @@ export class TelemetryService implements OnModuleDestroy {
           AND Timestamp >= {startDate: DateTime64(3)}
           AND Timestamp <= {endDate: DateTime64(3)}
       `,
-      query_params: { organizationId, startDate, endDate },
+      query_params: { organizationId, startDate: TelemetryService.dt(startDate), endDate: TelemetryService.dt(endDate) },
       format: 'JSONEachRow',
     });
     const fileRows = await fileResult.json<{ file_path: string }>();
@@ -466,7 +471,7 @@ export class TelemetryService implements OnModuleDestroy {
             AND TimeUnix >= {startDate: DateTime64(3)}
             AND TimeUnix <= {endDate: DateTime64(3)}
         `,
-        query_params: { organizationId, startDate, endDate },
+        query_params: { organizationId, startDate: TelemetryService.dt(startDate), endDate: TelemetryService.dt(endDate) },
         format: 'JSONEachRow',
       });
       const lineRows = await lineResult.json<{ total: number }>();
@@ -490,11 +495,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -554,11 +559,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -627,8 +632,8 @@ export class TelemetryService implements OnModuleDestroy {
 
       const params: Record<string, string> = {
         organizationId: query.organizationId,
-        startDate: query.startDate,
-        endDate: query.endDate,
+        startDate: TelemetryService.dt(query.startDate),
+        endDate: TelemetryService.dt(query.endDate),
       };
 
       if (query.userId) {
@@ -678,11 +683,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -739,11 +744,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -792,8 +797,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -839,8 +844,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -882,8 +887,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
       const teamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -925,8 +930,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -966,8 +971,8 @@ export class TelemetryService implements OnModuleDestroy {
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
-      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
       const teamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
 
@@ -1009,11 +1014,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -1075,11 +1080,11 @@ export class TelemetryService implements OnModuleDestroy {
       let dateFilter = '';
       if (startDate) {
         dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`;
-        params.startDate = startDate;
+        params.startDate = TelemetryService.dt(startDate);
       }
       if (endDate) {
         dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`;
-        params.endDate = endDate;
+        params.endDate = TelemetryService.dt(endDate);
       }
       const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
       if (teamId) params.teamId = teamId;
@@ -1246,8 +1251,8 @@ export class TelemetryService implements OnModuleDestroy {
 
     const params: Record<string, string> = { organizationId };
     let dateFilter = '';
-    if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = startDate; }
-    if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = endDate; }
+    if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+    if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
     const metricsTeamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
     const tracesTeamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
     const logsTeamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
@@ -1264,8 +1269,8 @@ export class TelemetryService implements OnModuleDestroy {
       const prevStart = new Date(start - duration).toISOString();
       const prevEnd = new Date(start).toISOString();
       prevDateFilter = ` AND Timestamp >= {prevStart: DateTime64(3)} AND Timestamp <= {prevEnd: DateTime64(3)}`;
-      prevParams.prevStart = prevStart;
-      prevParams.prevEnd = prevEnd;
+      prevParams.prevStart = TelemetryService.dt(prevStart);
+      prevParams.prevEnd = TelemetryService.dt(prevEnd);
     }
 
     try {
