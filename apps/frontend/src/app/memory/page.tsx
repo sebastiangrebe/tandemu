@@ -5,6 +5,7 @@ import { MemoryStats } from '@/components/memory/memory-stats';
 import { MemoryCharts } from '@/components/memory/memory-charts';
 import { MemoryInsights } from '@/components/memory/memory-insights';
 import { MemoryBrowser } from '@/components/memory/memory-browser';
+import { KnowledgeGaps } from '@/components/memory/knowledge-gaps';
 import { getMemoryStats, type MemoryStatsResponse } from '@/lib/api';
 
 interface MemoryStatsContextValue {
@@ -38,6 +39,7 @@ export default function MemoryPage() {
         <MemoryCharts />
         <MemoryInsights />
         <MemoryBrowser />
+        <KnowledgeGaps />
       </div>
     </MemoryStatsContext.Provider>
   );

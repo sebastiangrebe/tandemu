@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, TrendingUp, TrendingDown, Trash2, CheckCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2, CheckCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  getMemoryGaps,
   getMemoryUsageInsights,
-  type GapEntry,
   type UsageInsightsResponse,
 } from '@/lib/api';
 import { DeleteMemoryDialog } from '@/components/memory/delete-memory-dialog';
@@ -71,92 +69,34 @@ function InsightCardSkeleton() {
   );
 }
 
-function KnowledgeGapsCard({ gaps }: { gaps: GapEntry[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const maxChanges = Math.max(...gaps.map((g) => g.changeCount));
-  const sorted = [...gaps].sort((a, b) => b.changeCount - a.changeCount);
-  const visible = expanded ? sorted : sorted.slice(0, 5);
-  const remaining = sorted.length - 5;
-
-  return (
-    <Card className="border-amber-500/20">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          Knowledge Gaps
-          <Badge variant="outline" className="text-[10px] h-4 text-amber-400 border-amber-500/30 ml-auto">{gaps.length}</Badge>
-        </CardTitle>
-        <CardDescription className="text-xs">Hot areas with no documented knowledge.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y divide-border/50">
-          {visible.map((gap) => (
-            <div key={gap.filePath} className="flex items-center gap-3 px-6 py-2 hover:bg-accent/30 transition-colors">
-              <div className="flex-1 min-w-0">
-                <code className="text-xs font-mono text-muted-foreground truncate block">{gap.filePath}</code>
-              </div>
-              <div className="w-16 shrink-0">
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-amber-500/60"
-                    style={{ width: `${(gap.changeCount / maxChanges) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <span className="text-[11px] font-mono tabular-nums text-amber-400 shrink-0 w-12 text-right">
-                {gap.changeCount}
-              </span>
-            </div>
-          ))}
-        </div>
-        {remaining > 0 && !expanded && (
-          <div className="px-6 py-2 border-t border-border/50">
-            <Button variant="ghost" size="sm" className="text-xs h-6 px-2 text-amber-400" onClick={() => setExpanded(true)}>
-              +{remaining} more
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function MemoryInsights() {
-  const [gaps, setGaps] = useState<GapEntry[]>([]);
   const [usageInsights, setUsageInsights] = useState<UsageInsightsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [deleteMemoryId, setDeleteMemoryId] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.allSettled([
-      getMemoryGaps().then((r) => setGaps(r.gaps)),
-      getMemoryUsageInsights('all', 30).then(setUsageInsights),
-    ]).finally(() => setLoading(false));
+    getMemoryUsageInsights('all', 30)
+      .then(setUsageInsights)
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => <InsightCardSkeleton key={i} />)}
+      <div className="grid gap-4 md:grid-cols-2">
+        {[1, 2].map((i) => <InsightCardSkeleton key={i} />)}
       </div>
     );
   }
 
-  const hasGaps = gaps.length > 0;
   const hasTopUsed = usageInsights && usageInsights.topUsed.length > 0;
   const hasCleanup = usageInsights && (usageInsights.leastUsed.length > 0 || usageInsights.neverAccessedCount > 0);
 
-  if (!hasGaps && !hasTopUsed && !hasCleanup) return null;
+  if (!hasTopUsed && !hasCleanup) return null;
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Knowledge Gaps */}
-        {hasGaps && (
-          <KnowledgeGapsCard gaps={gaps} />
-        )}
-
+      <div className="grid gap-4 md:grid-cols-2">
         {/* Most Used */}
         {hasTopUsed && usageInsights && (
           <Card>
