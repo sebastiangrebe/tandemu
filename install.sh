@@ -487,6 +487,7 @@ tandemu_perms = [
     "Bash(rm -f ~/.claude/tandemu*)",
     f"Bash(curl*{api_host}:3001*)",
     f"Bash(curl*{api_host}:4318*)",
+    "mcp__tandemu-memory",
 ]
 for p in tandemu_perms:
     if p not in allow:

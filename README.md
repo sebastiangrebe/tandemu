@@ -1,126 +1,131 @@
-# Tandemu
+<p align="center">
+  <img src="apps/frontend/public/logo-mark-dark.svg" alt="Tandemu" width="80" />
+</p>
 
-AI Teammate platform — persistent memory, personality, and development telemetry for AI-native coding.
+<h1 align="center">Tandemu</h1>
+
+<p align="center">
+  <strong>An AI that remembers you. A team that sees everything.</strong>
+</p>
+
+<p align="center">
+  The management layer for AI-assisted development.<br/>
+  Persistent memory and telemetry for Claude Code — built for developers and engineering leads.
+</p>
+
+<p align="center">
+  <a href="https://tandemu.dev">Website</a> · <a href="https://tandemu.dev/docs">Documentation</a> · <a href="https://app.tandemu.dev">Dashboard</a> · <a href="https://tandemu.dev/docs/self-hosting/overview">Self-Hosting Guide</a>
+</p>
+
+<br/>
+
+<p align="center">
+  <img src="apps/e2e/screenshots/app-dashboard.png" alt="Tandemu Dashboard" width="800" />
+</p>
+
+<br/>
+
+## What is Tandemu?
+
+Tandemu is an AI teammate platform that sits on top of [Claude Code](https://claude.ai/code). It serves two audiences:
+
+- **For developers** — a persistent AI companion that remembers your coding style, architectural decisions, and debugging history across sessions. Daily workflow is driven by slash commands (`/morning`, `/finish`, `/standup`).
+- **For engineering leads** — non-invasive observability into AI-native development. Real metrics (AI ratio, cycle time, friction, DORA) replace estimation ceremonies like story points and manual timesheets.
+
+## Key Features
+
+| | Feature | Description |
+|---|---|---|
+| 🧠 | **Persistent Memory** | Retains coding styles, decisions, and context across sessions |
+| 📊 | **Code Attribution** | Exact AI vs. manual split per commit via `Co-Authored-By` |
+| ⏱️ | **Passive Time Tracking** | Automated session-based logging — no manual timesheets |
+| 🔥 | **Friction Detection** | Surfaces tool failures and prompt loops as a heatmap |
+| 📈 | **DORA Metrics** | Deployment frequency and lead time from task completions |
+| 💰 | **ROI Analysis** | Productivity multipliers, cost-per-task, capacity freed |
+| 🔒 | **Privacy-First** | Session-level metrics only — no keystrokes, screen recordings, or prompt content |
+
+## Integrations
+
+GitHub Issues · Linear · Jira · ClickUp · Asana · monday.com
+
+## Quick Start
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- [Node.js](https://nodejs.org/) 20+
+- [pnpm](https://pnpm.io/) 9+
+
+### 1. Start the stack
+
+```bash
+git clone https://github.com/sebastiangrebe/tandemu.git
+cd tandemu
+docker compose up -d
+```
+
+### 2. Connect Claude Code
+
+```bash
+# In Claude Code:
+/plugin marketplace add sebastiangrebe/tandemu
+/plugin install tandemu
+/tandemu:setup
+```
+
+Exit and reopen Claude Code to activate memory, then start working:
+
+```bash
+/morning
+```
+
+> Alternatively, run `./install.sh` for scripted onboarding. See the [setup docs](https://tandemu.dev/docs/setup) for details.
+
+### 3. Development mode
+
+For local development with hot reload:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+pnpm install   # IDE support
+pnpm build     # Build all packages
+```
 
 ## Architecture
 
 ```
 apps/
-  backend/        — NestJS API (Postgres + ClickHouse)
+  backend/        — NestJS API (PostgreSQL + ClickHouse)
   frontend/       — Next.js dashboard (shadcn/ui + Recharts)
-  mcp-server/     — MCP memory server
   claude-plugins/ — Skills, personality, hooks
   e2e/            — Playwright E2E tests
 packages/
   types/          — Shared TypeScript types
   database/       — SQL migrations
-  telemetry/      — OTEL SDK
 ```
-
-## Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-- Docker & Docker Compose
-
-## Getting Started
-
-### 1. Start infrastructure
-
-Production mode (builds backend and frontend in containers):
-
-```bash
-docker compose up -d
-```
-
-### 2. Development mode
-
-Development mode mounts source code and enables hot reload for backend and frontend:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-```
-
-This starts infrastructure services (Postgres, ClickHouse, Redis, OTEL collector, OpenMemory, Qdrant) from the base compose file, and replaces backend/frontend with hot-reloading dev containers.
-
-### 3. Install dependencies (for IDE support)
-
-```bash
-pnpm install
-```
-
-### 4. Build all packages
-
-```bash
-pnpm build
-```
-
-## Services
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| backend | 3001 | NestJS API |
 | frontend | 3000 | Next.js dashboard |
+| backend | 3001 | NestJS API |
 | postgres | 5432 | Relational data |
 | clickhouse | 8123 | Telemetry analytics |
-| redis | 6379 | Cache |
-| otel-collector | 4317/4318 | Telemetry ingestion |
-| openmemory | 8765 | MCP memory server |
+| redis | 6379 | Cache + job queues |
+| otel-collector | 4317/4318 | OpenTelemetry ingestion |
+| openmemory | 8765 | MCP memory server (Mem0) |
 | mem0_store | 6333 | Qdrant vector store |
-
-## Claude Code Setup
-
-### Option A: Plugin marketplace
-
-```bash
-# In Claude Code:
-> /plugin marketplace add sebastiangrebe/tandemu
-> /plugin install tandemu
-> /reload-plugins
-
-# Exit and reopen Claude Code, then:
-> /tandemu:setup
-
-# Exit and reopen once more to activate memory, then:
-> /morning
-```
-
-### Option B: Install script
-
-Run the install script to configure Claude Code with Tandemu skills and memory:
-
-```bash
-./install.sh
-```
-
-Same result as the plugin setup, but as a bash script. Useful for scripted onboarding or CI/CD.
 
 ## How It Works
 
-### Task workflow
-
 ```
-/morning  →  creates worktree + branch  →  work  →  /finish  →  cleans up worktree
+/morning  →  pick a task  →  work  →  /finish
 ```
 
-1. **`/morning`** — Fetches tasks from your ticket system, you pick one. Creates a git worktree in `.worktrees/<task-id>/` with a new feature branch and switches into it. The main checkout stays on `main`.
-2. **Work** — Code normally. Tandemu tracks session time, AI vs manual lines, and friction in the background.
-3. **`/finish`** — Measures work, sends telemetry, updates the ticket, creates a PR if needed, and removes the worktree.
-4. **`/pause`** — Pauses the task, keeps the worktree for later. Resume by opening that worktree and running `/morning`.
+1. **`/morning`** — Fetches tasks from your ticket system. Creates a git worktree with a feature branch.
+2. **Work** — Code normally. Tandemu tracks session time, AI ratio, and friction in the background.
+3. **`/finish`** — Measures work, sends telemetry, updates the ticket, creates a PR, and cleans up the worktree.
 
-### Multiple tasks in parallel
-
-Each task lives in its own worktree. Open multiple Claude Code sessions to work on multiple tasks simultaneously:
-
-```
-~/project/                          ← main checkout (stays on main)
-~/project/.worktrees/SGS-61/        ← task 1 (session A)
-~/project/.worktrees/SGS-100/       ← task 2 (session B)
-```
-
-Task state is stored in branch-keyed files (`~/.claude/tandemu-active-task-{branch-slug}.json`), so sessions never conflict.
-
-### Available skills
+Each task runs in its own worktree, so you can work on multiple tasks in parallel across Claude Code sessions.
 
 | Skill | Description |
 |-------|-------------|
@@ -130,104 +135,32 @@ Task state is stored in branch-keyed files (`~/.claude/tandemu-active-task-{bran
 | `/create` | Create a new task in the ticket system |
 | `/standup` | Generate a team standup report |
 
-### Managing your installation
+## Deployment
+
+| | Option | Details |
+|---|---|---|
+| 🏠 | **Self-hosted** | Docker Compose — free and open-source |
+| ☁️ | **Managed cloud** | [app.tandemu.dev](https://app.tandemu.dev) — $10/developer/month |
+
+See the [self-hosting guide](https://tandemu.dev/docs/self-hosting/overview) for production deployment instructions.
+
+## Documentation
+
+Full documentation is available at **[tandemu.dev/docs](https://tandemu.dev/docs)**.
+
+- [Installation & Setup](https://tandemu.dev/docs/setup)
+- [Developer Workflow](https://tandemu.dev/docs/developer/workflow)
+- [Memory System](https://tandemu.dev/docs/developer/memory)
+- [Dashboard & Metrics](https://tandemu.dev/docs/lead/dashboard)
+- [Self-Hosting Configuration](https://tandemu.dev/docs/self-hosting/configuration)
+
+## Uninstalling
 
 ```bash
-./install.sh --check       # Check for updates
-./install.sh --uninstall   # Remove all Tandemu files
+./install.sh --uninstall
 ```
 
-### Full uninstall (clean slate)
-
-If you need to do a hard reset (e.g., plugin cache is stale or you want a completely fresh install):
-
-```bash
-# 1. Remove plugin cache and registry entries
-rm -rf ~/.claude/plugins/marketplaces/tandemu
-rm -rf ~/.claude/plugins/cache/tandemu*
-
-# 2. Remove plugin from registry files
-python3 -c "
-import json, os
-for f in ['installed_plugins.json', 'known_marketplaces.json']:
-    path = os.path.expanduser(f'~/.claude/plugins/{f}')
-    try:
-        with open(path) as fh: d = json.load(fh)
-        if f == 'installed_plugins.json':
-            d['plugins'] = {k:v for k,v in d.get('plugins',{}).items() if 'tandemu' not in k}
-        else:
-            d.pop('tandemu', None)
-        with open(path, 'w') as fh: json.dump(d, fh, indent=2)
-    except: pass
-"
-
-# 3. Remove from settings.json (env, permissions, hooks, plugin entries)
-python3 -c "
-import json, os
-f = os.path.expanduser('~/.claude/settings.json')
-try:
-    with open(f) as fh: s = json.load(fh)
-    s['enabledPlugins'] = {k:v for k,v in s.get('enabledPlugins',{}).items() if 'tandemu' not in k}
-    ekm = s.get('extraKnownMarketplaces', {}); ekm.pop('tandemu', None)
-    if ekm: s['extraKnownMarketplaces'] = ekm
-    elif 'extraKnownMarketplaces' in s: del s['extraKnownMarketplaces']
-    env = s.get('env', {})
-    for k in list(env.keys()):
-        if k.startswith('OTEL_') or k == 'CLAUDE_CODE_ENABLE_TELEMETRY': del env[k]
-    if env: s['env'] = env
-    elif 'env' in s: del s['env']
-    allow = s.get('permissions',{}).get('allow',[])
-    allow = [p for p in allow if 'tandemu' not in p.lower() and ':3001' not in p and ':4318' not in p]
-    if allow: s['permissions']['allow'] = allow
-    elif 'allow' in s.get('permissions',{}): del s['permissions']['allow']
-    if not s.get('permissions',{}).get('allow'):
-        s.get('permissions',{}).pop('allow', None)
-    if not s.get('permissions'): s.pop('permissions', None)
-    hooks = s.get('hooks', {})
-    hooks.pop('SessionStart', None)
-    if not hooks: s.pop('hooks', None)
-    with open(f, 'w') as fh: json.dump(s, fh, indent=2)
-except: pass
-"
-
-# 4. Remove Tandemu config, skills, lib, memory index, and MCP
-rm -f ~/.claude/tandemu.json ~/.claude/tandemu-active-task*.json ~/.claude/tandemu-version.txt
-rm -f ~/.claude/tandemu-memory-index-*.md
-find ~/.claude/projects -name "tandemu-index.md" -delete 2>/dev/null || true
-rm -f ~/.claude/CLAUDE.md ~/.claude/lib/tandemu-env.sh
-rm -rf ~/.claude/skills/{morning,finish,pause,create,standup,setup}
-python3 -c "
-import json, os
-for f in [os.path.expanduser('~/.mcp.json'), os.path.expanduser('~/.claude.json')]:
-    try:
-        with open(f) as fh: c = json.load(fh)
-        c.get('mcpServers',{}).pop('tandemu-memory', None)
-        if not c.get('mcpServers'): c.pop('mcpServers', None)
-        if c:
-            with open(f, 'w') as fh: json.dump(c, fh, indent=2)
-        else: os.remove(f)
-    except: pass
-"
-
-# 5. Restart Claude Code, then reinstall fresh:
-#    /plugin marketplace add sebastiangrebe/tandemu
-#    /plugin install tandemu
-#    /tandemu:setup
-```
-
-### Why install.sh?
-
-Claude Code has an official plugin marketplace, but plugin skills are namespaced (`/tandemu:morning`). Tandemu uses `install.sh` (or `/tandemu:setup`) to install skills with short names (`/morning`) for daily use. The installer also handles OAuth authentication and user-scoped memory configuration that plugins can't do natively.
-
-### Available skills
-
-| Skill | Description |
-|-------|-------------|
-| `/morning` | Pick a task and start working |
-| `/finish` | Complete task, measure work, send telemetry |
-| `/pause` | Pause current task, switch to another |
-| `/create` | Create a new task in the ticket system |
-| `/standup` | Generate a team standup report |
+For a full clean-slate reset, see [UNINSTALL.md](UNINSTALL.md).
 
 ## License
 
