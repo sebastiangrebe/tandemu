@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -11,18 +11,30 @@ interface FullscreenCardProps {
 export function FullscreenCard({ children }: FullscreenCardProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const close = useCallback(() => setIsFullscreen(false), []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isFullscreen, close]);
+
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-background overflow-auto p-6">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 right-4 z-10"
-          onClick={() => setIsFullscreen(false)}
-        >
-          <Minimize2 className="h-4 w-4" />
-        </Button>
-        <div className="h-full">{children}</div>
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <div className="flex items-center justify-end p-4 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={close}
+          >
+            <Minimize2 className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-auto px-6 pb-6">{children}</div>
       </div>
     );
   }
