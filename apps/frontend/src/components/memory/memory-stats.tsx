@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Brain, User, Building2, Activity } from 'lucide-react';
 import { CardSkeleton } from '@/components/ui/skeleton-helpers';
 import { useMemoryStats } from '@/app/memory/page';
@@ -19,53 +19,73 @@ export function MemoryStats() {
   if (!stats) return null;
 
   const accessedCount = stats.total - stats.neverAccessedCount;
+  const healthPct = stats.total > 0 ? Math.round((accessedCount / stats.total) * 100) : 0;
+
+  const cards = [
+    {
+      label: 'Total Memories',
+      value: stats.total,
+      sub: `across ${Object.keys(stats.categories).length} categories`,
+      icon: Brain,
+      gradient: 'from-violet-500/10',
+      iconBg: 'bg-violet-500/10',
+      iconColor: 'text-violet-400',
+      valueColor: 'text-violet-400',
+    },
+    {
+      label: 'Personal',
+      value: stats.personal,
+      sub: 'coding style, preferences, DNA',
+      icon: User,
+      gradient: 'from-blue-500/10',
+      iconBg: 'bg-blue-500/10',
+      iconColor: 'text-blue-400',
+      valueColor: 'text-blue-400',
+    },
+    {
+      label: 'Organization',
+      value: stats.org,
+      sub: 'architecture, decisions, patterns',
+      icon: Building2,
+      gradient: 'from-emerald-500/10',
+      iconBg: 'bg-emerald-500/10',
+      iconColor: 'text-emerald-400',
+      valueColor: 'text-emerald-400',
+    },
+    {
+      label: 'Memory Health',
+      value: stats.total > 0 ? `${healthPct}%` : '—',
+      sub: 'actively used by AI',
+      icon: Activity,
+      gradient: 'from-amber-500/10',
+      iconBg: 'bg-amber-500/10',
+      iconColor: 'text-amber-400',
+      valueColor: 'text-amber-400',
+    },
+  ];
 
   return (
     <div className="grid gap-4 md:grid-cols-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Total Memories</CardTitle>
-          <Brain className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.total}</div>
-          <p className="text-xs text-muted-foreground mt-1">
-            across {Object.keys(stats.categories).length} categories
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Personal</CardTitle>
-          <User className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.personal}</div>
-          <p className="text-xs text-muted-foreground mt-1">coding style, preferences, DNA</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Organization</CardTitle>
-          <Building2 className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.org}</div>
-          <p className="text-xs text-muted-foreground mt-1">architecture, decisions, patterns</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Memory Health</CardTitle>
-          <Activity className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {stats.total > 0 ? `${Math.round((accessedCount / stats.total) * 100)}%` : '—'}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">actively used by AI</p>
-        </CardContent>
-      </Card>
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <Card key={card.label} className="relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} to-transparent`} />
+            <CardContent className="relative pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
+                  <p className={`text-3xl font-bold ${card.valueColor} mt-1`}>{card.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>
+                </div>
+                <div className={`h-10 w-10 rounded-lg ${card.iconBg} flex items-center justify-center`}>
+                  <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
