@@ -50,11 +50,11 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
                 <stop offset="95%" stopColor="#a1a1aa" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} width={50} />
+            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={50} />
             <Tooltip
               contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: 'var(--ts)' }}
             />
             <Legend wrapperStyle={{ fontSize: '12px' }} />
             <Area type="monotone" dataKey="aiLines" name="AI Lines" stroke="#60a5fa" fill="url(#colorAILines)" strokeWidth={2} />
@@ -106,11 +106,11 @@ export function CostEfficiencyChart({ data }: CostEfficiencyChartProps) {
                 <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${v}`} />
+            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${v}`} />
             <Tooltip
               contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: 'var(--ts)' }}
               formatter={(value: number, name: string) => [
                 name === 'cost' ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`,
                 name === 'cost' ? 'Daily Cost' : 'Cost/Line',

@@ -45,11 +45,11 @@ export function VelocityChart({ data }: VelocityChartProps) {
       <CardContent>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData}>
-            <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} width={30} />
+            <XAxis dataKey="week" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={30} />
             <Tooltip
               contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: 'var(--ts)' }}
               formatter={(value: number, name: string) => [
                 name === 'hours' ? `${value}h avg` : `${value} tasks`,
                 name === 'hours' ? 'Avg Duration' : 'Tasks',

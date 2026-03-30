@@ -56,11 +56,11 @@ export function CostChart({ data }: CostChartProps) {
                 <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#71717a' }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${v}`} />
+            <XAxis dataKey="date" tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: 'var(--tt)' }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${v}`} />
             <Tooltip
               contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: 'var(--ts)' }}
               formatter={(value: number) => [`$${value.toFixed(2)}`, 'Cost']}
             />
             <Area type="monotone" dataKey="cost" stroke="#60a5fa" fill="url(#colorCostGrad)" strokeWidth={2} />

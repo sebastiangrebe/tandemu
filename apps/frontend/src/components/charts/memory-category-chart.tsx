@@ -56,13 +56,13 @@ export function MemoryCategoryChart({ categories }: MemoryCategoryChartProps) {
               type="category"
               dataKey="name"
               width={90}
-              tick={{ fontSize: 12, fill: '#a1a1aa' }}
+              tick={{ fontSize: 12, fill: 'var(--ts)' }}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
-              contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#fafafa' }}
+              contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: 'var(--ts)' }}
               cursor={{ fill: 'rgba(255,255,255,0.03)' }}
             />
             <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>

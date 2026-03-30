@@ -76,7 +76,7 @@ export function InvestmentChart({ data }: InvestmentChartProps) {
               ]}
             />
             <Legend
-              formatter={(value: string) => <span style={{ color: '#a1a1aa', fontSize: '12px' }}>{value}</span>}
+              formatter={(value: string) => <span style={{ color: 'var(--ts)', fontSize: '12px' }}>{value}</span>}
             />
           </PieChart>
         </ResponsiveContainer>

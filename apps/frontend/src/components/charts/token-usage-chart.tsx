@@ -66,7 +66,7 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
             <XAxis
               type="number"
-              tick={{ fontSize: 12, fill: '#71717a' }}
+              tick={{ fontSize: 12, fill: 'var(--tt)' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={formatTokens}
@@ -74,14 +74,14 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
             <YAxis
               type="category"
               dataKey="model"
-              tick={{ fontSize: 11, fill: '#71717a' }}
+              tick={{ fontSize: 11, fill: 'var(--tt)' }}
               axisLine={false}
               tickLine={false}
               width={120}
             />
             <Tooltip
               contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '12px', fontSize: '12px' }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: 'var(--ts)' }}
               formatter={(value: number) => [formatTokens(value), undefined]}
             />
             <Legend wrapperStyle={{ fontSize: '12px' }} />

@@ -1,10 +1,10 @@
 import type { TaskCategory } from '@tandemu/types';
 
 const CATEGORY_RULES: Array<{ keywords: string[]; category: TaskCategory }> = [
-  { keywords: ['bug', 'fix', 'hotfix'], category: 'bugfix' },
-  { keywords: ['feature', 'enhancement'], category: 'feature' },
-  { keywords: ['debt', 'refactor', 'chore'], category: 'tech_debt' },
-  { keywords: ['maintenance', 'ops', 'infra'], category: 'maintenance' },
+  { keywords: ['bug', 'fix', 'hotfix', 'defect', 'regression', 'broken', 'crash', 'error', 'incident', 'patch'], category: 'bugfix' },
+  { keywords: ['feature', 'enhancement', 'improvement', 'story', 'epic', 'user story', 'new', 'add', 'implement', 'mvp', 'prototype'], category: 'feature' },
+  { keywords: ['debt', 'refactor', 'chore', 'cleanup', 'clean up', 'migrate', 'migration', 'deprecate', 'upgrade', 'tech debt', 'rework'], category: 'tech_debt' },
+  { keywords: ['maintenance', 'ops', 'infra', 'ci', 'cd', 'pipeline', 'deploy', 'monitor', 'alert', 'config', 'devops', 'tooling', 'docs', 'documentation'], category: 'maintenance' },
 ];
 
 export function inferCategory(labels: string[]): TaskCategory {
