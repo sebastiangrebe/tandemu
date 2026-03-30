@@ -54,7 +54,7 @@ export function ActivityChart({ data, startDate, endDate, height = 220 }: Activi
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
-          <AreaChart data={chartData} margin={{ top: 10 }}>
+          <AreaChart data={chartData} margin={{ top: 20 }}>
             <defs>
               <linearGradient id="colorHoursGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />

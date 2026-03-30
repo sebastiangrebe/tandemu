@@ -50,7 +50,7 @@ export function CostChart({ data }: CostChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData} margin={{ top: 10 }}>
+          <AreaChart data={chartData} margin={{ top: 20 }}>
             <defs>
               <linearGradient id="colorCostGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />

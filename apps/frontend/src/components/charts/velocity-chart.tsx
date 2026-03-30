@@ -45,7 +45,7 @@ export function VelocityChart({ data }: VelocityChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 10 }}>
+          <LineChart data={chartData} margin={{ top: 20 }}>
             <XAxis dataKey="week" tick={AXIS_TICK} axisLine={false} tickLine={false} />
             <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={30} />
             <Tooltip

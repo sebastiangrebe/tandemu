@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Zap, Clock, DollarSign, Brain, TrendingDown, Share2, Info, Settings } from 'lucide-react';
-import { getInsightsMetrics, getMemoryStats, getTokenUsage, getDeveloperStats } from '@/lib/api';
-import type { InsightsMetrics, TokenUsageEntry, DeveloperStat } from '@/lib/api';
-import { DeveloperLeaderboard } from '@/components/charts/developer-leaderboard';
+import { Card, CardContent } from '@/components/ui/card';
+import { Zap, Clock, DollarSign, Info, Settings } from 'lucide-react';
+import { getInsightsMetrics, getTokenUsage } from '@/lib/api';
+import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
 import { TokenUsageChart } from '@/components/charts/token-usage-chart';
@@ -24,9 +23,7 @@ function formatNumber(value: number | null): string {
 
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsMetrics | null>(null);
-  const [orgMemoryCount, setOrgMemoryCount] = useState(0);
   const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
-  const [devStats, setDevStats] = useState<DeveloperStat[]>([]);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate, teamId } = useFilterParams();
 
@@ -36,17 +33,13 @@ export default function InsightsPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate, teamId };
-        const [insights, memStats, tokens, devs] = await Promise.allSettled([
+        const [insights, tokens] = await Promise.allSettled([
           getInsightsMetrics(f),
-          getMemoryStats(),
           getTokenUsage(f),
-          getDeveloperStats(f),
         ]);
         if (cancelled) return;
         if (insights.status === 'fulfilled') setData(insights.value);
-        if (memStats.status === 'fulfilled') setOrgMemoryCount(memStats.value.org);
         if (tokens.status === 'fulfilled') setTokenData(tokens.value);
-        if (devs.status === 'fulfilled') setDevStats(devs.value);
       } catch {
         // Non-critical
       } finally {
@@ -117,80 +110,87 @@ export default function InsightsPage() {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold tracking-tight">AI Coding Value</h2>
 
-            {/* KPI Cards */}
+            {/* Hero KPI Cards */}
             <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Productivity Multiplier</CardTitle>
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+              <Card className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent" />
+                <CardContent className="relative pt-6 pb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/15">
+                      <Zap className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">Productivity Multiplier</p>
+                  </div>
+                  <p className="text-3xl font-bold tracking-tight">
                     {data.productivityMultiplier !== null ? `${data.productivityMultiplier}x` : '-'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    total output / manual-only output
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">total output / manual-only output</p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Capacity Freed</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+              <Card className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
+                <CardContent className="relative pt-6 pb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/15">
+                      <Clock className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">Capacity Freed</p>
+                  </div>
+                  <p className="text-3xl font-bold tracking-tight">
                     {data.capacityFreedHours > 0 ? `${data.capacityFreedHours}h` : '-'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    hours of manual work handled by AI
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">hours of manual work handled by AI</p>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Cost per Task</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency(data.costPerTask, data.assumptions.currency)}
+              <Card className="relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent" />
+                <CardContent className="relative pt-6 pb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/15">
+                      <DollarSign className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">Cost per Task</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    AI cost per completed task
+                  <p className="text-3xl font-bold tracking-tight">
+                    {formatCurrency(data.costPerTask, data.assumptions.currency)}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">AI cost per completed task</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Throughput stats */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card className="bg-muted/30">
-                <CardContent className="pt-4 pb-3">
-                  <p className="text-xs text-muted-foreground mb-1">AI Lines</p>
-                  <p className="text-lg font-semibold">{formatNumber(data.totalAILines)}</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-muted/30">
-                <CardContent className="pt-4 pb-3">
-                  <p className="text-xs text-muted-foreground mb-1">Manual Lines</p>
-                  <p className="text-lg font-semibold">{formatNumber(data.totalManualLines)}</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-muted/30">
-                <CardContent className="pt-4 pb-3">
-                  <p className="text-xs text-muted-foreground mb-1">Tasks Completed</p>
-                  <p className="text-lg font-semibold">{formatNumber(data.totalTasks)}</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-muted/30">
-                <CardContent className="pt-4 pb-3">
-                  <p className="text-xs text-muted-foreground mb-1">Total AI Cost</p>
-                  <p className="text-lg font-semibold">{formatCurrency(data.totalAICost, data.assumptions.currency)}</p>
-                </CardContent>
-              </Card>
+            {/* Throughput stats — compact inline row */}
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+              <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <div className="h-2 w-2 rounded-full bg-blue-400" />
+                <div>
+                  <p className="text-lg font-semibold leading-tight">{formatNumber(data.totalAILines)}</p>
+                  <p className="text-xs text-muted-foreground">AI Lines</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <div className="h-2 w-2 rounded-full bg-zinc-400" />
+                <div>
+                  <p className="text-lg font-semibold leading-tight">{formatNumber(data.totalManualLines)}</p>
+                  <p className="text-xs text-muted-foreground">Manual Lines</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                <div>
+                  <p className="text-lg font-semibold leading-tight">{formatNumber(data.totalTasks)}</p>
+                  <p className="text-xs text-muted-foreground">Tasks Completed</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <div className="h-2 w-2 rounded-full bg-amber-400" />
+                <div>
+                  <p className="text-lg font-semibold leading-tight">{formatCurrency(data.totalAICost, data.assumptions.currency)}</p>
+                  <p className="text-xs text-muted-foreground">Total AI Cost</p>
+                </div>
+              </div>
             </div>
 
             {/* Charts */}
@@ -202,71 +202,6 @@ export default function InsightsPage() {
             <TokenUsageChart data={tokenData} />
           </div>
 
-          {/* Section 2: Tandemu Impact */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold tracking-tight">Tandemu Impact</h2>
-            <p className="text-sm text-muted-foreground">
-              How memory and workflow features reduce ramp-up time and prevent repeated mistakes.
-            </p>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Memory Hits</CardTitle>
-                  <Brain className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatNumber(data.memoryHits)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    times AI used stored knowledge
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Friction Trend</CardTitle>
-                  <TrendingDown className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-2xl font-bold ${
-                    data.frictionEventsReduced !== null
-                      ? data.frictionEventsReduced < 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                      : ''
-                  }`}>
-                    {data.frictionEventsReduced !== null
-                      ? `${data.frictionEventsReduced > 0 ? '+' : ''}${data.frictionEventsReduced}%`
-                      : '-'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    tool failures vs previous period
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Knowledge Shared</CardTitle>
-                  <Share2 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatNumber(orgMemoryCount)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    org memories available to all members
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Section 3: AI Adoption */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold tracking-tight">AI Adoption</h2>
-            <p className="text-sm text-muted-foreground">
-              Per-developer AI usage — who&apos;s leveraging AI and who could benefit from more adoption.
-            </p>
-            <DeveloperLeaderboard data={devStats} />
-          </div>
         </>
       )}
     </div>
