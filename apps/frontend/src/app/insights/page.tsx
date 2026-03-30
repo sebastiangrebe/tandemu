@@ -122,7 +122,7 @@ export default function InsightsPage() {
                     <p className="text-sm font-medium text-muted-foreground">Productivity Multiplier</p>
                   </div>
                   <p className="text-3xl font-bold tracking-tight">
-                    {data.productivityMultiplier !== null ? `${data.productivityMultiplier}x` : '-'}
+                    {data.productivityMultiplier !== null ? `${data.productivityMultiplier}x` : data.totalAILines > 0 ? '100%' : '-'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">total output / manual-only output</p>
                 </CardContent>

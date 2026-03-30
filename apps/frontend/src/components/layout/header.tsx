@@ -55,6 +55,7 @@ import {
   Sun,
   Moon,
   BadgeCheck,
+  MessageCircle,
 } from "lucide-react";
 
 const mainNavAll = [
@@ -94,11 +95,21 @@ const allNavItems = [
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
+import { Crisp } from 'crisp-sdk-web';
+
+const CRISP_WEBSITE_ID = process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID;
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, currentOrg, organizations, switchOrg, logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  // Load Crisp chat (SaaS only)
+  useEffect(() => {
+    if (!CRISP_WEBSITE_ID) return;
+    Crisp.configure(CRISP_WEBSITE_ID);
+  }, []);
 
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -363,6 +374,12 @@ export function Header() {
                     )}
                     {theme === "dark" ? "Light mode" : "Dark mode"}
                   </DropdownMenuItem>
+                  {CRISP_WEBSITE_ID && (
+                    <DropdownMenuItem onClick={() => Crisp.chat.open()}>
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Support
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}>
