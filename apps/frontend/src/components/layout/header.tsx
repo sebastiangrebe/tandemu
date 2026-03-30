@@ -103,15 +103,9 @@ export function Header() {
 
   // Load Crisp chat (SaaS only)
   useEffect(() => {
-    console.log('[Tandemu] BILLING_ENABLED:', process.env.NEXT_PUBLIC_BILLING_ENABLED);
-    console.log('[Tandemu] CRISP_WEBSITE_ID:', process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID);
     if (process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID) {
-      console.log('[Tandemu] Initializing Crisp...');
       import('crisp-sdk-web').then(({ Crisp }) => {
         Crisp.configure(process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID!);
-        console.log('[Tandemu] Crisp configured');
-      }).catch((err) => {
-        console.error('[Tandemu] Crisp failed:', err);
       });
     }
   }, []);
