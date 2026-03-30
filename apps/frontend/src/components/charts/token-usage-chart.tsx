@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { AXIS_TICK, AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { TokenUsageEntry } from '@/lib/api';
@@ -12,15 +12,19 @@ interface TokenUsageChartProps {
 }
 
 const TOKEN_COLORS: Record<string, string> = {
-  input: '#818cf8',      // indigo-400
-  output: '#f472b6',     // pink-400
-  cache_read: '#34d399',  // emerald-400
-  cache_creation: '#a78bfa', // violet-400
+  input: '#818cf8',           // indigo-400
+  output: '#f472b6',          // pink-400
+  cacheRead: '#34d399',       // emerald-400
+  cacheCreation: '#a78bfa',   // violet-400
+  cache_read: '#34d399',      // alias
+  cache_creation: '#a78bfa',  // alias
 };
 
 const TOKEN_LABELS: Record<string, string> = {
   input: 'Input',
   output: 'Output',
+  cacheRead: 'Cache Read',
+  cacheCreation: 'Cache Creation',
   cache_read: 'Cache Read',
   cache_creation: 'Cache Creation',
 };
@@ -99,9 +103,6 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
     );
   }
 
-  // Calculate dynamic bar height
-  const barHeight = Math.max(280, chartData.length * 60 + 60);
-
   return (
     <Card>
       <CardHeader>
@@ -109,13 +110,8 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
         <CardDescription>Token consumption by model and type</CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={barHeight}>
-          <BarChart
-            data={chartData}
-            layout="vertical"
-            margin={{ left: 10, right: 30, top: 10, bottom: 10 }}
-            barCategoryGap="30%"
-          >
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 30 }}>
             <XAxis
               type="number"
               tick={AXIS_TICK}
@@ -129,7 +125,7 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
               tick={AXIS_TICK_SM}
               axisLine={false}
               tickLine={false}
-              width={140}
+              width={120}
               tickFormatter={shortenModel}
             />
             <Tooltip
