@@ -18,6 +18,25 @@ export function CardSkeleton() {
   );
 }
 
+/** KPI card with gradient background matching the redesigned style */
+function GradientCardSkeleton() {
+  return (
+    <Card className="relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-muted/30 to-transparent" />
+      <CardContent className="relative pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-16 mt-2" />
+            <Skeleton className="h-3 w-28 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-10 rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ChartSkeleton({ height = 220 }: { height?: number }) {
   return (
     <Card>
@@ -32,14 +51,52 @@ export function ChartSkeleton({ height = 220 }: { height?: number }) {
   );
 }
 
+/** File browser card skeleton matching friction/hot files/knowledge gaps style */
+function FileBrowserSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-3 w-56 mt-1" />
+          </div>
+          <div className="flex gap-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-7 w-16 rounded-md" />)}
+          </div>
+        </div>
+        <Skeleton className="h-9 w-full mt-2 rounded-md" />
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y divide-border/50">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-1.5 w-24 rounded-full" />
+              <Skeleton className="h-4 w-8" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Page Skeletons ──
 
-/** Dashboard: 4 KPI cards + 2 charts */
+/** Dashboard: 6 KPI cards (3-col) + 2×2 charts */
 export function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5, 6].map((i) => <CardSkeleton key={i} />)}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartSkeleton />
+        <ChartSkeleton />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartSkeleton />
@@ -49,7 +106,7 @@ export function DashboardSkeleton() {
   );
 }
 
-/** Activity: 3 stat cards + chart + table */
+/** Activity: 3 stat cards + chart + leaderboard + 2 file browsers */
 export function ActivitySkeleton() {
   return (
     <div className="space-y-6">
@@ -57,68 +114,71 @@ export function ActivitySkeleton() {
         {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
       </div>
       <ChartSkeleton height={280} />
+      {/* Leaderboard */}
       <Card>
         <CardHeader>
-          <Skeleton className="h-5 w-28 mb-1" />
-          <Skeleton className="h-3 w-44" />
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-52" />
         </CardHeader>
         <CardContent className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex gap-4 items-center">
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
+            <div key={i} className="flex items-center gap-4">
+              <Skeleton className="h-4 w-6" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-1.5 w-24 rounded-full" />
+              <Skeleton className="h-4 w-12" />
             </div>
           ))}
         </CardContent>
       </Card>
+      {/* Hot files + AI effectiveness */}
+      <FileBrowserSkeleton />
+      <FileBrowserSkeleton />
     </div>
   );
 }
 
-/** Friction Map: 3 severity cards + file list */
-export function FrictionSkeleton() {
+/** Insights: 3 gradient KPIs + 4 inline stats + 2 charts + token chart */
+export function InsightsSkeleton() {
   return (
     <div className="space-y-6">
+      {/* Assumptions banner */}
+      <Skeleton className="h-10 w-full rounded-lg" />
+      {/* Section heading */}
+      <Skeleton className="h-5 w-32" />
+      {/* Hero KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3].map((i) => <GradientCardSkeleton key={i} />)}
+      </div>
+      {/* Throughput stats */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
           <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-8 mb-1" />
-              <Skeleton className="h-3 w-28" />
+            <CardContent className="pt-4 pb-3">
+              <Skeleton className="h-3 w-16 mb-1" />
+              <Skeleton className="h-6 w-20" />
             </CardContent>
           </Card>
         ))}
       </div>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-5" />
-            <Skeleton className="h-5 w-36" />
-          </div>
-          <Skeleton className="h-3 w-64" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-48" />
-              </div>
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-5 w-16 rounded-full" />
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+      <ChartSkeleton height={280} />
+    </div>
+  );
+}
+
+/** Friction Map: 4 gradient KPI cards + file tree browser */
+export function FrictionSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => <GradientCardSkeleton key={i} />)}
+      </div>
+      <FileBrowserSkeleton rows={8} />
     </div>
   );
 }
@@ -212,42 +272,38 @@ export function SettingsSkeleton() {
   );
 }
 
-/** Memory: 4 KPI cards + 2 charts + insights + scope toggle + memory cards */
+/** Memory: 4 gradient KPI cards + 2 charts + 2 insight cards + browser + knowledge gaps */
 export function MemorySkeleton() {
   return (
     <div className="space-y-6">
-      {/* KPI row */}
+      {/* KPI row — gradient style */}
       <div className="grid gap-4 md:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => <CardSkeleton key={i} />)}
+        {[1, 2, 3, 4].map((i) => <GradientCardSkeleton key={i} />)}
       </div>
       {/* Charts row */}
       <div className="grid gap-4 md:grid-cols-2">
         <ChartSkeleton />
         <ChartSkeleton height={160} />
       </div>
-      {/* Insights row */}
-      <div>
-        <Skeleton className="h-5 w-20 mb-1" />
-        <Skeleton className="h-3 w-56 mb-4" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-4" />
-                  <Skeleton className="h-4 w-28" />
-                </div>
-                <Skeleton className="h-3 w-44 mt-1" />
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-1.5 w-full rounded-full" />
-                <Skeleton className="h-3 w-4/5" />
-                <Skeleton className="h-1.5 w-4/5 rounded-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      {/* Insights row — 2 cols now */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {[1, 2].map((i) => (
+          <Card key={i}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+              <Skeleton className="h-3 w-44 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+              <Skeleton className="h-3 w-4/5" />
+              <Skeleton className="h-1.5 w-4/5 rounded-full" />
+            </CardContent>
+          </Card>
+        ))}
       </div>
       {/* Scope toggle + search */}
       <div className="flex items-center gap-4">
@@ -275,6 +331,8 @@ export function MemorySkeleton() {
           </div>
         ))}
       </div>
+      {/* Knowledge gaps */}
+      <FileBrowserSkeleton rows={5} />
     </div>
   );
 }

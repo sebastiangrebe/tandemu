@@ -9,7 +9,7 @@ import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
 import { TokenUsageChart } from '@/components/charts/token-usage-chart';
-import { DashboardSkeleton } from '@/components/ui/skeleton-helpers';
+import { InsightsSkeleton } from '@/components/ui/skeleton-helpers';
 
 function formatCurrency(value: number | null, currency = 'USD'): string {
   if (value === null) return '-';
@@ -60,7 +60,7 @@ export default function InsightsPage() {
           </div>
           <TelemetryFilters showTeamFilter={true} />
         </div>
-        <DashboardSkeleton />
+        <InsightsSkeleton />
       </div>
     );
   }
