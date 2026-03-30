@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/table";
 import { Search } from 'lucide-react';
 import { FileTree } from '@/components/memory/file-tree';
+import { useFullscreen } from '@/components/ui/fullscreen-card';
 import type { HotFile } from '@/lib/api';
 import type { FileTreeNode } from '@/lib/api';
 
@@ -111,6 +112,7 @@ function buildTree(files: HotFile[]): FileTreeNode[] {
 }
 
 export function HotFilesChart({ data }: HotFilesChartProps) {
+  const isFullscreen = useFullscreen();
   const [selectedPath, setSelectedPath] = useState<string>();
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -155,7 +157,7 @@ export function HotFilesChart({ data }: HotFilesChartProps) {
   }
 
   return (
-    <Card>
+    <Card className={isFullscreen ? 'h-full flex flex-col' : ''}>
       <CardHeader>
         <CardTitle>Hot Files</CardTitle>
         <CardDescription>
@@ -165,8 +167,8 @@ export function HotFilesChart({ data }: HotFilesChartProps) {
           }
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr] h-full">
+      <CardContent className={isFullscreen ? 'flex-1 min-h-0' : ''}>
+        <div className={`grid gap-4 lg:grid-cols-[280px_1fr] ${isFullscreen ? 'h-full' : ''}`}>
           {/* File tree */}
           <div className="flex flex-col border rounded-lg overflow-hidden">
             <div className="relative shrink-0 border-b">
@@ -179,7 +181,7 @@ export function HotFilesChart({ data }: HotFilesChartProps) {
                 className="w-full bg-transparent pl-8 pr-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <div className="flex-1 overflow-y-auto p-2 max-h-[360px]">
+            <div className={`flex-1 overflow-y-auto p-2 ${isFullscreen ? '' : 'max-h-[360px]'}`}>
               <FileTree
                 tree={tree}
                 selectedPath={selectedPath}
@@ -197,7 +199,7 @@ export function HotFilesChart({ data }: HotFilesChartProps) {
           </div>
 
           {/* Detail table */}
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className={`overflow-y-auto ${isFullscreen ? '' : 'max-h-[400px]'}`}>
             <Table>
               <TableHeader>
                 <TableRow>

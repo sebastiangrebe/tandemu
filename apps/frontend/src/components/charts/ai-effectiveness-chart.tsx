@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/table";
 import { Search } from 'lucide-react';
 import { FileTree } from '@/components/memory/file-tree';
+import { useFullscreen } from '@/components/ui/fullscreen-card';
 import type { AIEffectivenessEntry } from '@/lib/api';
 import type { FileTreeNode } from '@/lib/api';
 
@@ -100,6 +101,7 @@ function buildTree(files: AIEffectivenessEntry[]): FileTreeNode[] {
 }
 
 export function AIEffectivenessChart({ data }: AIEffectivenessChartProps) {
+  const isFullscreen = useFullscreen();
   const [selectedPath, setSelectedPath] = useState<string>();
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -144,7 +146,7 @@ export function AIEffectivenessChart({ data }: AIEffectivenessChartProps) {
   }
 
   return (
-    <Card>
+    <Card className={isFullscreen ? 'h-full flex flex-col' : ''}>
       <CardHeader>
         <CardTitle>AI Effectiveness</CardTitle>
         <CardDescription>
@@ -154,8 +156,8 @@ export function AIEffectivenessChart({ data }: AIEffectivenessChartProps) {
           }
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr] h-full">
+      <CardContent className={isFullscreen ? 'flex-1 min-h-0' : ''}>
+        <div className={`grid gap-4 lg:grid-cols-[280px_1fr] ${isFullscreen ? 'h-full' : ''}`}>
           <div className="flex flex-col border rounded-lg overflow-hidden">
             <div className="relative shrink-0 border-b">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -167,7 +169,7 @@ export function AIEffectivenessChart({ data }: AIEffectivenessChartProps) {
                 className="w-full bg-transparent pl-8 pr-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <div className="flex-1 overflow-y-auto p-2 max-h-[360px]">
+            <div className={`flex-1 overflow-y-auto p-2 ${isFullscreen ? '' : 'max-h-[360px]'}`}>
               <FileTree
                 tree={tree}
                 selectedPath={selectedPath}
@@ -184,7 +186,7 @@ export function AIEffectivenessChart({ data }: AIEffectivenessChartProps) {
             </div>
           </div>
 
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className={`overflow-y-auto ${isFullscreen ? '' : 'max-h-[400px]'}`}>
             <Table>
               <TableHeader>
                 <TableRow>
