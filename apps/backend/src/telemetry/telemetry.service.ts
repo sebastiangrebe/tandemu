@@ -54,6 +54,7 @@ export interface FinishTaskInput {
   readonly category?: string;
   readonly labels?: string[];
   readonly teamId?: string;
+  readonly repo?: string;
 }
 
 export interface FinishTaskResult {
@@ -187,6 +188,7 @@ export class TelemetryService implements OnModuleDestroy {
     let aiLines = 0;
     let manualLines = 0;
     let usedNativeAttribution = false;
+    let nativeAiFilePaths: string[] = [];
 
     try {
       const nativeResult = await this.getNativeAIAttribution(
@@ -197,6 +199,7 @@ export class TelemetryService implements OnModuleDestroy {
 
       if (nativeResult.aiFilePaths.length > 0) {
         usedNativeAttribution = true;
+        nativeAiFilePaths = nativeResult.aiFilePaths;
         const nativeAiLines = nativeResult.totalNativeAiLines;
 
         // Per the plan: if native AI lines >= total additions, 100% AI
@@ -247,13 +250,10 @@ export class TelemetryService implements OnModuleDestroy {
     const endNs = BigInt(now.getTime()) * 1_000_000n;
 
     const changedFiles = input.changedFilesList.join(',');
-    let aiFilesList: string;
-    if (usedNativeAttribution) {
-      aiFilesList = (await this.getNativeAIAttribution(organizationId, input.startedAt, now.toISOString()).catch(() => ({ aiFilePaths: [] as string[], totalNativeAiLines: 0 }))).aiFilePaths.join(',');
-    } else {
-      // Fallback: if AI lines > 0, attribute all changed files as AI-touched
-      aiFilesList = aiLines > 0 ? input.changedFilesList.join(',') : '';
-    }
+    // Use files from native attribution if available, otherwise fallback to changed files
+    const aiFilesList = nativeAiFilePaths.length > 0
+      ? nativeAiFilePaths.join(',')
+      : aiLines > 0 ? input.changedFilesList.join(',') : '';
 
     // Queue trace span
     this.telemetryQueue.add('otlp-trace', {
@@ -287,6 +287,7 @@ export class TelemetryService implements OnModuleDestroy {
                 { key: 'ai_files', value: { stringValue: aiFilesList } },
                 { key: 'task_category', value: { stringValue: input.category ?? 'other' } },
                 { key: 'task_labels', value: { stringValue: (input.labels ?? []).join(',') } },
+                { key: 'repo', value: { stringValue: input.repo ?? '' } },
                 { key: 'deployment', value: { stringValue: 'true' } },
               ],
               status: {},
@@ -810,6 +811,7 @@ export class TelemetryService implements OnModuleDestroy {
         query: `
           SELECT
             arrayJoin(splitByChar(',', SpanAttributes['changed_files'])) AS file_path,
+            any(SpanAttributes['repo']) AS repo,
             count(*) AS change_count,
             uniq(SpanAttributes['task_id']) AS task_count,
             uniq(SpanAttributes['user_id']) AS developer_count
@@ -821,15 +823,16 @@ export class TelemetryService implements OnModuleDestroy {
             ${teamFilter}
           GROUP BY file_path
           ORDER BY change_count DESC
-          LIMIT 20
+          LIMIT 50
         `,
         query_params: params,
         format: 'JSONEachRow',
       });
 
-      const rows = await resultSet.json<{ file_path: string; change_count: number; task_count: number; developer_count: number }>();
+      const rows = await resultSet.json<{ file_path: string; repo: string; change_count: number; task_count: number; developer_count: number }>();
       return rows.map((r) => ({
         filePath: r.file_path,
+        repo: r.repo || '',
         changeCount: Number(r.change_count),
         taskCount: Number(r.task_count),
         developerCount: Number(r.developer_count),

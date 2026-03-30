@@ -238,6 +238,7 @@ export async function getTaskVelocity(filter?: TelemetryFilter): Promise<TaskVel
 
 export interface HotFile {
   filePath: string;
+  repo: string;
   changeCount: number;
   taskCount: number;
   developerCount: number;

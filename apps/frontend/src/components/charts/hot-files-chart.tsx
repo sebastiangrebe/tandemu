@@ -19,37 +19,70 @@ function getHeatColor(count: number): string {
   return 'text-muted-foreground';
 }
 
-/** Build a FileTreeNode hierarchy from flat hot file paths. */
+/** Extract repo basename from owner/repo or path */
+function repoName(repo: string): string {
+  if (!repo) return 'Unknown';
+  const segments = repo.replace(/\/+$/, '').split('/').filter(Boolean);
+  return segments[segments.length - 1] ?? repo;
+}
+
+/** Build a FileTreeNode hierarchy from flat hot file paths, grouped by repo. */
 function buildTree(files: HotFile[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
 
+  // Group files by repo first
+  const byRepo = new Map<string, HotFile[]>();
   for (const file of files) {
-    const parts = file.filePath.split('/');
-    let currentLevel = root;
+    const repo = file.repo || '';
+    if (!byRepo.has(repo)) byRepo.set(repo, []);
+    byRepo.get(repo)!.push(file);
+  }
 
-    for (let i = 0; i < parts.length; i++) {
-      const name = parts[i];
-      const path = parts.slice(0, i + 1).join('/');
-      const isFile = i === parts.length - 1;
+  const hasMultipleRepos = byRepo.size > 1 || (byRepo.size === 1 && [...byRepo.keys()][0] !== '');
 
-      let existing = currentLevel.find((n) => n.name === name);
-      if (!existing) {
-        existing = {
-          name,
-          path,
-          memoryCount: isFile ? file.changeCount : 0,
-          children: [],
-          memoryIds: isFile ? [file.filePath] : [],
-        };
-        currentLevel.push(existing);
+  for (const [repo, repoFiles] of byRepo) {
+    // Determine the starting level: if multiple repos (or repo info exists), nest under repo node
+    let currentRoot: FileTreeNode[];
+    if (hasMultipleRepos && repo) {
+      const rName = repoName(repo);
+      let repoNode = root.find((n) => n.name === rName);
+      if (!repoNode) {
+        repoNode = { name: rName, path: rName, memoryCount: 0, children: [], memoryIds: [] };
+        root.push(repoNode);
       }
+      currentRoot = repoNode.children;
+    } else {
+      currentRoot = root;
+    }
 
-      if (isFile) {
-        existing.memoryIds = [file.filePath];
-        existing.memoryCount = file.changeCount;
+    for (const file of repoFiles) {
+      const parts = file.filePath.split('/');
+      let currentLevel = currentRoot;
+
+      for (let i = 0; i < parts.length; i++) {
+        const name = parts[i];
+        const path = parts.slice(0, i + 1).join('/');
+        const isFile = i === parts.length - 1;
+
+        let existing = currentLevel.find((n) => n.name === name);
+        if (!existing) {
+          existing = {
+            name,
+            path,
+            memoryCount: isFile ? file.changeCount : 0,
+            children: [],
+            memoryIds: isFile ? [file.filePath] : [],
+          };
+          currentLevel.push(existing);
+        }
+
+        if (isFile) {
+          existing.memoryIds = [file.filePath];
+          existing.memoryCount = file.changeCount;
+        }
+
+        currentLevel = existing.children;
       }
-
-      currentLevel = existing.children;
     }
   }
 

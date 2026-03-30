@@ -1089,14 +1089,24 @@ export class MemoryController {
       memories = await this.filterOrgDrafts(memories, user);
     }
 
-    // Build tree from file paths
+    // Build tree from file paths, grouped by repo at root level
     const root: FileTreeNode = { name: '', path: '', memoryCount: 0, children: [], memoryIds: [] };
+
+    // Collect all repos to decide if we need repo grouping
+    const repos = new Set<string>();
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      const repo = typeof metadata?.repo === 'string' ? metadata.repo : '';
+      if (repo) repos.add(repo);
+    }
+    const hasMultipleRepos = repos.size > 1 || (repos.size === 1 && [...repos][0] !== '');
 
     for (const mem of memories) {
       const metadata = mem.metadata as Record<string, unknown> | null;
       const rawFiles = metadata?.files;
       const files: string[] = Array.isArray(rawFiles) ? rawFiles : typeof rawFiles === 'string' ? [rawFiles] : [];
       const memId = mem.id as string;
+      const repo = typeof metadata?.repo === 'string' ? metadata.repo : '';
 
       if (files.length === 0) {
         // Uncategorized — attach to a special node
@@ -1110,9 +1120,21 @@ export class MemoryController {
         continue;
       }
 
+      // Determine the tree root: if multiple repos, nest under repo node
+      let treeRoot = root;
+      if (hasMultipleRepos && repo) {
+        const repoBaseName = repo.split('/').filter(Boolean).pop() ?? repo;
+        let repoNode = root.children.find((c) => c.name === repoBaseName);
+        if (!repoNode) {
+          repoNode = { name: repoBaseName, path: repoBaseName, memoryCount: 0, children: [], memoryIds: [] };
+          root.children.push(repoNode);
+        }
+        treeRoot = repoNode;
+      }
+
       for (const filePath of files) {
         const parts = filePath.split('/').filter(Boolean);
-        let current = root;
+        let current = treeRoot;
 
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];

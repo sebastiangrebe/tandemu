@@ -152,7 +152,8 @@ RESULT=$(curl -sf -X POST "$TANDEMU_API/api/telemetry/tasks/<taskId>/finish" \
     "changedFilesList": ["<file1>", "<file2>"],
     "category": "<category from active task>",
     "labels": ["<label1>", "<label2>"],
-    "teamId": "<teamId from active task file, if present>"
+    "teamId": "<teamId from active task file, if present>",
+    "repo": "<owner/repo from git remote, e.g. 'sebastiangrebe/tandemu'>"
   }')
 echo "$RESULT"
 ```
