@@ -4,12 +4,17 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service.js';
 import type { Invite, MembershipRole } from '@tandemu/types';
+import type { InviteCreatedEvent, InviteAcceptedEvent } from '../email/email.types.js';
 
 @Injectable()
 export class InvitesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(orgId: string, email: string, role: MembershipRole, invitedBy: string, teamId?: string): Promise<Invite> {
     // Check if user already exists and is already a member
@@ -47,7 +52,16 @@ export class InvitesService {
       [email, orgId, role.toLowerCase(), invitedBy, teamId ?? null],
     );
 
-    return this.mapInvite(result.rows[0]!);
+    const invite = this.mapInvite(result.rows[0]!);
+    this.eventEmitter.emit('invite.created', {
+      inviteId: invite.id,
+      email,
+      organizationId: orgId,
+      invitedBy,
+      role: invite.role,
+      teamId,
+    } satisfies InviteCreatedEvent);
+    return invite;
   }
 
   async findAllForOrg(orgId: string): Promise<Invite[]> {
@@ -141,6 +155,12 @@ export class InvitesService {
       return updatedInvite.rows[0]!;
     });
 
+    this.eventEmitter.emit('invite.accepted', {
+      inviteId,
+      invitedBy: invite.invited_by,
+      acceptedByUserId: userId,
+      organizationId: invite.organization_id,
+    } satisfies InviteAcceptedEvent);
     return this.mapInvite(result);
   }
 

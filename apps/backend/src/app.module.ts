@@ -15,6 +15,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js';
 import { MemoryModule } from './memory/memory.module.js';
 import { SetupModule } from './setup/setup.module.js';
 import { QueueModule } from './queue/queue.module.js';
+import { EmailModule } from './email/email.module.js';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { QueueModule } from './queue/queue.module.js';
     MemoryModule,
     SetupModule,
     QueueModule,
+    EmailModule,
   ],
 })
 export class AppModule implements NestModule {

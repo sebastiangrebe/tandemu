@@ -11,9 +11,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IntegrationsService } from './integrations.service.js';
 import { TasksService } from './tasks.service.js';
 import { getProvider } from './providers/index.js';
+import type { IntegrationConnectedEvent } from '../email/email.types.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
@@ -32,6 +34,7 @@ export class IntegrationsController {
   constructor(
     private readonly integrationsService: IntegrationsService,
     private readonly tasksService: TasksService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // Owner/Admin only — connect a ticket system
@@ -42,7 +45,13 @@ export class IntegrationsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: CreateIntegrationDto,
   ) {
-    return this.integrationsService.create(user.organizationId, dto);
+    const result = await this.integrationsService.create(user.organizationId, dto);
+    this.eventEmitter.emit('integration.connected', {
+      organizationId: user.organizationId,
+      provider: dto.provider,
+      connectedByUserId: user.userId,
+    } satisfies IntegrationConnectedEvent);
+    return result;
   }
 
   // All members can view connected integrations

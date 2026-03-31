@@ -73,3 +73,80 @@ export type TelemetryJobData =
   | OtlpTraceJob
   | OtlpMetricsJob
   | GitSelfHealJob;
+
+// ── email queue ──
+
+export interface InviteCreatedEmailJob {
+  readonly type: 'invite-created';
+  readonly to: string;
+  readonly inviterName: string;
+  readonly organizationName: string;
+  readonly role: string;
+  readonly frontendUrl: string;
+  readonly inviteId: string;
+}
+
+export interface InviteAcceptedEmailJob {
+  readonly type: 'invite-accepted';
+  readonly to: string;
+  readonly acceptedByName: string;
+  readonly organizationName: string;
+}
+
+export interface WelcomeEmailJob {
+  readonly type: 'welcome';
+  readonly to: string;
+  readonly userName: string;
+  readonly autoAcceptedOrgs: Array<{ name: string; role: string }>;
+  readonly frontendUrl: string;
+}
+
+export interface MemberAddedOrgEmailJob {
+  readonly type: 'member-added-org';
+  readonly to: string;
+  readonly memberName: string;
+  readonly organizationName: string;
+  readonly role: string;
+  readonly frontendUrl: string;
+}
+
+export interface MemberRemovedOrgEmailJob {
+  readonly type: 'member-removed-org';
+  readonly to: string;
+  readonly memberName: string;
+  readonly organizationName: string;
+}
+
+export interface MemberAddedTeamEmailJob {
+  readonly type: 'member-added-team';
+  readonly to: string;
+  readonly memberName: string;
+  readonly teamName: string;
+  readonly organizationName: string;
+}
+
+export interface IntegrationConnectedEmailJob {
+  readonly type: 'integration-connected';
+  readonly to: string[];
+  readonly provider: string;
+  readonly organizationName: string;
+  readonly connectedByName: string;
+  readonly frontendUrl: string;
+}
+
+export interface EmailAliasAddedEmailJob {
+  readonly type: 'email-alias-added';
+  readonly to: string;
+  readonly userName: string;
+  readonly aliasEmail: string;
+}
+
+export type EmailJobData =
+  | InviteCreatedEmailJob
+  | InviteAcceptedEmailJob
+  | WelcomeEmailJob
+  | MemberAddedOrgEmailJob
+  | MemberRemovedOrgEmailJob
+  | MemberAddedTeamEmailJob
+  | IntegrationConnectedEmailJob
+  | EmailAliasAddedEmailJob;
