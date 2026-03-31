@@ -19,7 +19,9 @@ import {
   getTeams,
   createCheckout,
   createBillingPortal,
+  getInvoices,
 } from '@/lib/api';
+import type { Invoice } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
@@ -44,7 +46,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function SettingsPage() {
-  const { currentOrg: authOrg } = useAuth();
+  const { currentOrg: authOrg, user: authUser } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,6 +68,9 @@ export default function SettingsPage() {
   // Memory settings
   const [editDraftRetention, setEditDraftRetention] = useState(30);
   const [savingMemory, setSavingMemory] = useState(false);
+
+  // Invoices (OWNER only)
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   // Invite dialog
   const [showInviteDialog, setShowInviteDialog] = useState(false);
@@ -89,6 +94,11 @@ export default function SettingsPage() {
       setMembers(memberList);
       setInvitesList(invites);
       setTeams(teamList);
+
+      // Load invoices for OWNER only
+      if (process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && activeOrg.planTier !== 'FREE') {
+        getInvoices().then(setInvoices).catch(() => {});
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load settings');
     }
@@ -396,6 +406,68 @@ export default function SettingsPage() {
                 Manage Billing
               </Button>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Invoice History — OWNER only, paid plans only */}
+      {org && process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && org.planTier !== 'FREE' && authUser?.role === 'OWNER' && invoices.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Invoices</CardTitle>
+                <CardDescription>Your recent billing history.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Invoice</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="text-sm">
+                      {new Date(inv.createdAt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(inv.periodStart * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {' – '}
+                      {new Date(inv.periodEnd * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {inv.currency.toUpperCase()} {(inv.amountPaid / 100).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={inv.status === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                        {inv.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {inv.hostedInvoiceUrl && (
+                        <a
+                          href={inv.hostedInvoiceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

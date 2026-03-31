@@ -11,6 +11,7 @@ import { renderMemberRemovedOrg } from './templates/member-removed-org.js';
 import { renderMemberAddedTeam } from './templates/member-added-team.js';
 import { renderIntegrationConnected } from './templates/integration-connected.js';
 import { renderEmailAliasAdded } from './templates/email-alias-added.js';
+import { renderInvoicePaid } from './templates/invoice-paid.js';
 
 @Processor('email')
 export class EmailProcessor extends WorkerHost {
@@ -85,6 +86,14 @@ export class EmailProcessor extends WorkerHost {
           job.data.to,
           'Email alias added to your account',
           renderEmailAliasAdded(job.data),
+        );
+        break;
+
+      case 'invoice-paid':
+        await this.emailService.send(
+          job.data.to,
+          `Invoice paid for ${job.data.organizationName}`,
+          renderInvoicePaid(job.data),
         );
         break;
 

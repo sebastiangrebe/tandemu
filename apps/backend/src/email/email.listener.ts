@@ -14,6 +14,7 @@ import type {
   TeamMemberAddedEvent,
   IntegrationConnectedEvent,
   EmailAliasAddedEvent,
+  InvoicePaidEvent,
 } from './email.types.js';
 
 @Injectable()
@@ -66,6 +67,17 @@ export class EmailListener {
       [teamId],
     );
     return result.rows[0]?.organization_id ?? '';
+  }
+
+  private async resolveOwnerEmail(orgId: string): Promise<string | null> {
+    const result = await this.db.query<{ email: string }>(
+      `SELECT u.email FROM users u
+       INNER JOIN memberships m ON m.user_id = u.id
+       WHERE m.organization_id = $1 AND m.role = 'owner'
+       LIMIT 1`,
+      [orgId],
+    );
+    return result.rows[0]?.email ?? null;
   }
 
   private async resolveAdminEmails(orgId: string): Promise<string[]> {
@@ -221,6 +233,31 @@ export class EmailListener {
       to: user.email,
       userName: user.name,
       aliasEmail: payload.aliasEmail,
+    });
+  }
+
+  @OnEvent('invoice.paid')
+  async handleInvoicePaid(payload: InvoicePaidEvent): Promise<void> {
+    if (!this.enabled) return;
+    const [ownerEmail, orgName] = await Promise.all([
+      this.resolveOwnerEmail(payload.organizationId),
+      this.resolveOrgName(payload.organizationId),
+    ]);
+    if (!ownerEmail) return;
+
+    const amount = (payload.amountPaid / 100).toFixed(2);
+    const currency = payload.currency.toUpperCase();
+    const start = new Date(payload.periodStart * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const end = new Date(payload.periodEnd * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    this.enqueue('invoice-paid', {
+      type: 'invoice-paid',
+      to: ownerEmail,
+      organizationName: orgName,
+      amountFormatted: `${currency} ${amount}`,
+      periodLabel: `${start} – ${end}`,
+      invoiceUrl: payload.invoiceUrl,
+      frontendUrl: this.frontendUrl,
     });
   }
 }

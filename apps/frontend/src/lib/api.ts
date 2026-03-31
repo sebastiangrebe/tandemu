@@ -566,6 +566,21 @@ export async function createBillingPortal(data: {
   });
 }
 
+export interface Invoice {
+  id: string;
+  amountPaid: number;
+  currency: string;
+  status: string;
+  hostedInvoiceUrl: string | null;
+  periodStart: number;
+  periodEnd: number;
+  createdAt: number;
+}
+
+export async function getInvoices(): Promise<Invoice[]> {
+  return fetchApi<Invoice[]>("/api/billing/invoices");
+}
+
 // ---- Memory ----
 
 export type MemoryScope = 'personal' | 'org';
