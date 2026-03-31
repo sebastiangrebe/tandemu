@@ -51,3 +51,12 @@ export interface EmailAliasAddedEvent {
   userId: string;
   aliasEmail: string;
 }
+
+export interface InvoicePaidEvent {
+  organizationId: string;
+  invoiceUrl: string;
+  amountPaid: number;
+  currency: string;
+  periodStart: number;
+  periodEnd: number;
+}

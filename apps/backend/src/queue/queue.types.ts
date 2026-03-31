@@ -141,6 +141,16 @@ export interface EmailAliasAddedEmailJob {
   readonly aliasEmail: string;
 }
 
+export interface InvoicePaidEmailJob {
+  readonly type: 'invoice-paid';
+  readonly to: string;
+  readonly organizationName: string;
+  readonly amountFormatted: string;
+  readonly periodLabel: string;
+  readonly invoiceUrl: string;
+  readonly frontendUrl: string;
+}
+
 export type EmailJobData =
   | InviteCreatedEmailJob
   | InviteAcceptedEmailJob
@@ -149,4 +159,5 @@ export type EmailJobData =
   | MemberRemovedOrgEmailJob
   | MemberAddedTeamEmailJob
   | IntegrationConnectedEmailJob
-  | EmailAliasAddedEmailJob;
+  | EmailAliasAddedEmailJob
+  | InvoicePaidEmailJob;
