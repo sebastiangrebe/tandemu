@@ -31,6 +31,15 @@ import { ConfigService } from '@nestjs/config';
           removeOnFail: { age: 86400 },
         },
       },
+      {
+        name: 'email',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 604800 },
+        },
+      },
     ),
   ],
   exports: [BullModule],

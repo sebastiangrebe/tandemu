@@ -222,6 +222,7 @@ export class OrganizationsService {
     );
 
     const row = result.rows[0]!;
+    this.eventEmitter.emit('organization.member_added', { organizationId: orgId, userId, email, role });
     this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
     return {
       id: row.id,

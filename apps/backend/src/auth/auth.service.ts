@@ -4,9 +4,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { DatabaseService } from '../database/database.service.js';
+import type { UserRegisteredEvent, EmailAliasAddedEvent } from '../email/email.types.js';
 
 interface AuthResponse {
   accessToken: string;
@@ -31,6 +33,7 @@ export class AuthService {
   constructor(
     private readonly db: DatabaseService,
     private readonly configService: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.jwtSecret = this.configService.get<string>('jwt.secret', 'change-me-in-production');
   }
@@ -68,6 +71,7 @@ export class AuthService {
 
       let organizationId = '';
       let role = 'MEMBER';
+      const autoAcceptedOrgIds: string[] = [];
 
       for (const invite of pendingInvites.rows) {
         await client.query(
@@ -78,6 +82,7 @@ export class AuthService {
           `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, $3)`,
           [user.id, invite.organization_id, invite.role],
         );
+        autoAcceptedOrgIds.push(invite.organization_id);
         // Use the first accepted invite's org as the default
         if (organizationId === '') {
           organizationId = invite.organization_id;
@@ -85,10 +90,17 @@ export class AuthService {
         }
       }
 
-      return user;
+      return { user, autoAcceptedOrgIds };
     });
 
-    return this.generateAuthResponse(result.id, result.email, result.name);
+    this.eventEmitter.emit('user.registered', {
+      userId: result.user.id,
+      email,
+      name,
+      autoAcceptedOrgIds: result.autoAcceptedOrgIds,
+    } satisfies UserRegisteredEvent);
+
+    return this.generateAuthResponse(result.user.id, result.user.email, result.user.name);
   }
 
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -287,6 +299,7 @@ export class AuthService {
         [email],
       );
 
+      const autoAcceptedOrgIds: string[] = [];
       for (const invite of pendingInvites.rows) {
         await client.query(
           `UPDATE invites SET status = 'accepted' WHERE id = $1`,
@@ -302,12 +315,20 @@ export class AuthService {
             [invite.team_id, user.id],
           );
         }
+        autoAcceptedOrgIds.push(invite.organization_id);
       }
 
-      return user;
+      return { user, autoAcceptedOrgIds };
     });
 
-    return this.generateAuthResponse(result.id, result.email, result.name);
+    this.eventEmitter.emit('user.registered', {
+      userId: result.user.id,
+      email,
+      name,
+      autoAcceptedOrgIds: result.autoAcceptedOrgIds,
+    } satisfies UserRegisteredEvent);
+
+    return this.generateAuthResponse(result.user.id, result.user.email, result.user.name);
   }
 
   // --- Email aliases ---
@@ -344,6 +365,10 @@ export class AuthService {
       [userId, email.toLowerCase().trim()],
     );
     const r = result.rows[0]!;
+    this.eventEmitter.emit('email_alias.added', {
+      userId,
+      aliasEmail: r.email,
+    } satisfies EmailAliasAddedEvent);
     return { id: r.id, email: r.email, isPrimary: r.is_primary, createdAt: r.created_at.toISOString() };
   }
 

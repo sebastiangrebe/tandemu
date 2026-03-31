@@ -31,6 +31,11 @@ export interface AppConfig {
     dsn: string;
     environment: string;
   };
+  email: {
+    resendApiKey: string;
+    fromAddress: string;
+    enabled: boolean;
+  };
   oauth: {
     appUrl: string;
     frontendUrl: string;
@@ -48,6 +53,7 @@ export interface AppConfig {
 }
 
 export default (): AppConfig => {
+  const resendApiKey = process.env['RESEND_API_KEY'] ?? '';
   const googleClientId = process.env['GOOGLE_CLIENT_ID'] ?? '';
   const googleClientSecret = process.env['GOOGLE_CLIENT_SECRET'] ?? '';
   const githubClientId = process.env['GITHUB_CLIENT_ID'] ?? '';
@@ -81,6 +87,11 @@ export default (): AppConfig => {
     },
     encryption: {
       key: process.env['ENCRYPTION_KEY'] ?? '',
+    },
+    email: {
+      resendApiKey,
+      fromAddress: process.env['EMAIL_FROM'] ?? 'Tandemu <notifications@tandemu.com>',
+      enabled: !!resendApiKey,
     },
     sentry: {
       dsn: process.env['SENTRY_BACKEND_DSN'] ?? '',

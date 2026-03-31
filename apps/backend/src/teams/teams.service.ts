@@ -3,8 +3,10 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service.js';
 import type { Team, TeamSettings, CreateTeamDto, UpdateTeamDto } from '@tandemu/types';
+import type { TeamMemberAddedEvent } from '../email/email.types.js';
 
 const DEFAULT_TEAM_SETTINGS: Required<TeamSettings> = {
   doneWindowDays: 14,
@@ -12,7 +14,10 @@ const DEFAULT_TEAM_SETTINGS: Required<TeamSettings> = {
 
 @Injectable()
 export class TeamsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(orgId: string, dto: CreateTeamDto): Promise<Team> {
     const result = await this.db.query<TeamRow>(
@@ -145,6 +150,11 @@ export class TeamsService {
     );
 
     const row = result.rows[0]!;
+    this.eventEmitter.emit('team.member_added', {
+      teamId,
+      userId,
+      organizationId: orgId,
+    } satisfies TeamMemberAddedEvent);
     return {
       id: row.id,
       teamId: row.team_id,
