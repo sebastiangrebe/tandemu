@@ -1,0 +1,5 @@
+-- This file is intentionally empty.
+-- The OpenTelemetry Collector's ClickHouse exporter creates its own tables
+-- (otel_traces, otel_logs, otel_metrics_sum, etc.) with create_schema: true.
+-- Our custom materialized views in 002_materialized_views.sql reference those tables.
+-- See the collector's schema: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/clickhouseexporter

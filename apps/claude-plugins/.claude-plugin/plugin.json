@@ -1,0 +1,12 @@
+{
+  "name": "tandemu",
+  "version": "1.9.1",
+  "description": "AI Teammate — task lifecycle, telemetry, and persistent memory for AI-native development",
+  "author": {
+    "name": "Tandemu",
+    "url": "https://tandemu.dev"
+  },
+  "repository": "https://github.com/sebastiangrebe/tandemu",
+  "license": "MIT",
+  "keywords": ["task-management", "telemetry", "memory", "ai-teammate", "developer-tools"]
+}

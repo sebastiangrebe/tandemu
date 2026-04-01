@@ -1,0 +1,398 @@
+---
+name: setup
+description: Set up Tandemu for the current developer. Handles authentication, configuration, and installs short-named skills for daily use.
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - AskUserQuestion
+---
+
+Set up Tandemu for the current developer. This skill handles authentication, configuration, and installs short-named skills for daily use.
+
+**This skill should only be run once per machine.** Re-run to re-authenticate or update.
+
+## Steps
+
+### 1. Check prerequisites
+
+```bash
+command -v python3 &>/dev/null && echo "OK" || echo "MISSING: python3"
+command -v curl &>/dev/null && echo "OK" || echo "MISSING: curl"
+```
+
+If any are missing, tell the developer what to install and stop.
+
+### 2. Choose Tandemu instance
+
+Use AskUserQuestion:
+- Question: "Which Tandemu instance do you want to connect to?"
+- Header: "Instance"
+- Options:
+  - Label: "Tandemu Cloud", Description: "Hosted at https://api.tandemu.dev (Recommended)"
+  - Label: "Self-hosted", Description: "You'll provide the URL"
+
+If **Tandemu Cloud**: set `API_URL=https://api.tandemu.dev`
+If **Self-hosted**: ask for the URL, strip trailing slash.
+
+Verify the instance is reachable:
+```bash
+curl -sf "${API_URL}/api/health" &>/dev/null && echo "OK" || echo "UNREACHABLE"
+```
+
+### 3. Authenticate via OAuth
+
+Start the device auth flow:
+
+```bash
+RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json")
+CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])")
+AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['url'])")
+echo "CODE=$CODE"
+echo "URL=$AUTH_URL"
+```
+
+Tell the developer: "Open this URL in your browser to authorize: <AUTH_URL>"
+
+Open the browser automatically:
+```bash
+open "$AUTH_URL" 2>/dev/null || xdg-open "$AUTH_URL" 2>/dev/null || true
+```
+
+Poll for authorization (max 150 retries, 2 seconds apart):
+```bash
+for i in $(seq 1 150); do
+  POLL=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null)
+  STATUS=$(echo "$POLL" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null || echo "pending")
+  if [ "$STATUS" = "authorized" ]; then
+    TOKEN=$(echo "$POLL" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['accessToken'])")
+    echo "TOKEN=$TOKEN"
+    break
+  elif [ "$STATUS" = "expired" ]; then
+    echo "EXPIRED"
+    break
+  fi
+  sleep 2
+done
+```
+
+If expired or timed out, tell the developer and stop.
+
+### 4. Fetch user info
+
+```bash
+ME=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me")
+echo "$ME" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)['data']['user']
+print(f\"USER_ID={d['id']}\")
+print(f\"USER_EMAIL={d['email']}\")
+print(f\"USER_NAME={d['name']}\")
+"
+```
+
+Fetch organizations and teams:
+```bash
+ORGS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations")
+echo "$ORGS" | python3 -c "
+import json, sys
+orgs = json.load(sys.stdin)['data']
+for i, org in enumerate(orgs):
+    print(f\"ORG_{i}_ID={org['id']}\")
+    print(f\"ORG_{i}_NAME={org['name']}\")
+print(f\"ORG_COUNT={len(orgs)}\")
+"
+```
+
+If there are **multiple organizations**, use AskUserQuestion to let the user pick:
+- Question: "Which organization do you want to connect?"
+- Header: "Organization"
+- Options: build dynamically from the org list (max 4). Each option:
+  - Label: the org name
+  - Description: the org ID
+
+After the user picks an org, switch the token to that org:
+```bash
+SWITCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"organizationId": "'"$CHOSEN_ORG_ID"'"}')
+NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])")
+TOKEN="$NEW_TOKEN"
+```
+
+Use the new `$TOKEN` for all subsequent API calls (team fetch, config writing).
+
+If there is **one organization**, use it directly (no prompt needed).
+If there are **zero organizations**, tell the developer to create one on the dashboard and stop.
+
+Fetch the user's teams (teams they are a member of):
+```bash
+# Fetch teams the user belongs to
+MY_TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams/mine")
+
+# Fallback: if user is not assigned to any team yet, fetch all org teams
+if [ -z "$MY_TEAMS" ] || [ "$MY_TEAMS" = "[]" ]; then
+  MY_TEAMS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams")
+fi
+
+echo "$MY_TEAMS" | python3 -c "
+import json, sys
+teams = json.load(sys.stdin)
+# Handle both raw array and {data: [...]} wrapper
+if isinstance(teams, dict):
+    teams = teams.get('data', [])
+if teams:
+    import json as _j
+    print(f'TEAMS_JSON={_j.dumps([{\"id\": t[\"id\"], \"name\": t[\"name\"]} for t in teams])}')
+    print(f'TEAMS_COUNT={len(teams)}')
+else:
+    print('TEAMS_JSON=[]')
+    print('TEAMS_COUNT=0')
+"
+```
+
+### 5. Write configuration files
+
+#### 5a. tandemu.json
+
+```bash
+mkdir -p ~/.claude
+python3 << 'PYEOF'
+import json, os
+teams_json = os.environ.get("TEAMS_JSON", "[]")
+teams = json.loads(teams_json)
+
+config = {
+  "auth": {"token": os.environ["TOKEN"]},
+  "user": {
+    "id": os.environ["USER_ID"],
+    "email": os.environ["USER_EMAIL"],
+    "name": os.environ["USER_NAME"]
+  },
+  "organization": {"id": os.environ["ORG_ID"], "name": os.environ["ORG_NAME"]},
+  "teams": teams,
+  "api": {"url": os.environ["API_URL"]}
+}
+
+config_path = os.path.expanduser("~/.claude/tandemu.json")
+with open(config_path, "w") as f:
+    json.dump(config, f, indent=2)
+print("OK")
+PYEOF
+```
+
+#### 5b. Fetch setup config from API
+
+Fetch all configuration in a single call:
+
+```bash
+SETUP_CONFIG=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/setup/config")
+OTEL_ENDPOINT=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['endpoint'])" 2>/dev/null)
+OTEL_INGESTION_KEY=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['otel']['ingestionKey'])" 2>/dev/null)
+MEM_TYPE=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['type'])" 2>/dev/null)
+MEM_URL=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['memory']['url'])" 2>/dev/null)
+```
+
+#### 5c. settings.json (telemetry + permissions)
+
+```bash
+python3 << 'PYEOF'
+import json, os
+settings_file = os.path.expanduser("~/.claude/settings.json")
+try:
+    with open(settings_file) as f:
+        settings = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    settings = {}
+
+otel_endpoint = os.environ.get("OTEL_ENDPOINT", "http://localhost:4318")
+otel_key = os.environ.get("OTEL_INGESTION_KEY", "")
+api_url = os.environ.get("API_URL", "http://localhost:3001")
+
+env = settings.get("env", {})
+env.update({
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
+    "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Bearer {otel_key}" if otel_key else "",
+    "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+    "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}",
+    "OTEL_LOG_TOOL_DETAILS": "1"
+})
+# Remove empty headers entry if no key
+if not otel_key:
+    env.pop("OTEL_EXPORTER_OTLP_HEADERS", None)
+settings["env"] = env
+
+perms = settings.get("permissions", {})
+allow = perms.get("allow", [])
+home = os.path.expanduser("~")
+tandemu_perms = [
+    "Edit(~/.claude/tandemu*)",
+    "Write(~/.claude/tandemu*)",
+    "Bash(cat > ~/.claude/tandemu*)",
+    "Bash(rm ~/.claude/tandemu*)",
+    "Bash(rm -f ~/.claude/tandemu*)",
+    f"Bash(cat > {home}/.claude/tandemu*)",
+    f"Bash(rm {home}/.claude/tandemu*)",
+    f"Bash(rm -f {home}/.claude/tandemu*)",
+    f"Bash(curl*{api_url}*)",
+    "mcp__tandemu-memory",
+]
+for p in tandemu_perms:
+    if p not in allow:
+        allow.append(p)
+perms["allow"] = allow
+settings["permissions"] = perms
+
+# SessionStart hook: updates personality in ~/.claude/CLAUDE.md (global) and outputs repo memory index
+hooks = settings.get("hooks", {})
+hooks["SessionStart"] = [
+    {
+        "matcher": "startup",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "bash ~/.claude/lib/tandemu-session-start.sh",
+                "timeout": 15
+            }
+        ]
+    }
+]
+settings["hooks"] = hooks
+
+with open(settings_file, "w") as f:
+    json.dump(settings, f, indent=2)
+print("OK")
+PYEOF
+```
+
+#### 5d. MCP memory config (~/.mcp.json)
+
+```bash
+python3 << 'PYEOF'
+import json, os
+mcp_file = os.path.expanduser("~/.mcp.json")
+mem_url = os.environ.get("MEM_URL", "")
+if not mem_url:
+    print("SKIP: no memory config from API")
+    exit(0)
+try:
+    with open(mcp_file) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    config = {}
+servers = config.get("mcpServers", {})
+token = os.environ.get("TOKEN", "")
+mem_type = os.environ.get("MEM_TYPE", "sse")
+server_config = {
+    "type": mem_type,
+    "url": mem_url,
+    "headers": {
+        "Authorization": f"Bearer {token}"
+    }
+}
+servers["tandemu-memory"] = server_config
+config["mcpServers"] = servers
+with open(mcp_file, "w") as f:
+    json.dump(config, f, indent=2)
+print("OK")
+PYEOF
+```
+
+Also migrate legacy config if it exists:
+```bash
+python3 << 'PYEOF'
+import json, os
+# Migrate from ~/.claude.json to ~/.mcp.json if needed
+old_file = os.path.expanduser("~/.claude.json")
+new_file = os.path.expanduser("~/.mcp.json")
+try:
+    with open(old_file) as f:
+        old = json.load(f)
+    if "tandemu-memory" in old.get("mcpServers", {}):
+        del old["mcpServers"]["tandemu-memory"]
+        if not old["mcpServers"]:
+            del old["mcpServers"]
+        if old:
+            with open(old_file, "w") as f:
+                json.dump(old, f, indent=2)
+        else:
+            os.remove(old_file)
+        print("MIGRATED")
+    else:
+        print("NO_MIGRATION")
+except (FileNotFoundError, json.JSONDecodeError):
+    print("NO_MIGRATION")
+PYEOF
+```
+
+### 6. Install shared lib
+
+Copy the shared config loader so skills can source it:
+
+```bash
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+if [ -z "$PLUGIN_ROOT" ]; then
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+  if [ -d "$REPO_ROOT/apps/claude-plugins/lib" ]; then
+    PLUGIN_ROOT="$REPO_ROOT/apps/claude-plugins"
+  fi
+fi
+
+if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
+  mkdir -p ~/.claude/lib
+  cp -r "$PLUGIN_ROOT/lib"/* ~/.claude/lib/
+  echo "OK"
+fi
+```
+
+### 7. Write personal CLAUDE.md
+
+Write a `~/.claude/CLAUDE.md` that tells Claude the developer's actual name. The plugin's CLAUDE.md uses `{{DEV_NAME}}` as a placeholder — this file provides the real value:
+
+```bash
+cat > ~/.claude/CLAUDE.md << EOF
+# Developer Context
+The developer's name is ${USER_NAME}. Use it naturally in conversation.
+EOF
+```
+
+### 8. Show summary
+
+Tell the developer:
+
+```
+Tandemu installed!
+
+Connected as: <USER_NAME> (<USER_EMAIL>)
+Organization: <ORG_NAME>
+Teams: <comma-separated list of team names from TEAMS_JSON>
+API: <API_URL>
+Telemetry: enabled
+Memory: enabled
+
+⚠️  Please start a new session to activate the memory server.
+   Type /exit, then run `claude` again (don't resume — start fresh).
+   Resuming this session won't activate memory or load the knowledge index.
+
+Available skills:
+  /morning   — Pick a task and start working
+  /finish    — Complete task, measure work, send telemetry
+  /pause     — Pause current task, switch to another
+  /standup   — Generate a team standup report
+
+After restarting, get started with:
+  > /morning
+```
+
+### Notes
+
+- This skill is idempotent — safe to re-run for re-authentication or updates
+- The OAuth poll loop runs in bash, not interactively — the developer authorizes in their browser
+- Settings.json is merged, not overwritten — other settings are preserved
+- Skills are distributed via the plugin — no standalone copies needed
+- Legacy `~/.claude.json` MCP config is migrated to `~/.mcp.json` automatically

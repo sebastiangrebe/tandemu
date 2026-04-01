@@ -1,0 +1,98 @@
+# Development override — hot reload for backend and frontend
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Infrastructure (postgres, clickhouse, redis, otel-collector) runs from
+# the base docker-compose.yml. Backend and frontend run with source
+# mounted for hot reload.
+
+services:
+  # Disable the production backend/frontend containers
+  backend:
+    profiles: ["production"]
+
+  frontend:
+    profiles: ["production"]
+
+  # Dev backend — tsx watch with source mounted
+  backend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: >
+      sh -c "
+        corepack enable &&
+        corepack prepare pnpm@9.15.0 --activate &&
+        pnpm install --frozen-lockfile &&
+        pnpm --filter @tandemu/types build &&
+        pnpm --filter @tandemu/database build &&
+        pnpm --filter @tandemu/telemetry build &&
+        pnpm --filter @tandemu/backend build &&
+        (pnpm --filter @tandemu/backend exec tsc --watch &) &&
+        node --watch apps/backend/dist/main.js
+      "
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mount source code
+      - ./package.json:/app/package.json:ro
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./turbo.json:/app/turbo.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./packages:/app/packages
+      - ./apps/backend:/app/apps/backend
+      # Persist node_modules so installs are fast after first run
+      - dev_node_modules:/app/node_modules
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://tandemu:tandemu@postgres:5432/tandemu
+      REDIS_URL: redis://redis:6379
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CORS_ORIGIN: http://localhost:3000
+      JWT_SECRET: dev-secret-change-me
+      APP_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Dev frontend — next dev with source mounted
+  frontend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: >
+      sh -c "
+        corepack enable &&
+        corepack prepare pnpm@9.15.0 --activate &&
+        pnpm install --frozen-lockfile &&
+        pnpm --filter @tandemu/types build &&
+        cd apps/frontend && npx next dev -H 0.0.0.0
+      "
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./turbo.json:/app/turbo.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./packages:/app/packages
+      - ./apps/frontend:/app/apps/frontend
+      # Reuse the same node_modules volume
+      - dev_node_modules:/app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_TELEMETRY_DISABLED: 1
+    depends_on:
+      - backend-dev
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  redis_data:
+  dev_node_modules:
