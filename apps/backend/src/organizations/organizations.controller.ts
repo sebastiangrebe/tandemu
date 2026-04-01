@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -95,9 +96,13 @@ export class OrganizationsController {
   @Roles(MembershipRole.OWNER, MembershipRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
+    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Param('userId') userId: string,
   ): Promise<void> {
+    if (userId === user.userId) {
+      throw new ForbiddenException('Cannot remove yourself from the organization');
+    }
     const removed = await this.organizationsService.removeMember(id, userId);
     if (!removed) {
       throw new NotFoundException('Membership not found');

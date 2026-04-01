@@ -1,5 +1,6 @@
 import {
   Injectable,
+  ForbiddenException,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
@@ -177,6 +178,13 @@ export class OrganizationsService {
   }
 
   async removeMember(orgId: string, userId: string): Promise<boolean> {
+    const membership = await this.db.query<{ role: string }>(
+      'SELECT role FROM memberships WHERE organization_id = $1 AND user_id = $2',
+      [orgId, userId],
+    );
+    if (membership.rows.length > 0 && membership.rows[0]!.role.toUpperCase() === 'OWNER') {
+      throw new ForbiddenException('Cannot remove the organization owner');
+    }
     const result = await this.db.query(
       'DELETE FROM memberships WHERE organization_id = $1 AND user_id = $2',
       [orgId, userId],

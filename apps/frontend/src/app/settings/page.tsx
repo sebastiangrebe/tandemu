@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain, Trash2 } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
+import { RemoveMemberDialog } from '@/components/remove-member-dialog';
 import { toast } from 'sonner';
 import {
   updateOrganization,
   getMembers,
+  removeMember,
   getInvites,
   cancelInvite,
   getTeams,
@@ -46,7 +48,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function SettingsPage() {
-  const { currentOrg: authOrg, user: authUser } = useAuth();
+  const { currentOrg: authOrg, user: authUser, isAdmin } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +61,7 @@ export default function SettingsPage() {
   const [members, setMembers] = useState<Membership[]>([]);
   const [invitesList, setInvitesList] = useState<Invite[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [removingMember, setRemovingMember] = useState<{ id: string; name: string } | null>(null);
 
   // ROI settings
   const [editHourlyRate, setEditHourlyRate] = useState(75);
@@ -522,7 +525,8 @@ export default function SettingsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead className="text-right">Role</TableHead>
+                    <TableHead className={isAdmin ? '' : 'text-right'}>Role</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -530,9 +534,23 @@ export default function SettingsPage() {
                     <TableRow key={m.id}>
                       <TableCell className="font-medium">{m.name}</TableCell>
                       <TableCell className="text-muted-foreground">{m.email}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className={isAdmin ? '' : 'text-right'}>
                         <RoleBadge role={m.role} />
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          {m.role !== 'OWNER' && m.id !== authUser?.id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setRemovingMember({ id: m.id, name: m.name })}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -603,6 +621,21 @@ export default function SettingsPage() {
           orgId={org.id}
           teams={teams}
           onInvitesSent={setInvitesList}
+        />
+      )}
+
+      {/* Remove Member Dialog */}
+      {org && removingMember && (
+        <RemoveMemberDialog
+          open={!!removingMember}
+          onOpenChange={(open) => { if (!open) setRemovingMember(null); }}
+          orgId={org.id}
+          memberId={removingMember.id}
+          memberName={removingMember.name}
+          onRemoved={() => {
+            setMembers(members.filter((m: any) => m.id !== removingMember.id));
+            setRemovingMember(null);
+          }}
         />
       )}
     </div>

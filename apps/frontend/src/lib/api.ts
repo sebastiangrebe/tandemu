@@ -160,6 +160,12 @@ export async function getMembers(orgId: string): Promise<Membership[]> {
   return fetchApi<Membership[]>(`/api/organizations/${orgId}/members`);
 }
 
+export async function removeMember(orgId: string, userId: string): Promise<void> {
+  return fetchApi<void>(`/api/organizations/${orgId}/members/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ---- Telemetry ----
 
 export interface TelemetryFilter {
