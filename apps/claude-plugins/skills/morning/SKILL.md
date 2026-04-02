@@ -22,8 +22,13 @@ Help the developer start their work session by picking a task.
 
 Before anything else, search memories for the developer's personal context — their name, what they were working on recently, any preferences. Use this to greet them personally.
 
-If you know their name (from `~/.claude/tandemu.json` under `user.name`): "Morning, {{DEV_NAME}}. Let me pull up your tasks."
-If you don't know their name yet: "Good morning! Let me get your tasks."
+Use the `LOCAL_NOW` from the setup step (Step 1) to determine the time-of-day greeting. Extract the hour from the output (format: `2026-04-01 21:20 +04`):
+- Hour < 12 → "Morning"
+- Hour 12–17 → "Afternoon"
+- Hour > 17 → "Evening"
+
+If you know their name (from `~/.claude/tandemu.json` under `user.name`): "<greeting>, {{DEV_NAME}}. Let me pull up your tasks."
+If you don't know their name yet: "Good <greeting>! Let me get your tasks."
 
 If you remember what they worked on recently, mention it: "Last time you were working on the invoice module — want to continue or pick something new?"
 
