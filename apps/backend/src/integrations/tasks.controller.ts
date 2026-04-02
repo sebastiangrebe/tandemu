@@ -54,6 +54,7 @@ export class TasksController {
     @Query('order') order?: 'asc' | 'desc',
     @Query('excludeDone') excludeDone?: string,
     @Query('fallbackUnassigned') fallbackUnassigned?: string,
+    @Query('includeSubtasks') includeSubtasks?: string,
   ): Promise<Task[]> {
     // When fetching "my" tasks, use all email aliases for matching
     let assigneeEmails: string[] | undefined;
@@ -75,6 +76,7 @@ export class TasksController {
             assigneeEmails,
             sprint: sprint ?? 'current',
             excludeDone: excludeDone === 'true',
+            includeSubtasks: includeSubtasks === 'true',
           }),
         ),
       );
@@ -90,6 +92,7 @@ export class TasksController {
         assigneeEmails,
         sprint: sprint ?? 'current',
         excludeDone: excludeDone === 'true',
+        includeSubtasks: includeSubtasks === 'true',
       });
     }
 
@@ -162,7 +165,7 @@ export class TasksController {
     const [teamInfo, members, tasks, devStats, friction] = await Promise.all([
       this.teamsService.findOne(teamId),
       this.teamsService.getMembers(teamId),
-      this.tasksService.getTasks(orgId, { teamId }),
+      this.tasksService.getTasks(orgId, { teamId, includeSubtasks: true }),
       this.telemetryService.getDeveloperStats(orgId, startDate, endDate, teamId),
       this.telemetryService.getFrictionHeatmap(orgId, startDate, endDate, teamId),
     ]);
@@ -336,6 +339,15 @@ export class TasksController {
   }
 
   // ── Parameterized routes ──
+
+  @Get(':taskId/subtasks')
+  async getSubtasks(
+    @CurrentUser() user: RequestUser,
+    @Param('taskId') taskId: string,
+    @Query('provider') provider: IntegrationProvider,
+  ): Promise<Task[]> {
+    return this.tasksService.getSubtasks(user.organizationId, taskId, provider);
+  }
 
   @Get(':taskId/statuses')
   async getStatuses(

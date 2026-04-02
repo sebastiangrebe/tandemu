@@ -10,6 +10,7 @@ import type {
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderFetchSubtasksParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -84,6 +85,8 @@ interface MondayItem {
   group: { id: string; title: string };
   updated_at: string;
   url: string;
+  parent_item?: { id: string } | null;
+  subitems_page?: { items: Array<{ id: string }> };
 }
 
 interface MondayUser {
@@ -163,6 +166,8 @@ export class MondayProvider implements TaskProvider {
               group { id title }
               updated_at
               url
+              parent_item { id }
+              subitems_page(limit: 10) { items { id } }
             }
           }
         }
@@ -225,6 +230,9 @@ export class MondayProvider implements TaskProvider {
       provider: 'monday',
       externalProjectId,
       updatedAt: item.updated_at,
+      parentId: item.parent_item?.id ?? undefined,
+      hasSubtasks: (item.subitems_page?.items?.length ?? 0) > 0,
+      subtaskCount: item.subitems_page?.items?.length ?? 0,
     };
   }
 
@@ -387,6 +395,67 @@ export class MondayProvider implements TaskProvider {
       externalProjectId,
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {
+    const { accessToken, taskId } = params;
+
+    const data = await mondayQuery<{
+      items: Array<{
+        board: { id: string };
+        subitems_page: { items: MondayItem[] };
+      }>;
+    }>(
+      accessToken,
+      `query ($itemId: [ID!]!) {
+        items(ids: $itemId) {
+          board { id }
+          subitems_page(limit: 100) {
+            items {
+              id
+              name
+              column_values {
+                id
+                title
+                text
+                type
+                value
+              }
+              group { id title }
+              updated_at
+            }
+          }
+        }
+      }`,
+      { itemId: [taskId] },
+    );
+
+    const item = data.items[0];
+    if (!item) return [];
+
+    const boardId = item.board.id;
+
+    // Resolve assignees for subitems
+    let userMap: Map<number, MondayUser> | undefined;
+    const allAssigneeIds = new Set<number>();
+    item.subitems_page.items.forEach((sub) =>
+      getAssigneeIds(sub).forEach((id) => allAssigneeIds.add(id)),
+    );
+    if (allAssigneeIds.size > 0) {
+      userMap = await this.fetchUserMap(accessToken);
+    }
+
+    return item.subitems_page.items.map((sub) => {
+      const assigneeIds = getAssigneeIds(sub);
+      const assignee = assigneeIds.length > 0 && userMap ? userMap.get(assigneeIds[0]) : undefined;
+      // Monday doesn't support sub-subitems
+      return {
+        ...this.mapItem(sub, boardId, assignee),
+        parentId: taskId,
+        hasSubtasks: false,
+        subtaskCount: 0,
+      };
+    });
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

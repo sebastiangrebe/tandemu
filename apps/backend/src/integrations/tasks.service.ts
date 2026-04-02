@@ -10,6 +10,7 @@ export interface GetTasksParams {
   assigneeEmails?: string[];
   sprint?: string;
   excludeDone?: boolean;
+  includeSubtasks?: boolean;
 }
 
 @Injectable()
@@ -57,7 +58,28 @@ export class TasksService {
     }
 
     const results = await Promise.all(fetchPromises);
-    return results.flat();
+    const all = results.flat();
+
+    // Filter out subtasks from the top-level list unless explicitly requested
+    if (params.includeSubtasks) {
+      return all;
+    }
+    return all.filter((t) => !t.parentId);
+  }
+
+  async getSubtasks(orgId: string, taskId: string, provider: IntegrationProvider): Promise<Task[]> {
+    const integration = await this.integrationsService.findOne(orgId, provider);
+    const taskProvider = getProvider(provider);
+
+    if (!taskProvider.fetchSubtasks) {
+      return [];
+    }
+
+    return taskProvider.fetchSubtasks({
+      accessToken: integration.access_token,
+      taskId,
+      config: integration.config,
+    });
   }
 
   async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {

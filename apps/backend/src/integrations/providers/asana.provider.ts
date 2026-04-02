@@ -8,6 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderFetchSubtasksParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
   ExternalProject,
@@ -87,6 +88,8 @@ interface AsanaTask {
   tags: Array<{ name: string }>;
   modified_at: string;
   permalink_url: string;
+  parent?: { gid: string } | null;
+  num_subtasks?: number;
 }
 
 interface AsanaSection {
@@ -115,10 +118,13 @@ function mapTask(task: AsanaTask, externalProjectId: string): Task {
     provider: 'asana',
     externalProjectId,
     updatedAt: task.modified_at,
+    parentId: task.parent?.gid ?? undefined,
+    hasSubtasks: (task.num_subtasks ?? 0) > 0,
+    subtaskCount: task.num_subtasks ?? 0,
   };
 }
 
-const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assignee.name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name,custom_fields,tags.name,modified_at,permalink_url';
+const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assignee.name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name,custom_fields,tags.name,modified_at,permalink_url,parent,num_subtasks';
 
 export class AsanaProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
@@ -332,5 +338,20 @@ export class AsanaProvider implements TaskProvider {
     } catch {
       return [];
     }
+  }
+
+  async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {
+    const { accessToken, taskId } = params;
+
+    const subtasks = await asanaFetch<AsanaTask[]>(
+      `/tasks/${taskId}/subtasks?opt_fields=${TASK_OPT_FIELDS}`,
+      accessToken,
+    );
+
+    // Subtasks may belong to a project via memberships; use the first project GID if available
+    return subtasks.map((task) => {
+      const projectGid = task.memberships?.[0]?.project?.gid ?? '';
+      return mapTask(task, projectGid);
+    });
   }
 }

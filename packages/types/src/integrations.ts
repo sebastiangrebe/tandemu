@@ -37,6 +37,9 @@ export interface Task {
   readonly externalProjectId: string;
   readonly updatedAt: string;
   readonly category?: TaskCategory;
+  readonly parentId?: string;           // external ID of parent task
+  readonly hasSubtasks?: boolean;       // true if task has direct children
+  readonly subtaskCount?: number;       // number of direct children
 }
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
