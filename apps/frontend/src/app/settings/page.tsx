@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,17 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsSkeleton />}>
+      <SettingsPageContent />
+    </Suspense>
+  );
+}
+
+function SettingsPageContent() {
   const { currentOrg: authOrg, user: authUser, isAdmin } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -112,6 +123,13 @@ export default function SettingsPage() {
       loadData(authOrg).finally(() => setLoading(false));
     }
   }, [authOrg, loadData]);
+
+  useEffect(() => {
+    if (searchParams.get('billing') === 'success') {
+      toast.success('Subscription activated! Welcome to Tandemu Pro.');
+      router.replace('/settings', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const handleSaveOrg = async () => {
     if (!org) return;
@@ -368,7 +386,7 @@ export default function SettingsPage() {
                 </p>
                 {org.planTier !== 'FREE' && (
                   <p className="text-sm text-muted-foreground">
-                    ${members.length * 10}/month
+                    ${members.length * 25}/month
                   </p>
                 )}
               </div>
