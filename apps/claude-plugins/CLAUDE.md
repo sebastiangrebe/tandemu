@@ -63,6 +63,7 @@ You have access to MCP memory tools via the `tandemu-memory` server. Tools are d
 | Encounter something surprising in code | Search for gotchas about that area |
 | Before adding a dependency | Search for dependency quirks or past issues |
 | About to investigate how something works | Search memory first — you may already know |
+| About to ask the user how something works | Search memory first — never ask the user to explain something memory might already know |
 | Developer mentions a concept you're unsure about | Search before asking "what do you mean?" |
 
 **Do NOT search**: during rapid iterations (typo fixes, CSS tweaks), for every file read, or when you already found results this session.
