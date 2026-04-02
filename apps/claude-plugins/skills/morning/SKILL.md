@@ -156,7 +156,7 @@ curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamI
 
 Use `teamId=all` when "All teams" is selected — the backend fetches from all teams and deduplicates.
 
-The response is a `Task[]` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`, `category`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is.
+The response is a `Task[]` where each task has: `id`, `title`, `description`, `status`, `priority`, `assigneeName`, `assigneeEmail`, `labels`, `url`, `provider`, `category`, `parentId`, `hasSubtasks`, `subtaskCount`. **The API returns tasks already sorted by priority (urgent first).** Do not re-sort — use the response order as-is. Tasks with `parentId` set are filtered out by default — you'll only see root-level tasks.
 
 Filter to tasks that are `todo` or `in_progress` status. **Then exclude any task IDs listed in `---OTHER_ACTIVE_TASKS---` from the setup output** — those are already being worked on in another session/worktree and should not be offered again.
 
@@ -176,9 +176,29 @@ Use AskUserQuestion to present the tasks as a selectable list:
 
 If there are more than 4 tasks, show the top 4 and mention how many more exist.
 
+### 4a. Subtask drill-down
+
+After the developer picks a task, check if `hasSubtasks` is `true` on the selected task. If so, fetch the subtasks:
+
+```bash
+curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/subtasks?provider=<task.provider>"
+```
+
+This returns a `Task[]` of direct children. Present them with AskUserQuestion:
+- Question: "**<parent title>** has <subtaskCount> subtasks. Pick one to work on:"
+- Header: "Subtasks"
+- Options: up to 4 subtasks (same format: title, "ID · priority · provider"), plus one final option:
+  - Label: "Work on parent directly", Description: "Skip subtasks and work on <parent title> itself"
+
+If the developer picks a subtask that itself has `hasSubtasks: true`, **repeat the drill-down** (recurse). Continue until reaching a leaf task or the developer chooses "Work on parent directly". **Cap at 5 levels deep** as a safety guard — if you reach level 5, just proceed with that task.
+
+Track the drill-down path as a `parentChain` array (list of task IDs from root to chosen task). Store this in the active task file later (Step 5b).
+
+If `hasSubtasks` is `false` on the selected task, skip this step entirely.
+
 ### 5. Set up the chosen task
 
-Once the developer picks a task:
+Once the developer picks a task (either a leaf subtask from drill-down, or a task they chose "Work on parent directly" for, or a task with no subtasks):
 
 #### 5a. Check for uncommitted changes
 
@@ -250,7 +270,8 @@ cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
   "url": "<task.url>",
   "category": "<task.category from API response>",
   "labels": [<task.labels as JSON array>],
-  "worktree": "$WORKTREE_DIR"
+  "worktree": "$WORKTREE_DIR",
+  "parentChain": [<array of task IDs from root to chosen task, from Step 4a drill-down — empty array if no drill-down occurred>]
 }
 EOF
 ```

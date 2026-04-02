@@ -10,6 +10,7 @@ import type {
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderFetchSubtasksParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -69,6 +70,8 @@ interface JiraIssue {
     labels: string[];
     sprint?: { name: string };
     updated: string;
+    parent?: { key: string };
+    subtasks?: Array<{ key: string }>;
   };
 }
 
@@ -113,27 +116,11 @@ export class JiraProvider implements TaskProvider {
       jql += ' AND statusCategory != "Done"';
     }
 
-    const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,description,status,priority,assignee,labels,sprint,updated`;
+    const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,description,status,priority,assignee,labels,sprint,updated,subtasks,parent`;
 
     const data = await jiraFetch<JiraSearchResponse>(url, accessToken);
 
-    return data.issues.map((issue): Task => ({
-      id: issue.key,
-      title: issue.fields.summary,
-      description: issue.fields.description
-        ? JSON.stringify(issue.fields.description)
-        : undefined,
-      status: mapStatus(issue.fields.status.name),
-      priority: mapPriority(issue.fields.priority?.name),
-      assigneeName: issue.fields.assignee?.displayName,
-      assigneeEmail: issue.fields.assignee?.emailAddress,
-      labels: issue.fields.labels,
-      sprint: issue.fields.sprint?.name,
-      url: `https://${siteId}.atlassian.net/browse/${issue.key}`,
-      provider: 'jira',
-      externalProjectId,
-      updatedAt: issue.fields.updated,
-    }));
+    return data.issues.map((issue) => this.mapTask(issue, siteId, externalProjectId));
   }
 
   async getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
@@ -280,6 +267,48 @@ export class JiraProvider implements TaskProvider {
       externalProjectId,
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  private mapTask(issue: JiraIssue, siteId: string, externalProjectId: string): Task {
+    return {
+      id: issue.key,
+      title: issue.fields.summary,
+      description: issue.fields.description
+        ? JSON.stringify(issue.fields.description)
+        : undefined,
+      status: mapStatus(issue.fields.status.name),
+      priority: mapPriority(issue.fields.priority?.name),
+      assigneeName: issue.fields.assignee?.displayName,
+      assigneeEmail: issue.fields.assignee?.emailAddress,
+      labels: issue.fields.labels,
+      sprint: issue.fields.sprint?.name,
+      url: `https://${siteId}.atlassian.net/browse/${issue.key}`,
+      provider: 'jira',
+      externalProjectId,
+      updatedAt: issue.fields.updated,
+      parentId: issue.fields.parent?.key ?? undefined,
+      hasSubtasks: (issue.fields.subtasks?.length ?? 0) > 0,
+      subtaskCount: issue.fields.subtasks?.length ?? 0,
+    };
+  }
+
+  async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {
+    const { accessToken, taskId, config } = params;
+    const siteId = config.siteId as string | undefined;
+    if (!siteId) {
+      throw new BadGatewayException('Jira integration requires a siteId in config');
+    }
+
+    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+    const jql = `parent=${taskId}`;
+    const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=100&fields=summary,description,status,priority,assignee,labels,sprint,updated,subtasks,parent`;
+
+    const data = await jiraFetch<JiraSearchResponse>(url, accessToken);
+
+    // Derive project key from the parent taskId (e.g., "PROJ-123" → "PROJ")
+    const externalProjectId = taskId.split('-')[0] ?? taskId;
+
+    return data.issues.map((issue) => this.mapTask(issue, siteId, externalProjectId));
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

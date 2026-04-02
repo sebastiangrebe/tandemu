@@ -8,6 +8,7 @@ import type {
   TaskProvider,
   TaskProviderFetchParams,
   TaskProviderFetchProjectsParams,
+  TaskProviderFetchSubtasksParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
   ExternalProject,
@@ -71,6 +72,7 @@ interface ClickUpTask {
   date_updated: string;
   list: { id: string; name: string };
   sprint_id?: string;
+  parent?: string | null;
 }
 
 interface ClickUpTasksResponse {
@@ -106,7 +108,22 @@ function mapTask(task: ClickUpTask, externalProjectId: string): Task {
     provider: 'clickup',
     externalProjectId,
     updatedAt: new Date(parseInt(task.date_updated, 10)).toISOString(),
+    parentId: task.parent ?? undefined,
   };
+}
+
+function enrichSubtaskCounts(tasks: Task[]): Task[] {
+  const childCounts = new Map<string, number>();
+  for (const t of tasks) {
+    if (t.parentId) {
+      childCounts.set(t.parentId, (childCounts.get(t.parentId) ?? 0) + 1);
+    }
+  }
+  return tasks.map((t) => ({
+    ...t,
+    hasSubtasks: (childCounts.get(t.id) ?? 0) > 0,
+    subtaskCount: childCounts.get(t.id) ?? 0,
+  }));
 }
 
 export class ClickUpProvider implements TaskProvider {
@@ -156,7 +173,8 @@ export class ClickUpProvider implements TaskProvider {
       );
     }
 
-    return allTasks.map((task) => mapTask(task, externalProjectId));
+    const mapped = allTasks.map((task) => mapTask(task, externalProjectId));
+    return enrichSubtaskCounts(mapped);
   }
 
   async getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]> {
@@ -243,6 +261,21 @@ export class ClickUpProvider implements TaskProvider {
     }
     const task = (await res.json()) as ClickUpTask;
     return mapTask(task, externalProjectId);
+  }
+
+  async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {
+    const { accessToken, taskId } = params;
+
+    const task = await clickupFetch<ClickUpTask & { subtasks?: ClickUpTask[] }>(
+      `${CLICKUP_API}/task/${taskId}?include_subtasks=true`,
+      accessToken,
+    );
+
+    const subtasks = task.subtasks ?? [];
+    // Use the parent task's list as the externalProjectId context
+    const externalProjectId = task.list.id;
+    const mapped = subtasks.map((st) => mapTask(st, externalProjectId));
+    return enrichSubtaskCounts(mapped);
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {

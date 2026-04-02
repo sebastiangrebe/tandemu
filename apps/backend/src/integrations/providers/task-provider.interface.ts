@@ -48,6 +48,12 @@ export interface TaskProviderCreateParams {
   config: Record<string, unknown>;
 }
 
+export interface TaskProviderFetchSubtasksParams {
+  accessToken: string;
+  taskId: string;
+  config: Record<string, unknown>;
+}
+
 export interface TaskProvider {
   fetchTasks(params: TaskProviderFetchParams): Promise<Task[]>;
   fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]>;
@@ -56,4 +62,6 @@ export interface TaskProvider {
   createTask(params: TaskProviderCreateParams): Promise<Task>;
   /** Optional: fetch sub-projects within a project (e.g. Linear projects in a team, ClickUp lists in a folder) */
   fetchSubProjects?(accessToken: string, projectId: string, config?: Record<string, unknown>): Promise<ExternalProject[]>;
+  /** Optional: fetch direct subtasks/children of a task */
+  fetchSubtasks?(params: TaskProviderFetchSubtasksParams): Promise<Task[]>;
 }

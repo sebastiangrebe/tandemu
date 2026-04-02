@@ -10,6 +10,7 @@ import type {
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderFetchSubtasksParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -79,6 +80,8 @@ interface LinearIssueNode {
   assignee: { name: string; email: string } | null;
   labels: { nodes: Array<{ name: string }> };
   cycle: { name: string | null; number: number } | null;
+  parent?: { identifier: string } | null;
+  children?: { nodes: Array<{ identifier: string }> };
   url: string;
   updatedAt: string;
 }
@@ -137,6 +140,8 @@ export class LinearProvider implements TaskProvider {
             assignee { name email }
             labels { nodes { name } }
             cycle { name number }
+            parent { identifier }
+            children { nodes { identifier } }
             url
             updatedAt
           }
@@ -162,6 +167,9 @@ export class LinearProvider implements TaskProvider {
       provider: 'linear',
       externalProjectId,
       updatedAt: issue.updatedAt,
+      parentId: issue.parent?.identifier ?? undefined,
+      hasSubtasks: (issue.children?.nodes?.length ?? 0) > 0,
+      subtaskCount: issue.children?.nodes?.length ?? 0,
     }));
   }
 
@@ -317,6 +325,76 @@ export class LinearProvider implements TaskProvider {
       externalProjectId,
       updatedAt: issue.updatedAt,
     };
+  }
+
+  async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {
+    const { accessToken, taskId } = params;
+
+    const match = taskId.match(/^([A-Z]+)-(\d+)$/);
+    if (!match) return [];
+
+    const [, teamKey, numberStr] = match;
+    const number = parseInt(numberStr, 10);
+
+    const data = await linearFetch<{
+      issues: {
+        nodes: Array<{
+          children: {
+            nodes: LinearIssueNode[];
+          };
+          team: { id: string };
+        }>;
+      };
+    }>(accessToken, `
+      query {
+        issues(filter: { number: { eq: ${number} }, team: { key: { eq: "${teamKey}" } } }, first: 1) {
+          nodes {
+            team { id }
+            children {
+              nodes {
+                identifier
+                title
+                description
+                state { name }
+                priority
+                assignee { name email }
+                labels { nodes { name } }
+                cycle { name number }
+                parent { identifier }
+                children { nodes { identifier } }
+                url
+                updatedAt
+              }
+            }
+          }
+        }
+      }
+    `);
+
+    const parentIssue = data.issues.nodes[0];
+    if (!parentIssue) return [];
+
+    const externalProjectId = parentIssue.team.id;
+    return parentIssue.children.nodes.map((issue): Task => ({
+      id: issue.identifier,
+      title: issue.title,
+      description: issue.description ?? undefined,
+      status: mapStatus(issue.state.name),
+      priority: mapPriority(issue.priority),
+      assigneeName: issue.assignee?.name,
+      assigneeEmail: issue.assignee?.email,
+      labels: issue.labels.nodes.map((l) => l.name),
+      sprint: issue.cycle
+        ? issue.cycle.name ?? `Cycle ${issue.cycle.number}`
+        : undefined,
+      url: issue.url,
+      provider: 'linear',
+      externalProjectId,
+      updatedAt: issue.updatedAt,
+      parentId: issue.parent?.identifier ?? undefined,
+      hasSubtasks: (issue.children?.nodes?.length ?? 0) > 0,
+      subtaskCount: issue.children?.nodes?.length ?? 0,
+    }));
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {
