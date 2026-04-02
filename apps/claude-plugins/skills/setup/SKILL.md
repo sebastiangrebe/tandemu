@@ -158,24 +158,22 @@ else:
 
 ```bash
 mkdir -p ~/.claude
-python3 << 'PYEOF'
-import json, os
-teams_json = os.environ.get("TEAMS_JSON", "[]")
-teams = json.loads(teams_json)
+python3 << PYEOF
+import json
 
 config = {
-  "auth": {"token": os.environ["TOKEN"]},
+  "auth": {"token": "${TOKEN}"},
   "user": {
-    "id": os.environ["USER_ID"],
-    "email": os.environ["USER_EMAIL"],
-    "name": os.environ["USER_NAME"]
+    "id": "${USER_ID}",
+    "email": "${USER_EMAIL}",
+    "name": "${USER_NAME}"
   },
-  "organization": {"id": os.environ["ORG_ID"], "name": os.environ["ORG_NAME"]},
-  "teams": teams,
-  "api": {"url": os.environ["API_URL"]}
+  "organization": {"id": "${ORG_ID}", "name": "${ORG_NAME}"},
+  "teams": json.loads('${TEAMS_JSON}') if '${TEAMS_JSON}' else [],
+  "api": {"url": "${API_URL}"}
 }
 
-config_path = os.path.expanduser("~/.claude/tandemu.json")
+config_path = "$HOME/.claude/tandemu.json"
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
 print("OK")
@@ -197,18 +195,19 @@ MEM_URL=$(echo "$SETUP_CONFIG" | python3 -c "import json,sys; print(json.load(sy
 #### 5c. settings.json (telemetry + permissions)
 
 ```bash
-python3 << 'PYEOF'
-import json, os
-settings_file = os.path.expanduser("~/.claude/settings.json")
+python3 << PYEOF
+import json
+
+settings_file = "$HOME/.claude/settings.json"
 try:
     with open(settings_file) as f:
         settings = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     settings = {}
 
-otel_endpoint = os.environ.get("OTEL_ENDPOINT", "http://localhost:4318")
-otel_key = os.environ.get("OTEL_INGESTION_KEY", "")
-api_url = os.environ.get("API_URL", "http://localhost:3001")
+otel_endpoint = "${OTEL_ENDPOINT}" or "http://localhost:4318"
+otel_key = "${OTEL_INGESTION_KEY}"
+api_url = "${API_URL}" or "http://localhost:3001"
 
 env = settings.get("env", {})
 env.update({
@@ -219,7 +218,7 @@ env.update({
     "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
     "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Bearer {otel_key}" if otel_key else "",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
-    "OTEL_RESOURCE_ATTRIBUTES": f"organization_id={os.environ.get('ORG_ID', '')}",
+    "OTEL_RESOURCE_ATTRIBUTES": "organization_id=${ORG_ID}",
     "OTEL_LOG_TOOL_DETAILS": "1"
 })
 # Remove empty headers entry if no key
@@ -229,7 +228,7 @@ settings["env"] = env
 
 perms = settings.get("permissions", {})
 allow = perms.get("allow", [])
-home = os.path.expanduser("~")
+home = "$HOME"
 tandemu_perms = [
     "Edit(~/.claude/tandemu*)",
     "Write(~/.claude/tandemu*)",
@@ -273,10 +272,11 @@ PYEOF
 #### 5d. MCP memory config (~/.mcp.json)
 
 ```bash
-python3 << 'PYEOF'
-import json, os
-mcp_file = os.path.expanduser("~/.mcp.json")
-mem_url = os.environ.get("MEM_URL", "")
+python3 << PYEOF
+import json
+
+mcp_file = "$HOME/.mcp.json"
+mem_url = "${MEM_URL}"
 if not mem_url:
     print("SKIP: no memory config from API")
     exit(0)
@@ -286,8 +286,8 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 servers = config.get("mcpServers", {})
-token = os.environ.get("TOKEN", "")
-mem_type = os.environ.get("MEM_TYPE", "sse")
+token = "${TOKEN}"
+mem_type = "${MEM_TYPE}" or "sse"
 server_config = {
     "type": mem_type,
     "url": mem_url,
@@ -305,11 +305,11 @@ PYEOF
 
 Also migrate legacy config if it exists:
 ```bash
-python3 << 'PYEOF'
+python3 << PYEOF
 import json, os
 # Migrate from ~/.claude.json to ~/.mcp.json if needed
-old_file = os.path.expanduser("~/.claude.json")
-new_file = os.path.expanduser("~/.mcp.json")
+old_file = "$HOME/.claude.json"
+new_file = "$HOME/.mcp.json"
 try:
     with open(old_file) as f:
         old = json.load(f)
