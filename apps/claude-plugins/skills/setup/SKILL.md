@@ -46,8 +46,8 @@ Start the device auth flow:
 
 ```bash
 RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json")
-CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])")
-AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['url'])")
+CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d['code'])")
+AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d['url'])")
 echo "CODE=$CODE"
 echo "URL=$AUTH_URL"
 ```
@@ -63,9 +63,9 @@ Poll for authorization (max 150 retries, 2 seconds apart):
 ```bash
 for i in $(seq 1 150); do
   POLL=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null)
-  STATUS=$(echo "$POLL" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null || echo "pending")
+  STATUS=$(echo "$POLL" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('status','pending'))" 2>/dev/null || echo "pending")
   if [ "$STATUS" = "authorized" ]; then
-    TOKEN=$(echo "$POLL" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['accessToken'])")
+    TOKEN=$(echo "$POLL" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d['accessToken'])")
     echo "TOKEN=$TOKEN"
     break
   elif [ "$STATUS" = "expired" ]; then
@@ -84,7 +84,9 @@ If expired or timed out, tell the developer and stop.
 ME=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me")
 echo "$ME" | python3 -c "
 import json, sys
-d = json.load(sys.stdin)['data']['user']
+raw = json.load(sys.stdin)
+d = raw.get('data', raw)
+if 'user' in d: d = d['user']
 print(f\"USER_ID={d['id']}\")
 print(f\"USER_EMAIL={d['email']}\")
 print(f\"USER_NAME={d['name']}\")
@@ -96,7 +98,9 @@ Fetch organizations and teams:
 ORGS=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations")
 echo "$ORGS" | python3 -c "
 import json, sys
-orgs = json.load(sys.stdin)['data']
+raw = json.load(sys.stdin)
+orgs = raw.get('data', raw) if isinstance(raw, dict) else raw
+if not isinstance(orgs, list): orgs = [orgs]
 for i, org in enumerate(orgs):
     print(f\"ORG_{i}_ID={org['id']}\")
     print(f\"ORG_{i}_NAME={org['name']}\")
@@ -117,7 +121,7 @@ SWITCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"organizationId": "'"$CHOSEN_ORG_ID"'"}')
-NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])")
+NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d['accessToken'])")
 TOKEN="$NEW_TOKEN"
 ```
 
