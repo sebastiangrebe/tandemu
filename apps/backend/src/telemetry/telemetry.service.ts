@@ -134,7 +134,7 @@ export class TelemetryService implements OnModuleDestroy {
     // Add skip indexes on OTEL tables for common query patterns.
     // These are idempotent (IF NOT EXISTS) and dramatically reduce scan time
     // by letting ClickHouse skip data granules that don't match our filters.
-    this.ensureSkipIndexes();
+    this.ensureSkipIndexes().catch(() => {});
   }
 
   /** Strip trailing 'Z' so ClickHouse DateTime64(3) typed params accept ISO dates */
@@ -142,7 +142,7 @@ export class TelemetryService implements OnModuleDestroy {
     return iso.endsWith('Z') ? iso.slice(0, -1) : iso;
   }
 
-  private ensureSkipIndexes(): void {
+  private async ensureSkipIndexes(): Promise<void> {
     const indexes = [
       // otel_traces: most queries filter by org + SpanName
       `ALTER TABLE otel_traces ADD INDEX IF NOT EXISTS idx_org_id ResourceAttributes['organization_id'] TYPE bloom_filter(0.01) GRANULARITY 1`,
@@ -155,10 +155,15 @@ export class TelemetryService implements OnModuleDestroy {
       `ALTER TABLE otel_logs ADD INDEX IF NOT EXISTS idx_severity SeverityText TYPE set(20) GRANULARITY 1`,
     ];
 
+    // Run sequentially to avoid ClickHouse CANNOT_ASSIGN_ALTER errors
+    // caused by concurrent metadata version bumps on the same replica
     for (const ddl of indexes) {
-      this.client.query({ query: ddl }).then((rs) => rs.text()).catch(() => {
+      try {
+        const rs = await this.client.query({ query: ddl });
+        await rs.text();
+      } catch {
         // Indexes may fail if tables don't exist yet (first boot before OTEL collector runs)
-      });
+      }
     }
   }
 
