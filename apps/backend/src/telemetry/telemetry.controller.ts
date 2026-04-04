@@ -266,16 +266,19 @@ export class TelemetryController {
   ) {
     const metrics = await this.telemetryService.getDORAMetrics(user.organizationId, startDate, endDate, teamId);
 
-    // Check if GitHub integration exists so frontend can show the right empty state
+    // Check GitHub integration state so frontend can show the right empty state
     let githubConnected = false;
+    let githubReposMapped = false;
     try {
-      await this.integrationsService.findOne(user.organizationId, 'github');
+      const integration = await this.integrationsService.findOne(user.organizationId, 'github');
       githubConnected = true;
+      const mappings = await this.integrationsService.getMappings(integration.id);
+      githubReposMapped = mappings.length > 0;
     } catch {
       // Not found — no GitHub integration
     }
 
-    return { ...metrics, githubConnected };
+    return { ...metrics, githubConnected, githubReposMapped };
   }
 
   @Post('github-sync')

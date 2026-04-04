@@ -45,9 +45,12 @@ interface DORAMetricsCardProps {
 
 export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
   if (!data || (!data.deploymentFrequency && !data.leadTimeForChanges)) {
-    const message = data?.githubConnected
-      ? 'Syncing GitHub data — DORA metrics will appear after the first sync completes'
-      : 'Connect GitHub to see DORA metrics';
+    let message = 'Connect GitHub to see DORA metrics';
+    if (data?.githubConnected && !data?.githubReposMapped) {
+      message = 'Map a GitHub repository to a team in Settings → Integrations to enable DORA metrics';
+    } else if (data?.githubConnected) {
+      message = 'Syncing GitHub data — DORA metrics will appear after the first sync completes';
+    }
     return (
       <Card>
         <CardHeader>

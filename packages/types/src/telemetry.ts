@@ -159,4 +159,5 @@ export interface DORAMetrics {
   readonly changeFailureRate: null;
   readonly meanTimeToRestore: null;
   readonly githubConnected: boolean;
+  readonly githubReposMapped: boolean;
 }

@@ -730,6 +730,7 @@ export interface DORAMetrics {
   changeFailureRate: null;
   meanTimeToRestore: null;
   githubConnected: boolean;
+  githubReposMapped: boolean;
 }
 
 export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {

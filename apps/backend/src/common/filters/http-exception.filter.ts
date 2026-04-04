@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { SentryExceptionCaptured } from '@sentry/nestjs';
+import * as Sentry from '@sentry/nestjs';
 import type { Response } from 'express';
 import type { ApiError } from '@tandemu/types';
 
@@ -17,7 +17,6 @@ interface ExceptionResponse {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  @SentryExceptionCaptured()
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -55,6 +54,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'An unexpected error occurred',
       };
+    }
+
+    if (status >= 500) {
+      Sentry.captureException(exception);
     }
 
     response.status(status).json({
