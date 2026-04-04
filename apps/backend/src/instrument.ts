@@ -5,9 +5,7 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env['NODE_ENV'] ?? 'development',
-    tracesSampleRate: 0,
-    // Capture 100% of errors even when tracing is off
-    enableTracing: false,
+    tracesSampleRate: 1.0,
   });
 } else {
   console.warn('SENTRY_BACKEND_DSN not set — Sentry error reporting disabled');
