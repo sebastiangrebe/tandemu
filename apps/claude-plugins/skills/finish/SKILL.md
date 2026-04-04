@@ -236,7 +236,7 @@ Extract `prUrl`, `prNumber`, and `commitSha` from the output. These will be incl
 
 #### 5b. Store memories with provenance
 
-**IMPORTANT: Always include metadata on every `add_memory` call.** This enables the dashboard to organize memories by repo, category, task, and source:
+**IMPORTANT: The `add_memory` MCP tool uses a `text` parameter (not `query`). Always include metadata on every call.** This enables the dashboard to organize memories by repo, category, task, and source:
 
 ```
 metadata: {
