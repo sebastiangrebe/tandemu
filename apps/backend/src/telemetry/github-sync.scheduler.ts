@@ -27,13 +27,13 @@ export class GitHubSyncScheduler implements OnModuleInit {
       },
     );
 
-    // Run an initial sync on startup (delayed by 30s to let everything initialize)
+    // Run an initial sync on startup (unique jobId per boot to avoid Bull dedup)
     await this.syncQueue.add(
       'github-sync-trigger',
       { type: 'github-sync' } as GitHubSyncJobData,
       {
         delay: 30_000,
-        jobId: 'github-sync-initial',
+        jobId: `github-sync-initial-${Date.now()}`,
       },
     );
 
@@ -71,7 +71,13 @@ export class GitHubSyncScheduler implements OnModuleInit {
       const integration = await this.integrationsService.findOne(organizationId, 'github');
       const mappings = await this.integrationsService.getMappings(integration.id);
 
+      if (mappings.length === 0) {
+        this.logger.warn(`GitHub integration found for org ${organizationId} but no repo mappings`);
+        return;
+      }
+
       for (const mapping of mappings) {
+        this.logger.log(`Queuing sync for ${mapping.externalProjectId} (team: ${mapping.teamId})`);
         await this.syncQueue.add('github-sync', {
           type: 'github-sync',
           organizationId,
@@ -82,8 +88,8 @@ export class GitHubSyncScheduler implements OnModuleInit {
           since: since ?? new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
         });
       }
-    } catch {
-      // Org may not have GitHub integration — skip silently
+    } catch (err) {
+      this.logger.warn(`GitHub sync skipped for org ${organizationId}: ${err instanceof Error ? err.message : err}`);
     }
   }
 }

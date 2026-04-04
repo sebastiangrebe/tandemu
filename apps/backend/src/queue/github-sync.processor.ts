@@ -24,6 +24,7 @@ export class GitHubSyncProcessor extends WorkerHost {
   async process(job: Job<GitHubSyncJobData>): Promise<void> {
     // Trigger job: fan out per-repo sync jobs
     if (job.name === 'github-sync-trigger') {
+      this.logger.log('GitHub sync trigger fired — fanning out per-repo jobs');
       await this.scheduler.triggerSyncForAllOrgs();
       return;
     }
