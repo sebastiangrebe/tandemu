@@ -232,8 +232,9 @@ function SettingsPageContent() {
         </Card>
       )}
 
-      {/* ROI Settings */}
+      {/* ROI & Memory Settings */}
       {org && (
+        <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -301,10 +302,7 @@ function SettingsPageContent() {
             </Button>
           </CardFooter>
         </Card>
-      )}
 
-      {/* Memory Settings */}
-      {org && (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -360,6 +358,7 @@ function SettingsPageContent() {
             </Button>
           </CardFooter>
         </Card>
+        </div>
       )}
 
       {/* Billing Section — only shown when billing is enabled */}
