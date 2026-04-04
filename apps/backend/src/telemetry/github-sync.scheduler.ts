@@ -51,14 +51,20 @@ export class GitHubSyncScheduler implements OnModuleInit {
       );
 
       const since = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(); // 5 day overlap
+      let succeeded = 0;
 
       for (const { organization_id } of orgs.rows) {
-        await this.triggerSync(organization_id, since);
+        try {
+          await this.triggerSync(organization_id, since);
+          succeeded++;
+        } catch (err) {
+          this.logger.warn(`GitHub sync failed for org ${organization_id}: ${err instanceof Error ? err.message : err}`);
+        }
       }
 
-      this.logger.log(`Triggered GitHub sync for ${orgs.rows.length} org(s)`);
+      this.logger.log(`Triggered GitHub sync for ${succeeded}/${orgs.rows.length} org(s)`);
     } catch (err) {
-      this.logger.warn(`Failed to trigger GitHub sync: ${err}`);
+      this.logger.warn(`Failed to query orgs for GitHub sync: ${err}`);
     }
   }
 
