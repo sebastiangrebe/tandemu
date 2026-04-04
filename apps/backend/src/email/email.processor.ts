@@ -1,6 +1,7 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import { SentryProcessor } from '../queue/sentry-processor.js';
 import { EmailService } from './email.service.js';
 import type { EmailJobData } from '../queue/queue.types.js';
 import { renderInviteCreated } from './templates/invite-created.js';
@@ -14,14 +15,14 @@ import { renderEmailAliasAdded } from './templates/email-alias-added.js';
 import { renderInvoicePaid } from './templates/invoice-paid.js';
 
 @Processor('email')
-export class EmailProcessor extends WorkerHost {
+export class EmailProcessor extends SentryProcessor {
   private readonly logger = new Logger(EmailProcessor.name);
 
   constructor(private readonly emailService: EmailService) {
     super();
   }
 
-  async process(job: Job<EmailJobData>): Promise<void> {
+  async run(job: Job<EmailJobData>): Promise<void> {
     this.logger.log(`Processing email job: ${job.data.type}`);
 
     switch (job.data.type) {

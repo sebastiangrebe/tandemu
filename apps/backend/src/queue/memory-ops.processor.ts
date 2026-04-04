@@ -1,13 +1,14 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import { SentryProcessor } from './sentry-processor.js';
 import { MemoryService } from '../memory/memory.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
 import type { MemoryOpsJobData } from './queue.types.js';
 
 @Processor('memory-ops')
-export class MemoryOpsProcessor extends WorkerHost {
+export class MemoryOpsProcessor extends SentryProcessor {
   private readonly logger = new Logger(MemoryOpsProcessor.name);
 
   constructor(
@@ -18,7 +19,7 @@ export class MemoryOpsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<MemoryOpsJobData>): Promise<void> {
+  async run(job: Job<MemoryOpsJobData>): Promise<void> {
     switch (job.data.type) {
       case 'promote-memory':
         await this.promoteMemory(job.data.memoryId, job.data.upstreamUrl, job.data.upstreamHeaders);

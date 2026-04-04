@@ -1,13 +1,14 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger, Inject, forwardRef } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import { SentryProcessor } from './sentry-processor.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { GitHubSyncScheduler } from '../telemetry/github-sync.scheduler.js';
 import type { GitHubSyncJobData } from './queue.types.js';
 
 @Processor('github-sync')
-export class GitHubSyncProcessor extends WorkerHost {
+export class GitHubSyncProcessor extends SentryProcessor {
   private readonly logger = new Logger(GitHubSyncProcessor.name);
 
   constructor(
@@ -21,7 +22,7 @@ export class GitHubSyncProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<GitHubSyncJobData>): Promise<void> {
+  async run(job: Job<GitHubSyncJobData>): Promise<void> {
     // Trigger job: fan out per-repo sync jobs
     if (job.name === 'github-sync-trigger') {
       this.logger.log('GitHub sync trigger fired — fanning out per-repo jobs');

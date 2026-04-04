@@ -1,11 +1,12 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger, Inject, forwardRef } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import { SentryProcessor } from './sentry-processor.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import type { TelemetryJobData } from './queue.types.js';
 
 @Processor('telemetry')
-export class TelemetryProcessor extends WorkerHost {
+export class TelemetryProcessor extends SentryProcessor {
   private readonly logger = new Logger(TelemetryProcessor.name);
 
   constructor(
@@ -15,7 +16,7 @@ export class TelemetryProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<TelemetryJobData>): Promise<void> {
+  async run(job: Job<TelemetryJobData>): Promise<void> {
     switch (job.data.type) {
       case 'memory-access-log':
         await this.telemetryService.logMemoryAccess(
