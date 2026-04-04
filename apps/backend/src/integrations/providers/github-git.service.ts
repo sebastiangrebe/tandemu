@@ -16,6 +16,7 @@ export interface GitPRData {
   number: number;
   title: string;
   body: string;
+  createdAt: string;
   mergedAt: string;
   author: { login: string };
   url: string;
@@ -36,6 +37,7 @@ interface GitHubPRResponse {
   number: number;
   title: string;
   body: string | null;
+  created_at: string;
   merged_at: string | null;
   html_url: string;
   user: { login: string } | null;
@@ -47,6 +49,7 @@ interface GitHubSearchResponse {
     number: number;
     title: string;
     body: string | null;
+    created_at: string;
     pull_request?: { merged_at: string | null; html_url: string };
     user: { login: string } | null;
     labels: Array<{ name: string }>;
@@ -120,6 +123,7 @@ export class GitHubGitService {
           number: pr.number,
           title: pr.title,
           body: pr.body ?? '',
+          createdAt: pr.created_at,
           mergedAt: pr.merged_at!,
           author: { login: pr.user?.login ?? 'unknown' },
           url: pr.html_url,
@@ -150,6 +154,7 @@ export class GitHubGitService {
           number: item.number,
           title: item.title,
           body: item.body ?? '',
+          createdAt: item.created_at,
           mergedAt: item.pull_request!.merged_at!,
           author: { login: item.user?.login ?? 'unknown' },
           url: item.pull_request!.html_url,

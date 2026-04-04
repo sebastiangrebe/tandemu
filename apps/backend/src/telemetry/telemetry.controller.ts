@@ -252,4 +252,14 @@ export class TelemetryController {
       body,
     );
   }
+
+  @Get('dora-metrics')
+  async getDORAMetrics(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
+  ) {
+    return this.telemetryService.getDORAMetrics(user.organizationId, startDate, endDate, teamId);
+  }
 }

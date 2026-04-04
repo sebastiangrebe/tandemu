@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Brain, Users, Code2, Timer, Wrench } from "lucide-react";
-import { getAIRatio, getTimesheets, getToolUsage, getTaskVelocity, getInvestmentAllocation } from '@/lib/api';
-import type { TimesheetEntry, ToolUsageStat, TaskVelocityEntry, InvestmentAllocation } from '@/lib/api';
+import { getAIRatio, getTimesheets, getToolUsage, getTaskVelocity, getInvestmentAllocation, getDORAMetrics } from '@/lib/api';
+import type { TimesheetEntry, ToolUsageStat, TaskVelocityEntry, InvestmentAllocation, DORAMetrics } from '@/lib/api';
 import type { AIvsManualRatio } from '@tandemu/types';
 import { InstallBanner } from '@/components/install-banner';
 import { BillingBanner } from '@/components/billing-banner';
@@ -12,6 +12,7 @@ import { AIRatioChart } from '@/components/charts/ai-ratio-chart';
 import { ToolUsageChart } from '@/components/charts/tool-usage-chart';
 import { VelocityChart } from '@/components/charts/velocity-chart';
 import { InvestmentChart } from '@/components/charts/investment-chart';
+import { DORAMetricsCard } from '@/components/charts/dora-metrics-card';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { DashboardSkeleton } from '@/components/ui/skeleton-helpers';
 
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const [toolData, setToolData] = useState<ToolUsageStat[]>([]);
   const [velocityData, setVelocityData] = useState<TaskVelocityEntry[]>([]);
   const [investment, setInvestment] = useState<InvestmentAllocation[]>([]);
+  const [doraData, setDoraData] = useState<DORAMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { startDate, endDate, teamId } = useFilterParams();
@@ -39,9 +41,9 @@ export default function DashboardPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate, teamId };
-        const [ai, timesheets, tools, velocity, invest] = await Promise.allSettled([
+        const [ai, timesheets, tools, velocity, invest, dora] = await Promise.allSettled([
           getAIRatio(f), getTimesheets(f), getToolUsage(f), getTaskVelocity(f),
-          getInvestmentAllocation(f),
+          getInvestmentAllocation(f), getDORAMetrics(f),
         ]);
         if (cancelled) return;
         if (ai.status === 'fulfilled') setAiData(ai.value);
@@ -49,6 +51,7 @@ export default function DashboardPage() {
         if (tools.status === 'fulfilled') setToolData(tools.value);
         if (velocity.status === 'fulfilled') setVelocityData(velocity.value);
         if (invest.status === 'fulfilled') setInvestment(invest.value);
+        if (dora.status === 'fulfilled') setDoraData(dora.value);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -204,6 +207,9 @@ export default function DashboardPage() {
             <VelocityChart data={velocityData} />
             <InvestmentChart data={investment} />
           </div>
+
+          {/* DORA Metrics */}
+          <DORAMetricsCard data={doraData} />
         </>
       )}
     </div>

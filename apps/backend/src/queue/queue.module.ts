@@ -40,6 +40,15 @@ import { ConfigService } from '@nestjs/config';
           removeOnFail: { age: 604800 },
         },
       },
+      {
+        name: 'github-sync',
+        defaultJobOptions: {
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        },
+      },
     ),
   ],
   exports: [BullModule],

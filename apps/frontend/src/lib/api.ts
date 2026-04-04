@@ -708,3 +708,29 @@ export async function getMemoryGaps(params?: { startDate?: string; endDate?: str
 export async function getMemoryUsageInsights(scope: MemoryScope | 'all' = 'all', days = 30): Promise<UsageInsightsResponse> {
   return fetchApi<UsageInsightsResponse>(`/api/memory/usage-insights?scope=${scope}&days=${days}`);
 }
+
+// ── DORA Metrics ──
+
+export interface DORADeploymentFrequency {
+  avgPerWeek: number;
+  trend: Array<{ week: string; deployments: number }>;
+  rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORALeadTime {
+  medianHours: number;
+  p95Hours: number;
+  trend: Array<{ week: string; medianHours: number }>;
+  rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORAMetrics {
+  deploymentFrequency: DORADeploymentFrequency | null;
+  leadTimeForChanges: DORALeadTime | null;
+  changeFailureRate: null;
+  meanTimeToRestore: null;
+}
+
+export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {
+  return fetchApi<DORAMetrics>(`/api/telemetry/dora-metrics${buildParams(filter)}`);
+}

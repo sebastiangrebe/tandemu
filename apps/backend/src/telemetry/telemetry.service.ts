@@ -107,6 +107,30 @@ export class TelemetryService implements OnModuleDestroy {
       this.logger.warn(`Failed to create memory_access_log table: ${err}`);
     });
 
+    // Auto-create github_pull_requests table for DORA metrics
+    this.client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS github_pull_requests (
+          organization_id String,
+          repo String,
+          team_id String,
+          pr_number UInt32,
+          title String,
+          author String,
+          created_at DateTime64(3),
+          merged_at DateTime64(3),
+          url String,
+          labels Array(String),
+          has_ai_coauthor UInt8 DEFAULT 0,
+          synced_at DateTime DEFAULT now()
+        ) ENGINE = ReplacingMergeTree(synced_at)
+        ORDER BY (organization_id, repo, pr_number)
+        TTL synced_at + INTERVAL 365 DAY
+      `,
+    }).then((rs) => rs.text()).catch((err) => {
+      this.logger.warn(`Failed to create github_pull_requests table: ${err}`);
+    });
+
     // Add skip indexes on OTEL tables for common query patterns.
     // These are idempotent (IF NOT EXISTS) and dramatically reduce scan time
     // by letting ClickHouse skip data granules that don't match our filters.
@@ -1477,6 +1501,186 @@ export class TelemetryService implements OnModuleDestroy {
         daily: [],
         assumptions: { developerHourlyRate: hourlyRate, aiLineTimeEstimateSeconds: secsPerLine, currency },
       };
+    }
+  }
+
+  // ── GitHub PR sync & DORA metrics ──
+
+  async insertGitHubPRs(
+    organizationId: string,
+    repo: string,
+    teamId: string,
+    prs: Array<{
+      number: number;
+      title: string;
+      author: { login: string };
+      createdAt: string;
+      mergedAt: string;
+      url: string;
+      labels: string[];
+      body: string;
+    }>,
+  ): Promise<void> {
+    if (prs.length === 0) return;
+
+    const values = prs.map((pr) => ({
+      organization_id: organizationId,
+      repo,
+      team_id: teamId,
+      pr_number: pr.number,
+      title: pr.title,
+      author: pr.author.login,
+      created_at: TelemetryService.dt(pr.createdAt),
+      merged_at: TelemetryService.dt(pr.mergedAt),
+      url: pr.url,
+      labels: pr.labels,
+      has_ai_coauthor: (pr.body?.includes('Co-Authored-By: Claude') || pr.title?.toLowerCase().includes('[ai]')) ? 1 : 0,
+    }));
+
+    try {
+      await this.client.insert({
+        table: 'github_pull_requests',
+        values,
+        format: 'JSONEachRow',
+      });
+      this.logger.log(`Inserted ${prs.length} PRs for ${repo}`);
+    } catch (err) {
+      this.logger.warn(`Failed to insert GitHub PRs for ${repo}: ${err}`);
+    }
+  }
+
+  async getDORAMetrics(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    teamId?: string,
+  ): Promise<{
+    deploymentFrequency: { avgPerWeek: number; trend: Array<{ week: string; deployments: number }>; rating: string } | null;
+    leadTimeForChanges: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null;
+    changeFailureRate: null;
+    meanTimeToRestore: null;
+  }> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) {
+        dateFilter += ` AND merged_at >= {startDate: DateTime64(3)}`;
+        params.startDate = TelemetryService.dt(startDate);
+      }
+      if (endDate) {
+        dateFilter += ` AND merged_at <= {endDate: DateTime64(3)}`;
+        params.endDate = TelemetryService.dt(endDate);
+      }
+      const teamFilter = teamId ? ` AND team_id = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
+
+      // Deployment frequency: merged PRs per week
+      const freqQuery = `
+        SELECT
+          toStartOfWeek(merged_at) AS week,
+          count(*) AS deployments
+        FROM github_pull_requests FINAL
+        WHERE organization_id = {organizationId: String}
+          ${dateFilter}
+          ${teamFilter}
+        GROUP BY week
+        ORDER BY week
+      `;
+
+      const freqResult = await this.client.query({
+        query: freqQuery,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const freqRows = await freqResult.json<{ week: string; deployments: number }>();
+
+      // Lead time: created_at → merged_at in hours
+      const leadQuery = `
+        SELECT
+          toStartOfWeek(merged_at) AS week,
+          quantile(0.5)(dateDiff('second', created_at, merged_at) / 3600.0) AS medianHours,
+          quantile(0.95)(dateDiff('second', created_at, merged_at) / 3600.0) AS p95Hours
+        FROM github_pull_requests FINAL
+        WHERE organization_id = {organizationId: String}
+          ${dateFilter}
+          ${teamFilter}
+        GROUP BY week
+        ORDER BY week
+      `;
+
+      const leadResult = await this.client.query({
+        query: leadQuery,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const leadRows = await leadResult.json<{ week: string; medianHours: number; p95Hours: number }>();
+
+      // Overall aggregates
+      const aggQuery = `
+        SELECT
+          count(*) AS totalPRs,
+          dateDiff('day', min(merged_at), max(merged_at)) AS daySpan,
+          quantile(0.5)(dateDiff('second', created_at, merged_at) / 3600.0) AS overallMedianHours,
+          quantile(0.95)(dateDiff('second', created_at, merged_at) / 3600.0) AS overallP95Hours
+        FROM github_pull_requests FINAL
+        WHERE organization_id = {organizationId: String}
+          ${dateFilter}
+          ${teamFilter}
+      `;
+
+      const aggResult = await this.client.query({
+        query: aggQuery,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const [agg] = await aggResult.json<{
+        totalPRs: number;
+        daySpan: number;
+        overallMedianHours: number;
+        overallP95Hours: number;
+      }>();
+
+      if (!agg || Number(agg.totalPRs) === 0) {
+        return { deploymentFrequency: null, leadTimeForChanges: null, changeFailureRate: null, meanTimeToRestore: null };
+      }
+
+      const weeks = Math.max(Number(agg.daySpan) / 7, 1);
+      const avgPerWeek = Number(agg.totalPRs) / weeks;
+      const medianHours = Number(agg.overallMedianHours);
+      const p95Hours = Number(agg.overallP95Hours);
+
+      // DORA ratings per industry benchmarks
+      const rateDeployFreq = (avg: number): string => {
+        if (avg >= 7) return 'elite';
+        if (avg >= 1) return 'high';
+        if (avg >= 0.25) return 'medium'; // ~1/month
+        return 'low';
+      };
+      const rateLeadTime = (hours: number): string => {
+        if (hours <= 1) return 'elite';
+        if (hours <= 24) return 'high';
+        if (hours <= 168) return 'medium'; // 1 week
+        return 'low';
+      };
+
+      return {
+        deploymentFrequency: {
+          avgPerWeek: Math.round(avgPerWeek * 10) / 10,
+          trend: freqRows.map((r) => ({ week: r.week, deployments: Number(r.deployments) })),
+          rating: rateDeployFreq(avgPerWeek),
+        },
+        leadTimeForChanges: {
+          medianHours: Math.round(medianHours * 10) / 10,
+          p95Hours: Math.round(p95Hours * 10) / 10,
+          trend: leadRows.map((r) => ({ week: r.week, medianHours: Math.round(Number(r.medianHours) * 10) / 10 })),
+          rating: rateLeadTime(medianHours),
+        },
+        changeFailureRate: null,
+        meanTimeToRestore: null,
+      };
+    } catch (err) {
+      this.logger.warn(`Failed to get DORA metrics: ${err}`);
+      return { deploymentFrequency: null, leadTimeForChanges: null, changeFailureRate: null, meanTimeToRestore: null };
     }
   }
 }

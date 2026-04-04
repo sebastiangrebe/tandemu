@@ -139,3 +139,23 @@ export interface InsightsMetrics {
     readonly currency: string;
   };
 }
+
+export interface DORADeploymentFrequency {
+  readonly avgPerWeek: number;
+  readonly trend: ReadonlyArray<{ readonly week: string; readonly deployments: number }>;
+  readonly rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORALeadTime {
+  readonly medianHours: number;
+  readonly p95Hours: number;
+  readonly trend: ReadonlyArray<{ readonly week: string; readonly medianHours: number }>;
+  readonly rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORAMetrics {
+  readonly deploymentFrequency: DORADeploymentFrequency | null;
+  readonly leadTimeForChanges: DORALeadTime | null;
+  readonly changeFailureRate: null;
+  readonly meanTimeToRestore: null;
+}
