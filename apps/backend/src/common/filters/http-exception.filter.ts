@@ -1,10 +1,4 @@
-import {
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
-import type { ArgumentsHost } from '@nestjs/common';
+import * as common from '@nestjs/common';
 import { SentryExceptionCaptured } from '@sentry/nestjs';
 import type { Response } from 'express';
 import type { ApiError } from '@tandemu/types';
@@ -15,23 +9,23 @@ interface ExceptionResponse {
   statusCode?: number;
 }
 
-@Catch()
-export class HttpExceptionFilter implements ExceptionFilter {
+@common.Catch()
+export class HttpExceptionFilter implements common.ExceptionFilter {
   @SentryExceptionCaptured()
-  catch(exception: unknown, host: ArgumentsHost): void {
+  catch(exception: unknown, host: common.ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
-    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let status = common.HttpStatus.INTERNAL_SERVER_ERROR;
     let errorResponse: ApiError;
 
-    if (exception instanceof HttpException) {
+    if (exception instanceof common.HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse() as string | ExceptionResponse;
 
       if (typeof exceptionResponse === 'string') {
         errorResponse = {
-          code: HttpStatus[status] ?? 'UNKNOWN_ERROR',
+          code: common.HttpStatus[status] ?? 'UNKNOWN_ERROR',
           message: exceptionResponse,
         };
       } else {
@@ -40,7 +34,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
           : exceptionResponse.message ?? exception.message;
 
         errorResponse = {
-          code: exceptionResponse.error ?? HttpStatus[status] ?? 'UNKNOWN_ERROR',
+          code: exceptionResponse.error ?? common.HttpStatus[status] ?? 'UNKNOWN_ERROR',
           message,
           details: typeof exceptionResponse === 'object' ? (exceptionResponse as unknown as Record<string, unknown>) : undefined,
         };
