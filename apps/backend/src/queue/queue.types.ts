@@ -74,6 +74,20 @@ export type TelemetryJobData =
   | OtlpMetricsJob
   | GitSelfHealJob;
 
+// ── github-sync queue ──
+
+export interface GitHubSyncJob {
+  readonly type: 'github-sync';
+  readonly organizationId: string;
+  readonly integrationId: string;
+  readonly repo: string;
+  readonly teamId: string;
+  readonly token: string;
+  readonly since?: string;
+}
+
+export type GitHubSyncJobData = GitHubSyncJob;
+
 // ── email queue ──
 
 export interface InviteCreatedEmailJob {
