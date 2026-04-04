@@ -729,6 +729,7 @@ export interface DORAMetrics {
   leadTimeForChanges: DORALeadTime | null;
   changeFailureRate: null;
   meanTimeToRestore: null;
+  githubConnected: boolean;
 }
 
 export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {

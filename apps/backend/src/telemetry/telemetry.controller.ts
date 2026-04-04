@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards, forwardRef } from '@nestjs/common';
 import { TelemetryService, TimesheetEntry, ToolUsageStat } from './telemetry.service.js';
 import type { FinishTaskInput, FinishTaskResult } from './telemetry.service.js';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
@@ -7,6 +7,8 @@ import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
 import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, OrgSettings } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
+import { IntegrationsService } from '../integrations/integrations.service.js';
+import { GitHubSyncScheduler } from './github-sync.scheduler.js';
 
 @Controller('telemetry')
 @UseGuards(JwtAuthGuard, OrgRequiredGuard)
@@ -14,6 +16,8 @@ export class TelemetryController {
   constructor(
     private readonly telemetryService: TelemetryService,
     private readonly db: DatabaseService,
+    @Inject(forwardRef(() => IntegrationsService)) private readonly integrationsService: IntegrationsService,
+    @Inject(forwardRef(() => GitHubSyncScheduler)) private readonly gitHubSyncScheduler: GitHubSyncScheduler,
   ) {}
 
   @Get('health')
@@ -260,6 +264,26 @@ export class TelemetryController {
     @Query('endDate') endDate?: string,
     @Query('teamId') teamId?: string,
   ) {
-    return this.telemetryService.getDORAMetrics(user.organizationId, startDate, endDate, teamId);
+    const metrics = await this.telemetryService.getDORAMetrics(user.organizationId, startDate, endDate, teamId);
+
+    // Check if GitHub integration exists so frontend can show the right empty state
+    let githubConnected = false;
+    try {
+      await this.integrationsService.findOne(user.organizationId, 'github');
+      githubConnected = true;
+    } catch {
+      // Not found — no GitHub integration
+    }
+
+    return { ...metrics, githubConnected };
+  }
+
+  @Post('github-sync')
+  @HttpCode(HttpStatus.OK)
+  async triggerGitHubSync(
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.gitHubSyncScheduler.triggerSync(user.organizationId);
+    return { triggered: true };
   }
 }

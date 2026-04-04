@@ -158,4 +158,5 @@ export interface DORAMetrics {
   readonly leadTimeForChanges: DORALeadTime | null;
   readonly changeFailureRate: null;
   readonly meanTimeToRestore: null;
+  readonly githubConnected: boolean;
 }

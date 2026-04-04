@@ -45,6 +45,9 @@ interface DORAMetricsCardProps {
 
 export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
   if (!data || (!data.deploymentFrequency && !data.leadTimeForChanges)) {
+    const message = data?.githubConnected
+      ? 'Syncing GitHub data — DORA metrics will appear after the first sync completes'
+      : 'Connect GitHub to see DORA metrics';
     return (
       <Card>
         <CardHeader>
@@ -52,7 +55,7 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
           <CardDescription>Software delivery performance</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-12">
-          <p className="text-sm text-muted-foreground">Connect GitHub to see DORA metrics</p>
+          <p className="text-sm text-muted-foreground">{message}</p>
         </CardContent>
       </Card>
     );
