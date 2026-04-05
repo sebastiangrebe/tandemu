@@ -1603,8 +1603,8 @@ export class TelemetryService implements OnModuleDestroy {
       const leadQuery = `
         SELECT
           toStartOfWeek(merged_at) AS week,
-          quantile(0.5)(dateDiff('second', created_at, merged_at) / 3600.0) AS medianHours,
-          quantile(0.95)(dateDiff('second', created_at, merged_at) / 3600.0) AS p95Hours
+          quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+          quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS p95Hours
         FROM github_pull_requests FINAL
         WHERE organization_id = {organizationId: String}
           ${dateFilter}
@@ -1625,8 +1625,8 @@ export class TelemetryService implements OnModuleDestroy {
         SELECT
           count(*) AS totalPRs,
           dateDiff('day', min(merged_at), max(merged_at)) AS daySpan,
-          quantile(0.5)(dateDiff('second', created_at, merged_at) / 3600.0) AS overallMedianHours,
-          quantile(0.95)(dateDiff('second', created_at, merged_at) / 3600.0) AS overallP95Hours
+          quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallMedianHours,
+          quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallP95Hours
         FROM github_pull_requests FINAL
         WHERE organization_id = {organizationId: String}
           ${dateFilter}
