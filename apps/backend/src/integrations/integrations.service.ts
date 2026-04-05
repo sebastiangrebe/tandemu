@@ -245,7 +245,7 @@ export class IntegrationsService {
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && (error as { code: string }).code === '23505') {
         throw new ConflictException(
-          'A project mapping already exists for this team and integration',
+          'This project is already mapped to this team',
         );
       }
       throw error;
