@@ -90,7 +90,7 @@ export default (): AppConfig => {
     },
     email: {
       resendApiKey,
-      fromAddress: process.env['EMAIL_FROM'] ?? 'Tandemu <notifications@tandemu.com>',
+      fromAddress: process.env['EMAIL_FROM'] ?? 'Tandemu <notifications@tandemu.dev>',
       enabled: !!resendApiKey,
     },
     sentry: {
