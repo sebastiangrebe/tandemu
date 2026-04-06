@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as Sentry from '@sentry/nestjs';
 import type { MemoryMetadata } from '@tandemu/types';
 
 @Injectable()
@@ -131,6 +132,7 @@ export class MemoryService {
       });
     } catch (err) {
       this.logger.warn(`Failed to create org memory: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-create-org' } });
     }
   }
 
@@ -199,6 +201,7 @@ export class MemoryService {
       return [];
     } catch (err) {
       this.logger.warn(`Failed to search org memories: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-search-org' } });
       return [];
     }
   }
@@ -284,6 +287,7 @@ export class MemoryService {
       });
     } catch (err) {
       this.logger.warn(`Failed to promote memory ${memoryId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-promote' }, extra: { memoryId } });
     }
   }
 
@@ -294,6 +298,7 @@ export class MemoryService {
       });
     } catch (err) {
       this.logger.warn(`Failed to delete memory ${memoryId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-delete' }, extra: { memoryId } });
     }
   }
 
@@ -346,6 +351,7 @@ export class MemoryService {
         reassigned++;
       } catch (err) {
         this.logger.warn(`Failed to reassign memory ${mem.id}: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'memory-reassign' }, extra: { memoryId: String(mem.id) } });
       }
     }
     return reassigned;

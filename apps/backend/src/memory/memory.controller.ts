@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { createHash } from 'crypto';
+import * as Sentry from '@sentry/nestjs';
 import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { CurrentUser, Roles } from '../auth/auth.decorator.js';
@@ -118,6 +119,7 @@ export class MemoryController {
       });
     } catch (err) {
       this.logger.error(`Failed to connect to upstream MCP: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-mcp-upstream' } });
       res.status(502).json({ error: 'Failed to connect to memory server' });
       return;
     }
@@ -201,6 +203,7 @@ export class MemoryController {
       });
     } catch (err) {
       this.logger.error(`Failed to connect to upstream MCP: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-sse-upstream' } });
       res.write(`event: error\ndata: {"error":"Failed to connect to memory server"}\n\n`);
       res.end();
       return;
@@ -249,6 +252,7 @@ export class MemoryController {
       // Client disconnected or upstream closed — this is normal for SSE
       if ((err as { name?: string }).name !== 'AbortError') {
         this.logger.warn(`SSE proxy stream ended: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'memory-sse-stream' } });
       }
     } finally {
       req.off('close', cleanup);
@@ -547,6 +551,7 @@ export class MemoryController {
       }
     } catch (err) {
       this.logger.error(`Dual-scope search failed: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-dual-scope-search' } });
       res.status(502).json({ error: 'Memory search failed' });
     }
   }

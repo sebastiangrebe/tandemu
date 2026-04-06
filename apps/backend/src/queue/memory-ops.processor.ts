@@ -1,6 +1,7 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import * as Sentry from '@sentry/nestjs';
 import { SentryProcessor } from './sentry-processor.js';
 import { MemoryService } from '../memory/memory.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
@@ -126,6 +127,7 @@ export class MemoryOpsProcessor extends SentryProcessor {
       }
     } catch (err) {
       this.logger.warn(`Failed to cleanup memories for user ${userId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-cleanup-user' }, extra: { userId } });
     }
   }
 
@@ -154,6 +156,7 @@ export class MemoryOpsProcessor extends SentryProcessor {
         }
       } catch (err) {
         this.logger.warn(`Failed to clean stale drafts for org ${orgId}: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'memory-clean-stale-drafts' }, extra: { orgId } });
       }
     }
   }

@@ -5,6 +5,7 @@ import type { Queue } from 'bullmq';
 import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { randomBytes } from 'crypto';
+import * as Sentry from '@sentry/nestjs';
 import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, InsightsDaily, OrgSettings } from '@tandemu/types';
 import { MemoryService } from '../memory/memory.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
@@ -243,6 +244,7 @@ export class TelemetryService implements OnModuleDestroy {
       }
     } catch (err) {
       this.logger.warn('Failed to query native OTEL for AI attribution, falling back to Co-Authored-By', err);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-native-otel-attribution' } });
     }
 
     // Step 2: Fallback to Co-Authored-By commit analysis
@@ -455,6 +457,7 @@ export class TelemetryService implements OnModuleDestroy {
         }
       } catch (err) {
         this.logger.warn(`Self-heal failed for folder ${folder}: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'telemetry-git-self-heal' }, extra: { folder } });
       }
     }
 
@@ -582,7 +585,9 @@ export class TelemetryService implements OnModuleDestroy {
         periodStart: row.periodStart,
         periodEnd: row.periodEnd,
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get AI vs manual ratio: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-ai-ratio' } });
       return [];
     }
   }
@@ -641,7 +646,9 @@ export class TelemetryService implements OnModuleDestroy {
         errorCount: Number(row.error_count),
         timestamp: row.timestamp,
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get friction heatmap: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-friction' } });
       return [];
     }
   }
@@ -662,7 +669,9 @@ export class TelemetryService implements OnModuleDestroy {
       });
       const rows = await resultSet.json<{ repo: string }>();
       return rows.map((r) => r.repo);
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get known repos: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-known-repos' } });
       return [];
     }
   }
@@ -722,7 +731,9 @@ export class TelemetryService implements OnModuleDestroy {
         activeMinutes: Math.round(Number(row.activeMinutes)),
         sessions: Number(row.sessions),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get timesheets: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-timesheets' } });
       return [];
     }
   }
@@ -783,7 +794,9 @@ export class TelemetryService implements OnModuleDestroy {
         aiLines: Number(row.aiLines),
         manualLines: Number(row.manualLines),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get developer stats: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-developer-stats' } });
       return [];
     }
   }
@@ -838,7 +851,9 @@ export class TelemetryService implements OnModuleDestroy {
         avgDurationHours: Math.round(Number(row.avgDurationHours) * 10) / 10,
         taskCount: Number(row.taskCount),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get task velocity: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-task-velocity' } });
       return [];
     }
   }
@@ -887,7 +902,9 @@ export class TelemetryService implements OnModuleDestroy {
         taskCount: Number(r.task_count),
         developerCount: Number(r.developer_count),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get hot files: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-hot-files' } });
       return [];
     }
   }
@@ -930,7 +947,9 @@ export class TelemetryService implements OnModuleDestroy {
         taskCount: Number(r.task_count),
         totalHours: Math.round(Number(r.total_hours) * 10) / 10,
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get investment allocation: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-investment-allocation' } });
       return [];
     }
   }
@@ -975,7 +994,9 @@ export class TelemetryService implements OnModuleDestroy {
         repo: r.repo || '',
         aiTouchCount: Number(r.ai_touch_count),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get AI effectiveness: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-ai-effectiveness' } });
       return [];
     }
   }
@@ -1016,7 +1037,9 @@ export class TelemetryService implements OnModuleDestroy {
         date: r.date,
         totalCost: Math.round(Number(r.total_cost) * 100) / 100,
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get cost metrics: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-cost-metrics' } });
       return [];
     }
   }
@@ -1058,7 +1081,9 @@ export class TelemetryService implements OnModuleDestroy {
         model: r.model,
         totalTokens: Number(r.total_tokens),
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get token usage: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-token-usage' } });
       return [];
     }
   }
@@ -1123,7 +1148,9 @@ export class TelemetryService implements OnModuleDestroy {
           successRate: total > 0 ? Math.round((success / total) * 100) : 0,
         };
       });
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get tool usage stats: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-tool-usage' } });
       return [];
     }
   }
@@ -1195,7 +1222,9 @@ export class TelemetryService implements OnModuleDestroy {
         errorCount: Number(row.error_count),
         timestamp: row.timestamp,
       }));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get native friction: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-native-friction' } });
       return [];
     }
   }
@@ -1223,7 +1252,9 @@ export class TelemetryService implements OnModuleDestroy {
       });
       const rows = await resultSet.json<{ memory_id: string }>();
       return new Set(rows.map((r) => r.memory_id));
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get accessed memory IDs: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-accessed-memory-ids' } });
       return new Set();
     }
   }
@@ -1250,6 +1281,7 @@ export class TelemetryService implements OnModuleDestroy {
       });
     } catch (err) {
       this.logger.warn(`Failed to log memory access: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-log-memory-access' } });
     }
   }
 
@@ -1294,7 +1326,9 @@ export class TelemetryService implements OnModuleDestroy {
         : [];
 
       return { topUsed, leastUsed, totalTracked: rows.length };
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Failed to get usage insights: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-usage-insights' } });
       return { topUsed: [], leastUsed: [], totalTracked: 0 };
     }
   }
@@ -1496,6 +1530,7 @@ export class TelemetryService implements OnModuleDestroy {
       };
     } catch (err) {
       this.logger.warn(`Failed to get insights metrics: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-insights-metrics' } });
       return {
         totalAILines: 0,
         totalManualLines: 0,
@@ -1556,6 +1591,7 @@ export class TelemetryService implements OnModuleDestroy {
       this.logger.log(`Inserted ${prs.length} PRs for ${repo}`);
     } catch (err) {
       this.logger.warn(`Failed to insert GitHub PRs for ${repo}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-insert-github-prs' }, extra: { repo } });
     }
   }
 
@@ -1690,6 +1726,7 @@ export class TelemetryService implements OnModuleDestroy {
       };
     } catch (err) {
       this.logger.warn(`Failed to get DORA metrics: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-dora-metrics' } });
       return { deploymentFrequency: null, leadTimeForChanges: null, changeFailureRate: null, meanTimeToRestore: null };
     }
   }

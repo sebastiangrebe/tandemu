@@ -2,7 +2,9 @@ import {
   BadGatewayException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import type { Task, TaskStatus, TaskPriority } from '@tandemu/types';
 import type {
   TaskProvider,
@@ -126,6 +128,8 @@ function mapTask(task: AsanaTask, externalProjectId: string): Task {
 
 const TASK_OPT_FIELDS = 'gid,name,notes,completed,assignee,assignee.email,assignee.name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name,custom_fields,tags.name,modified_at,permalink_url,parent,num_subtasks';
 
+const logger = new Logger('AsanaProvider');
+
 export class AsanaProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
     const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone, config } = params;
@@ -151,8 +155,10 @@ export class AsanaProvider implements TaskProvider {
         const incompleteGids = new Set(tasks.map((t) => t.gid));
         const newCompleted = completedTasks.filter((t) => t.completed && !incompleteGids.has(t.gid));
         tasks = [...tasks, ...newCompleted];
-      } catch {
+      } catch (err) {
         // Non-critical — incomplete tasks are enough
+        logger.warn(`Failed to fetch completed Asana tasks: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'provider-asana-completed-tasks' } });
       }
     }
 
@@ -250,8 +256,10 @@ export class AsanaProvider implements TaskProvider {
             });
           }
         }
-      } catch {
-        // Priority field may not exist — silently skip
+      } catch (err) {
+        // Priority field may not exist
+        logger.warn(`Failed to update Asana priority field: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'provider-asana-priority-update' } });
       }
     }
   }
@@ -335,7 +343,9 @@ export class AsanaProvider implements TaskProvider {
         id: s.gid,
         name: s.name,
       }));
-    } catch {
+    } catch (err) {
+      logger.warn(`Failed to fetch Asana sub-projects for ${projectGid}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'provider-asana-sub-projects' }, extra: { projectGid } });
       return [];
     }
   }

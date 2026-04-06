@@ -1,4 +1,5 @@
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { IntegrationsController } from './integrations.controller.js';
 import { IntegrationOAuthController } from './integration-oauth.controller.js';
 import { TasksController } from './tasks.controller.js';
@@ -29,6 +30,7 @@ export class IntegrationsModule implements OnModuleInit {
       }
     } catch (err) {
       this.logger.warn(`Token re-encryption on startup failed: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'token-reencryption-startup' } });
     }
   }
 }
