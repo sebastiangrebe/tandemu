@@ -10,7 +10,7 @@ export class EmailService {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('email.resendApiKey', '');
-    this.from = this.configService.get<string>('email.fromAddress', 'Tandemu <notifications@tandemu.com>');
+    this.from = this.configService.get<string>('email.fromAddress', 'Tandemu <notifications@tandemu.dev>');
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
