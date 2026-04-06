@@ -152,6 +152,11 @@ export async function getOrganizations(): Promise<Organization[]> {
   return fetchApi<Organization[]>("/api/organizations");
 }
 
+export async function checkSlugAvailability(slug: string): Promise<boolean> {
+  const result = await fetchApi<{ available: boolean }>(`/api/organizations/check-slug/${encodeURIComponent(slug)}`);
+  return result.available;
+}
+
 export async function getOrganization(id: string): Promise<Organization> {
   return fetchApi<Organization>(`/api/organizations/${id}`);
 }

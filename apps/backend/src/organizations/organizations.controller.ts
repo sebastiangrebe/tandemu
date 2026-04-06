@@ -49,6 +49,15 @@ export class OrganizationsController {
     return this.organizationsService.findAll(user.userId);
   }
 
+  // Any authenticated user can check slug availability
+  @Get('check-slug/:slug')
+  async checkSlug(
+    @Param('slug') slug: string,
+  ): Promise<{ available: boolean }> {
+    const available = await this.organizationsService.isSlugAvailable(slug);
+    return { available };
+  }
+
   // Any member can view org details
   @Get(':id')
   async findById(
