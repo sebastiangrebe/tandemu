@@ -6,7 +6,7 @@
 set -e
 
 # Load config
-source ~/.claude/lib/tandemu-env.sh 2>/dev/null || exit 0
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || exit 0
 
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 START_MARKER="<!-- tandemu:personality:start -->"
@@ -52,15 +52,16 @@ fi
 if echo "$EXISTING" | grep -qF "$START_MARKER"; then
   # Replace existing section using python for reliable multiline replacement
   python3 -c "
-import re, sys
-existing = open('$CLAUDE_MD').read()
+import re, sys, os
+claude_md = os.path.expandvars('$CLAUDE_MD').replace('\\\\', '/')
+existing = open(claude_md).read()
 pattern = re.escape('$START_MARKER') + r'.*?' + re.escape('$END_MARKER')
 replacement = sys.stdin.read().strip()
 updated = re.sub(pattern, replacement, existing, flags=re.DOTALL)
 # Remove empty lines left behind if replacement is empty
 if not replacement:
     updated = re.sub(r'\n{3,}', '\n\n', updated)
-open('$CLAUDE_MD', 'w').write(updated)
+open(claude_md, 'w').write(updated)
 " <<EOF
 $NEW_BLOCK
 EOF
@@ -82,7 +83,7 @@ if [ -n "$REPO_NAME" ]; then
     echo "$INDEX"
 
     # Also persist to project memory dir
-    PROJECT_DIR=$(pwd | sed "s/\//-/g")
+    PROJECT_DIR=$(pwd | sed 's/[\/:\\]/-/g')
     MEMORY_DIR="$HOME/.claude/projects/${PROJECT_DIR}/memory"
     mkdir -p "$MEMORY_DIR"
     echo "$INDEX" > "$MEMORY_DIR/tandemu-index.md"

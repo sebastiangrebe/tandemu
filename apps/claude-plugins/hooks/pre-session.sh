@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PLUGIN_DIR="$(dirname "${SCRIPT_DIR}")"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 
@@ -52,7 +52,7 @@ fi
 export TANDEMU_TELEMETRY_ENABLED="${TELEMETRY_ENABLED}"
 export TANDEMU_TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-https://telemetry.tandemu.dev:4317}"
 export TANDEMU_ORG_ID="${ORG_ID}"
-export TANDEMU_SESSION_ID="${TANDEMU_SESSION_ID:-$(uuidgen 2>/dev/null || date +%s)}"
+export TANDEMU_SESSION_ID="${TANDEMU_SESSION_ID:-$(uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || date +%s)}"
 export TANDEMU_SESSION_START="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 echo ""
