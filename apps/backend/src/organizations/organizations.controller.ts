@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service.js';
@@ -50,9 +51,9 @@ export class OrganizationsController {
   }
 
   // Any authenticated user can check slug availability
-  @Get('check-slug/:slug')
+  @Get('check-slug')
   async checkSlug(
-    @Param('slug') slug: string,
+    @Query('slug') slug: string,
   ): Promise<{ available: boolean }> {
     const available = await this.organizationsService.isSlugAvailable(slug);
     return { available };
