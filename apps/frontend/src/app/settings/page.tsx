@@ -235,7 +235,7 @@ function SettingsPageContent() {
       {/* ROI & Memory Settings */}
       {org && (
         <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Lightbulb className="h-5 w-5 text-muted-foreground" />
@@ -303,7 +303,7 @@ function SettingsPageContent() {
           </CardFooter>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-muted-foreground" />
@@ -313,7 +313,7 @@ function SettingsPageContent() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex-1 space-y-4">
             <div className="max-w-xs space-y-2">
               <label className="text-sm font-medium">Draft Retention (days)</label>
               <Input
