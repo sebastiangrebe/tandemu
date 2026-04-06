@@ -186,8 +186,8 @@ export default function InsightsPage() {
 
             {/* Charts */}
             <div className="grid gap-4 md:grid-cols-2">
-              <ThroughputChart data={data.daily} />
-              <CostEfficiencyChart data={data.daily} />
+              <ThroughputChart data={data.daily} startDate={startDate} endDate={endDate} />
+              <CostEfficiencyChart data={data.daily} startDate={startDate} endDate={endDate} />
             </div>
 
             <TokenUsageChart data={tokenData} />
