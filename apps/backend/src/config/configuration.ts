@@ -83,7 +83,7 @@ export default (): AppConfig => {
     memory: {
       mem0ApiKey: process.env['MEM0_API_KEY'] ?? '',
       openmemoryHost: process.env['OPENMEMORY_HOST'] ?? 'localhost',
-      openmemoryPort: parseInt(process.env['OPENMEMORY_PORT'] ?? '8080', 10),
+      openmemoryPort: parseInt(process.env['OPENMEMORY_PORT'] ?? '8000', 10),
     },
     encryption: {
       key: process.env['ENCRYPTION_KEY'] ?? '',

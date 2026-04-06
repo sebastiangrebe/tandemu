@@ -19,7 +19,7 @@ export class MemoryService {
   constructor(private readonly configService: ConfigService) {
     this.mem0ApiKey = this.configService.get<string>('memory.mem0ApiKey', '');
     this.mem0OssHost = this.configService.get<string>('memory.openmemoryHost', 'localhost');
-    this.mem0OssPort = this.configService.get<number>('memory.openmemoryPort', 8080);
+    this.mem0OssPort = this.configService.get<number>('memory.openmemoryPort', 8000);
 
     this.logger.log(`Memory provider: ${this.isMem0Cloud ? 'Mem0 Cloud' : 'mem0 OSS'} (key ${this.mem0ApiKey ? 'present' : 'MISSING'})`);
   }
