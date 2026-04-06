@@ -29,9 +29,7 @@ export class SetupController {
     const host = req.headers['x-forwarded-host'] ?? req.get('host');
     const baseUrl = `${proto}://${host}`;
 
-    const memory = this.memoryService.isMem0Cloud
-      ? { type: 'http', url: `${baseUrl}/api/memory/mcp` }
-      : { type: 'sse', url: `${baseUrl}/api/memory/sse` };
+    const memory = { type: 'http', url: `${baseUrl}/api/memory/mcp` };
 
     // Fetch the org's ingestion key for OTEL authentication
     let ingestionKey = '';
