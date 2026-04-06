@@ -153,11 +153,28 @@ export interface DORALeadTime {
   readonly rating: 'elite' | 'high' | 'medium' | 'low';
 }
 
+export interface DORAChangeFailureRate {
+  readonly rate: number;
+  readonly failedDeploys: number;
+  readonly totalDeploys: number;
+  readonly trend: ReadonlyArray<{ readonly week: string; readonly rate: number }>;
+  readonly rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORAMeanTimeToRestore {
+  readonly medianHours: number;
+  readonly p95Hours: number;
+  readonly trend: ReadonlyArray<{ readonly week: string; readonly medianHours: number }>;
+  readonly rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
 export interface DORAMetrics {
   readonly deploymentFrequency: DORADeploymentFrequency | null;
   readonly leadTimeForChanges: DORALeadTime | null;
-  readonly changeFailureRate: null;
-  readonly meanTimeToRestore: null;
+  readonly changeFailureRate: DORAChangeFailureRate | null;
+  readonly meanTimeToRestore: DORAMeanTimeToRestore | null;
+  readonly dataSource: 'deployments' | 'pull_requests';
   readonly githubConnected: boolean;
   readonly githubReposMapped: boolean;
+  readonly incidentProviderConnected: boolean;
 }

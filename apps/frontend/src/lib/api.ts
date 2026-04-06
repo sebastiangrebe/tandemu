@@ -724,13 +724,30 @@ export interface DORALeadTime {
   rating: 'elite' | 'high' | 'medium' | 'low';
 }
 
+export interface DORAChangeFailureRate {
+  rate: number;
+  failedDeploys: number;
+  totalDeploys: number;
+  trend: Array<{ week: string; rate: number }>;
+  rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface DORAMeanTimeToRestore {
+  medianHours: number;
+  p95Hours: number;
+  trend: Array<{ week: string; medianHours: number }>;
+  rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
 export interface DORAMetrics {
   deploymentFrequency: DORADeploymentFrequency | null;
   leadTimeForChanges: DORALeadTime | null;
-  changeFailureRate: null;
-  meanTimeToRestore: null;
+  changeFailureRate: DORAChangeFailureRate | null;
+  meanTimeToRestore: DORAMeanTimeToRestore | null;
+  dataSource: 'deployments' | 'pull_requests';
   githubConnected: boolean;
   githubReposMapped: boolean;
+  incidentProviderConnected: boolean;
 }
 
 export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {

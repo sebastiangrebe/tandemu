@@ -88,6 +88,24 @@ export interface GitHubSyncJob {
 
 export type GitHubSyncJobData = GitHubSyncJob;
 
+// ── incident-sync queue ──
+
+export interface IncidentSyncJob {
+  readonly type: 'incident-sync';
+  readonly organizationId: string;
+  readonly provider: 'pagerduty' | 'opsgenie';
+  readonly teamId: string;
+  readonly token: string;
+  readonly since?: string;
+  readonly config: Record<string, unknown>;
+}
+
+export interface IncidentSyncTriggerJob {
+  readonly type: 'incident-sync-trigger';
+}
+
+export type IncidentSyncJobData = IncidentSyncJob | IncidentSyncTriggerJob;
+
 // ── email queue ──
 
 export interface InviteCreatedEmailJob {

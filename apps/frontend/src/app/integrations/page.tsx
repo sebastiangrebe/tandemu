@@ -65,6 +65,8 @@ function ProviderIcon({ providerId, size = 20 }: { providerId: string; size?: nu
     case 'clickup': return <SiClickup size={size} color="#7B68EE" />;
     case 'asana': return <SiAsana size={size} color="#F06A6A" />;
     case 'monday': return <Image src="/monday.svg" alt="Monday.com" width={size} height={size} />;
+    case 'pagerduty': return <span className="text-[#06AC38] font-bold" style={{ fontSize: size }}>PD</span>;
+    case 'opsgenie': return <span className="text-[#2684FF] font-bold" style={{ fontSize: size }}>OG</span>;
     default: return <Plug size={size} />;
   }
 }
@@ -136,6 +138,28 @@ const PROVIDERS = [
     workspaceRequired: false,
     helpText: 'Create an API token in your Monday.com admin panel under Developers',
     helpUrl: 'https://monday.com/developers/apps',
+  },
+  {
+    id: 'pagerduty',
+    name: 'PagerDuty',
+    description: 'Import incidents for DORA metrics (Change Failure Rate, Mean Time to Restore).',
+    capabilities: ['incidents'] as string[],
+    workspaceLabel: 'Subdomain (optional)',
+    workspacePlaceholder: 'mycompany',
+    workspaceRequired: false,
+    helpText: 'Create a read-only API key at your-subdomain.pagerduty.com under Integrations → API Access Keys',
+    helpUrl: 'https://support.pagerduty.com/docs/api-access-keys',
+  },
+  {
+    id: 'opsgenie',
+    name: 'Opsgenie',
+    description: 'Import incidents and alerts for DORA metrics (Change Failure Rate, Mean Time to Restore).',
+    capabilities: ['incidents'] as string[],
+    workspaceLabel: 'Region',
+    workspacePlaceholder: 'us or eu',
+    workspaceRequired: false,
+    helpText: 'Create an API integration key in Opsgenie Settings → API key management',
+    helpUrl: 'https://support.atlassian.com/opsgenie/docs/api-key-management/',
   },
 ] as const;
 

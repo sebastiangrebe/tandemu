@@ -130,7 +130,7 @@ export class IntegrationsController {
   ) {
     const integration = await this.integrationsService.findOne(user.organizationId, provider);
     const providerImpl = getProvider(provider);
-    if (!providerImpl.fetchSubProjects) return [];
+    if (!providerImpl?.fetchSubProjects) return [];
     return providerImpl.fetchSubProjects(integration.access_token, projectId, {
       externalWorkspaceId: integration.external_workspace_id,
       ...integration.config,

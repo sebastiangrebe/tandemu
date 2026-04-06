@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { AXIS_TICK, AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
-import { Clock, GitPullRequest, AlertTriangle, Wrench } from 'lucide-react';
+import { AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
+import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, Server } from 'lucide-react';
 import type { DORAMetrics } from '@/lib/api';
 
 const RATING_COLORS: Record<string, string> = {
@@ -33,7 +33,7 @@ function RatingBadge({ rating }: { rating: string }) {
   );
 }
 
-function formatLeadTime(hours: number): string {
+function formatDuration(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   if (hours < 24) return `${Math.round(hours * 10) / 10}h`;
   return `${Math.round(hours / 24 * 10) / 10}d`;
@@ -66,17 +66,29 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
 
   const freq = data.deploymentFrequency;
   const lead = data.leadTimeForChanges;
+  const cfr = data.changeFailureRate;
+  const mttr = data.meanTimeToRestore;
 
   const chartData = freq?.trend.map((d) => ({
     week: new Date(d.week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     deployments: d.deployments,
   })) ?? [];
 
+  const sourceLabel = data.dataSource === 'deployments' ? 'GitHub Deployments' : 'PR merges';
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>DORA Metrics</CardTitle>
-        <CardDescription>Software delivery performance from GitHub PR data</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>DORA Metrics</CardTitle>
+            <CardDescription>Software delivery performance</CardDescription>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {data.dataSource === 'deployments' ? <Rocket className="size-3" /> : <GitPullRequest className="size-3" />}
+            {sourceLabel}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Metric rows */}
@@ -106,7 +118,7 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
             </div>
             {lead ? (
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold">{formatLeadTime(lead.medianHours)}</span>
+                <span className="text-2xl font-semibold">{formatDuration(lead.medianHours)}</span>
                 <span className="text-sm text-muted-foreground">median</span>
                 <RatingBadge rating={lead.rating} />
               </div>
@@ -115,29 +127,51 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
             )}
           </div>
 
-          {/* Change Failure Rate — coming soon */}
-          <div className="space-y-1 opacity-50">
+          {/* Change Failure Rate */}
+          <div className={`space-y-1${!cfr && !data.incidentProviderConnected ? ' opacity-50' : ''}`}>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <AlertTriangle className="size-4" />
               Change Failure Rate
             </div>
-            <span className="text-xs text-muted-foreground">Coming soon (needs CI/CD)</span>
+            {cfr ? (
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-semibold">{Math.round(cfr.rate * 100)}%</span>
+                <span className="text-sm text-muted-foreground">{cfr.failedDeploys} of {cfr.totalDeploys}</span>
+                <RatingBadge rating={cfr.rating} />
+              </div>
+            ) : data.incidentProviderConnected ? (
+              <span className="text-sm text-muted-foreground">Syncing incident data...</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Connect PagerDuty or Opsgenie</span>
+            )}
           </div>
 
-          {/* MTTR — coming soon */}
-          <div className="space-y-1 opacity-50">
+          {/* Mean Time to Restore */}
+          <div className={`space-y-1${!mttr && !data.incidentProviderConnected ? ' opacity-50' : ''}`}>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Wrench className="size-4" />
               Mean Time to Restore
             </div>
-            <span className="text-xs text-muted-foreground">Coming soon (needs CI/CD)</span>
+            {mttr ? (
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-semibold">{formatDuration(mttr.medianHours)}</span>
+                <span className="text-sm text-muted-foreground">median</span>
+                <RatingBadge rating={mttr.rating} />
+              </div>
+            ) : data.incidentProviderConnected ? (
+              <span className="text-sm text-muted-foreground">Syncing incident data...</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Connect PagerDuty or Opsgenie</span>
+            )}
           </div>
         </div>
 
         {/* Deployment trend chart */}
         {chartData.length > 1 && (
           <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">PRs Merged per Week</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              {data.dataSource === 'deployments' ? 'Deployments per Week' : 'PRs Merged per Week'}
+            </p>
             <ResponsiveContainer width="100%" height={140}>
               <BarChart data={chartData} margin={{ top: 4 }}>
                 <XAxis dataKey="week" tick={AXIS_TICK_SM} axisLine={false} tickLine={false} />
@@ -146,7 +180,10 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
                   contentStyle={TOOLTIP_CONTENT_STYLE}
                   labelStyle={TOOLTIP_LABEL_STYLE}
                   itemStyle={TOOLTIP_ITEM_STYLE}
-                  formatter={(value: number) => [`${value} PRs`, 'Merged']}
+                  formatter={(value: number) => [
+                    `${value} ${data.dataSource === 'deployments' ? 'deploys' : 'PRs'}`,
+                    data.dataSource === 'deployments' ? 'Deployed' : 'Merged',
+                  ]}
                 />
                 <Bar dataKey="deployments" radius={[4, 4, 0, 0]}>
                   {chartData.map((_, i) => (
