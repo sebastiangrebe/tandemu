@@ -28,6 +28,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { MemoryService } from './memory.service.js';
 import { TasksService } from '../integrations/tasks.service.js';
+import { IntegrationsService } from '../integrations/integrations.service.js';
+import { githubFetch } from '../integrations/providers/github.provider.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { MemoryOpsJobData, TelemetryJobData } from '../queue/queue.types.js';
@@ -42,6 +44,7 @@ export class MemoryController {
   constructor(
     private readonly memoryService: MemoryService,
     private readonly tasksService: TasksService,
+    private readonly integrationsService: IntegrationsService,
     private readonly telemetryService: TelemetryService,
     private readonly authService: AuthService,
     @InjectQueue('memory-ops') private readonly memoryOpsQueue: Queue<MemoryOpsJobData>,
@@ -405,10 +408,10 @@ export class MemoryController {
           // Author always sees their own drafts
           if (metadata.author_id === user.userId) { filteredOrgMemories.push(mem); continue; }
 
-          // For other users' drafts: check if the task is finalized
+          // For other users' drafts: check if the work is finalized
           const taskId = metadata.taskId as string | undefined;
           if (taskId) {
-            const taskStatus = await this.getTaskFinalStatus(taskId, user);
+            const taskStatus = await this.getTaskFinalStatus(taskId, metadata, user);
             if (taskStatus === 'done') {
               // Promote to published — update the memory asynchronously
               metadata.status = 'published';
@@ -549,22 +552,53 @@ export class MemoryController {
    * Check task status for draft memory promotion.
    * Returns: 'done' (promote), 'cancelled' (delete), 'pending' (keep as draft)
    */
-  private async getTaskFinalStatus(taskId: string, user: RequestUser): Promise<'done' | 'cancelled' | 'pending'> {
-    const cached = this.publishedTaskCache.get(taskId);
+  private async getTaskFinalStatus(
+    taskId: string,
+    metadata: Record<string, unknown>,
+    user: RequestUser,
+  ): Promise<'done' | 'cancelled' | 'pending'> {
+    const cacheKey = metadata.prUrl ? `${taskId}:${metadata.prNumber}` : taskId;
+    const cached = this.publishedTaskCache.get(cacheKey);
     if (cached === true) return 'done';
     if (cached === false) return 'pending';
 
+    // If the org has a GitHub integration and the memory has PR info,
+    // check if the PR was actually merged (not just task marked done)
+    const repo = metadata.repo as string | undefined;
+    const prNumber = metadata.prNumber as number | undefined;
+    if (repo && prNumber) {
+      try {
+        const ghIntegration = await this.integrationsService.findOne(user.organizationId, 'github');
+        const pr = await githubFetch<{ merged: boolean; state: string }>(
+          `https://api.github.com/repos/${repo}/pulls/${prNumber}`,
+          ghIntegration.access_token,
+        );
+        if (pr.merged) {
+          this.publishedTaskCache.set(cacheKey, true);
+          return 'done';
+        }
+        if (pr.state === 'closed' && !pr.merged) {
+          return 'cancelled';
+        }
+        this.publishedTaskCache.set(cacheKey, false);
+        return 'pending';
+      } catch {
+        // No GitHub integration or API error — fall through to task status check
+      }
+    }
+
+    // Fallback: check task status from ticket system
     try {
       const tasks = await this.tasksService.getTasks(user.organizationId, {});
       const task = tasks.find((t) => t.id === taskId);
       if (task?.status === 'done') {
-        this.publishedTaskCache.set(taskId, true);
+        this.publishedTaskCache.set(cacheKey, true);
         return 'done';
       }
       if (task?.status === 'cancelled') {
         return 'cancelled';
       }
-      this.publishedTaskCache.set(taskId, false);
+      this.publishedTaskCache.set(cacheKey, false);
       return 'pending';
     } catch {
       return 'pending';
@@ -638,7 +672,7 @@ export class MemoryController {
 
         const taskId = metadata.taskId as string | undefined;
         if (taskId) {
-          const taskStatus = await this.getTaskFinalStatus(taskId, user);
+          const taskStatus = await this.getTaskFinalStatus(taskId, metadata, user);
           if (taskStatus === 'done') {
             metadata.status = 'published';
             this.memoryOpsQueue.add('mcp-tool-call', {
