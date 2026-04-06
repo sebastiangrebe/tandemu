@@ -1236,13 +1236,18 @@ export class TelemetryService implements OnModuleDestroy {
   ): Promise<void> {
     if (memoryIds.length === 0) return;
     try {
-      const values = memoryIds
-        .map((id) => `('${id.replace(/'/g, "''")}', '${organizationId}', '${userId}', '${accessType}', now())`)
-        .join(',');
-      const insertRs = await this.client.query({
-        query: `INSERT INTO memory_access_log (memory_id, organization_id, user_id, access_type, timestamp) VALUES ${values}`,
+      const now = new Date().toISOString().slice(0, 19);
+      await this.client.insert({
+        table: 'memory_access_log',
+        values: memoryIds.map((id) => ({
+          memory_id: id,
+          organization_id: organizationId,
+          user_id: userId,
+          access_type: accessType,
+          timestamp: now,
+        })),
+        format: 'JSONEachRow',
       });
-      await insertRs.text();
     } catch (err) {
       this.logger.warn(`Failed to log memory access: ${err}`);
     }
