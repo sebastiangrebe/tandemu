@@ -79,7 +79,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      OPENMEMORY_HOST: openmemory
+      OPENMEMORY_HOST: mem0
+      OPENMEMORY_PORT: 8080
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,15 +113,15 @@ services:
       retries: 5
     restart: unless-stopped
 
-  openmemory:
-    image: mem0/openmemory-mcp:latest
+  mem0:
+    image: mem0/mem0-api-server:latest
     ports:
-      - "8765:8765"
+      - "8080:8080"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MEM0_TELEMETRY: "false"
-    volumes:
-      - openmemory_data:/app/data
+      QDRANT_HOST: mem0_store
+      QDRANT_PORT: 6333
     depends_on:
       mem0_store:
         condition: service_healthy
@@ -131,4 +132,3 @@ volumes:
   clickhouse_data:
   redis_data:
   qdrant_data:
-  openmemory_data:

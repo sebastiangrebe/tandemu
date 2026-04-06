@@ -11,7 +11,6 @@ import {
   Res,
   UseGuards,
   Logger,
-  BadGatewayException,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
@@ -70,17 +69,9 @@ export class MemoryController {
     const host = req.headers['x-forwarded-host'] ?? req.get('host');
     const baseUrl = `${proto}://${host}`;
 
-    if (this.memoryService.isMem0Cloud) {
-      // Mem0 Cloud uses HTTP streamable transport
-      return {
-        type: 'http',
-        url: `${baseUrl}/api/memory/mcp`,
-      };
-    }
-    // OSS OpenMemory uses SSE transport
     return {
-      type: 'sse',
-      url: `${baseUrl}/api/memory/sse`,
+      type: 'http',
+      url: `${baseUrl}/api/memory/mcp`,
     };
   }
 
@@ -91,30 +82,61 @@ export class MemoryController {
     @Res() res: Response,
     @Body() body: unknown,
   ): Promise<void> {
+    const rpc = body as Record<string, unknown> | null;
+
+    // OSS: translate MCP tool calls → REST API calls
+    if (!this.memoryService.isMem0Cloud) {
+      if (rpc?.method === 'tools/call') {
+        const result = await this.handleMcpToolCallViaRest(rpc, user);
+        res.json({ jsonrpc: '2.0', id: rpc.id, result });
+      } else if (rpc?.method === 'initialize') {
+        res.json({
+          jsonrpc: '2.0', id: rpc.id,
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: { listChanged: false } },
+            serverInfo: { name: 'tandemu-memory', version: '1.0.0' },
+          },
+        });
+      } else if (rpc?.method === 'tools/list') {
+        res.json({
+          jsonrpc: '2.0', id: rpc.id,
+          result: {
+            tools: [
+              { name: 'add_memory', description: 'Store a new memory', inputSchema: { type: 'object', properties: { text: { type: 'string' }, user_id: { type: 'string' }, metadata: { type: 'object' } }, required: ['text'] } },
+              { name: 'search_memories', description: 'Search memories', inputSchema: { type: 'object', properties: { query: { type: 'string' }, user_id: { type: 'string' }, limit: { type: 'number' } }, required: ['query'] } },
+              { name: 'get_memories', description: 'List all memories', inputSchema: { type: 'object', properties: { user_id: { type: 'string' } } } },
+              { name: 'delete_memory', description: 'Delete a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' } }, required: ['memory_id'] } },
+              { name: 'update_memory', description: 'Update a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' }, text: { type: 'string' } }, required: ['memory_id'] } },
+            ],
+          },
+        });
+      } else {
+        // notifications/initialized, etc. — acknowledge
+        res.json({ jsonrpc: '2.0', id: rpc?.id ?? null, result: {} });
+      }
+      return;
+    }
+
+    // SaaS: proxy to Mem0 Cloud MCP endpoint
     const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
     const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
 
     // Check if this is a search/get that needs dual-scope (personal + org)
-    const rpc = body as Record<string, unknown> | null;
     const isSearch = rpc?.method === 'tools/call' && this.isSearchOrGetTool(rpc);
 
     if (isSearch) {
-      // Dual-scope search: personal (user_id) + org (user_id = orgId)
       await this.dualScopeSearch(body, user, upstreamUrl, upstreamHeaders, res);
       return;
     }
 
-    // For non-search calls: inject user_id (personal or orgId for org scope)
     const enrichedBody = await this.injectScoping(body, user.userId, user.organizationId);
 
     let upstreamResponse: globalThis.Response;
     try {
       upstreamResponse = await fetch(upstreamUrl, {
         method: 'POST',
-        headers: {
-          ...upstreamHeaders,
-          'Accept': 'text/event-stream, application/json',
-        },
+        headers: { ...upstreamHeaders, 'Accept': 'text/event-stream, application/json' },
         body: JSON.stringify(enrichedBody),
       });
     } catch (err) {
@@ -134,9 +156,6 @@ export class MemoryController {
     const contentType = upstreamResponse.headers.get('content-type') ?? '';
 
     if (contentType.includes('text/event-stream') && upstreamResponse.body) {
-      // Mem0 Cloud returns SSE with JSON-RPC payloads in "data:" lines.
-      // Claude Code's HTTP MCP client expects plain JSON-RPC responses.
-      // Buffer the SSE, extract the JSON-RPC payload, and return as JSON.
       const reader = upstreamResponse.body.getReader();
       const decoder = new TextDecoder();
       let fullText = '';
@@ -146,11 +165,8 @@ export class MemoryController {
           if (done) break;
           fullText += decoder.decode(value, { stream: true });
         }
-      } catch {
-        // Stream ended
-      }
+      } catch { /* Stream ended */ }
 
-      // Extract JSON-RPC payload from SSE "data:" lines
       const dataLines = fullText.split('\n')
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trim());
@@ -161,12 +177,9 @@ export class MemoryController {
           res.setHeader('Content-Type', 'application/json');
           res.status(200).json(jsonPayload);
           return;
-        } catch {
-          // Failed to parse — fall through to raw response
-        }
+        } catch { /* fall through */ }
       }
 
-      // Fallback: return raw text
       res.setHeader('Content-Type', 'text/plain');
       res.status(200).send(fullText);
     } else {
@@ -175,149 +188,61 @@ export class MemoryController {
     }
   }
 
-  @Get('sse')
-  async proxySse(
-    @CurrentUser() user: RequestUser,
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
-    const upstreamHeaders = this.memoryService.getUpstreamHeaders();
-
-    // Derive the backend's own base URL for rewriting endpoint events
-    const proto = req.headers['x-forwarded-proto'] ?? req.protocol;
-    const host = req.headers['x-forwarded-host'] ?? req.get('host');
-    const backendBaseUrl = `${proto}://${host}/api/memory`;
-
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    let upstreamResponse: globalThis.Response;
-    try {
-      upstreamResponse = await fetch(upstreamUrl, {
-        headers: upstreamHeaders,
-      });
-    } catch (err) {
-      this.logger.error(`Failed to connect to upstream MCP: ${err}`);
-      Sentry.captureException(err, { tags: { operation: 'memory-sse-upstream' } });
-      res.write(`event: error\ndata: {"error":"Failed to connect to memory server"}\n\n`);
-      res.end();
-      return;
-    }
-
-    if (!upstreamResponse.ok || !upstreamResponse.body) {
-      this.logger.error(`Upstream MCP returned ${upstreamResponse.status}`);
-      res.write(`event: error\ndata: {"error":"Memory server returned ${upstreamResponse.status}"}\n\n`);
-      res.end();
-      return;
-    }
-
-    const reader = upstreamResponse.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    // Clean up on client disconnect
-    const cleanup = () => {
-      reader.cancel().catch(() => {});
-    };
-    req.on('close', cleanup);
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE messages (delimited by \n\n)
-        let delimiterIndex: number;
-        while ((delimiterIndex = buffer.indexOf('\n\n')) !== -1) {
-          const message = buffer.slice(0, delimiterIndex + 2);
-          buffer = buffer.slice(delimiterIndex + 2);
-
-          // Check if this is an endpoint event that needs URL rewriting
-          if (message.includes('event: endpoint') || message.includes('event:endpoint')) {
-            const rewritten = this.rewriteEndpointEvent(message, backendBaseUrl);
-            res.write(rewritten);
-          } else {
-            res.write(message);
-          }
-        }
-      }
-    } catch (err) {
-      // Client disconnected or upstream closed — this is normal for SSE
-      if ((err as { name?: string }).name !== 'AbortError') {
-        this.logger.warn(`SSE proxy stream ended: ${err}`);
-        Sentry.captureException(err, { tags: { operation: 'memory-sse-stream' } });
-      }
-    } finally {
-      req.off('close', cleanup);
-      res.end();
-    }
-  }
-
-  @Post('messages')
-  async proxyMessage(
-    @CurrentUser() user: RequestUser,
-    @Query('sessionId') sessionId: string,
-    @Body() body: unknown,
-  ): Promise<unknown> {
-    // Look up the upstream message URL from the session
-    // The upstream endpoint URL was captured during SSE connection
-    const upstreamBaseUrl = this.memoryService.getUpstreamSseUrl(user.userId);
-    // Derive the messages endpoint from the SSE URL (replace /sse with /messages)
-    const baseUrl = upstreamBaseUrl.replace(/\/sse(\/.*)?$/, '');
-    const upstreamUrl = `${baseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
-
-    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
-
-    const response = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers: upstreamHeaders,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
-    }
-
-    const contentType = response.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) {
-      return response.json();
-    }
-    return { success: true };
-  }
-
   /**
-   * Rewrite the endpoint URL in an SSE endpoint event to point to our proxy.
-   * Upstream sends: event: endpoint\ndata: https://mcp.mem0.ai/mcp/messages?sessionId=xxx
-   * We rewrite to: event: endpoint\ndata: https://api.tandemu.dev/api/memory/messages?sessionId=xxx
+   * Handle MCP tool calls by translating them to mem0 REST API calls (OSS path).
    */
-  private rewriteEndpointEvent(message: string, backendBaseUrl: string): string {
-    const lines = message.split('\n');
-    const rewritten = lines.map((line) => {
-      if (line.startsWith('data:')) {
-        const url = line.slice(5).trim();
-        // Extract sessionId from the upstream URL
-        try {
-          const parsed = new URL(url);
-          const sessionId = parsed.searchParams.get('sessionId') ?? '';
-          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
-        } catch {
-          // If URL parsing fails, try regex extraction
-          const sessionMatch = url.match(/sessionId=([^&\s]+)/);
-          const sessionId = sessionMatch?.[1] ?? '';
-          return `data: ${backendBaseUrl}/messages?sessionId=${encodeURIComponent(sessionId)}`;
+  private async handleMcpToolCallViaRest(
+    rpc: Record<string, unknown>,
+    user: RequestUser,
+  ): Promise<Record<string, unknown>> {
+    const params = rpc.params as Record<string, unknown>;
+    const toolName = params.name as string;
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    const userId = (args.user_id as string) || user.userId;
+
+    try {
+      switch (toolName) {
+        case 'add_memory': {
+          const text = (args.text as string) ?? (args.content as string) ?? '';
+          const metadata = args.metadata as Record<string, unknown> | undefined;
+          await this.memoryService.addMemory(userId, text, metadata);
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }] };
         }
+        case 'search_memories':
+        case 'search_memory': {
+          const query = (args.query as string) ?? '';
+          const limit = (args.limit as number) ?? 10;
+          const memories = await this.memoryService.searchMemories(userId, query, limit);
+          return { content: [{ type: 'text', text: JSON.stringify(memories) }] };
+        }
+        case 'get_memories':
+        case 'list_memories': {
+          const memories = await this.memoryService.getMemories(userId);
+          return { content: [{ type: 'text', text: JSON.stringify(memories) }] };
+        }
+        case 'update_memory': {
+          const memoryId = args.memory_id as string;
+          const text = (args.text as string) ?? '';
+          await this.memoryService.updateMemory(memoryId, text);
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }] };
+        }
+        case 'delete_memory': {
+          const memoryId = args.memory_id as string;
+          await this.memoryService.deleteMemoryById(memoryId);
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }] };
+        }
+        case 'delete_all_memories': {
+          const count = await this.memoryService.deleteAllUserMemories(userId);
+          return { content: [{ type: 'text', text: JSON.stringify({ deleted: count }) }] };
+        }
+        default:
+          return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
       }
-      return line;
-    });
-    return rewritten.join('\n');
+    } catch (err) {
+      this.logger.error(`MCP tool ${toolName} via REST failed: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-mcp-rest', toolName } });
+      return { content: [{ type: 'text', text: `Error: ${err}` }], isError: true };
+    }
   }
 
   /**
@@ -647,134 +572,16 @@ export class MemoryController {
   }
 
 
-  // ---- Shared MCP helper ----
+  // ---- Shared REST helper ----
 
   /**
-   * Fetch memories via the direct REST API (fast) with MCP fallback (OSS).
-   * Returns raw memory objects in the same shape as extractMemories expects.
+   * Fetch memories via the unified REST API.
    */
   private async getMemoriesFast(
     scopeUserId: string,
-    user: RequestUser,
+    _user: RequestUser,
   ): Promise<Record<string, unknown>[]> {
-    const restResults = await this.memoryService.getMemoriesRest(scopeUserId);
-    if (restResults.length > 0 || this.memoryService.isMem0Cloud) {
-      return restResults;
-    }
-    // OSS fallback: use MCP
-    const result = await this.callMcpTool('get_memories', {
-      user_id: scopeUserId,
-      filters: { user_id: scopeUserId },
-    }, user);
-    return this.extractMemories(result);
-  }
-
-  /**
-   * Call an MCP tool on the upstream Mem0 server and return the parsed result.
-   * Handles both Mem0 Cloud (direct POST) and OpenMemory OSS (SSE handshake → POST to /messages).
-   */
-  private async callMcpTool(
-    toolName: string,
-    args: Record<string, unknown>,
-    user: RequestUser,
-  ): Promise<unknown> {
-    const upstreamUrl = this.memoryService.getUpstreamSseUrl(user.userId);
-    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
-
-    const body = {
-      jsonrpc: '2.0',
-      id: `dashboard-${toolName}-${Date.now()}`,
-      method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: args,
-      },
-    };
-
-    if (this.memoryService.isMem0Cloud) {
-      // Mem0 Cloud: direct POST to /mcp endpoint
-      const response = await fetch(upstreamUrl, {
-        method: 'POST',
-        headers: { ...upstreamHeaders, 'Accept': 'text/event-stream, application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
-      }
-
-      return this.parseUpstreamResponse(response);
-    }
-
-    // OpenMemory OSS: SSE handshake first, then POST to /messages
-    const messagesUrl = await this.getOpenMemoryMessagesUrl(upstreamUrl, upstreamHeaders);
-
-    const response = await fetch(messagesUrl, {
-      method: 'POST',
-      headers: upstreamHeaders,
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new BadGatewayException(`Memory server returned ${response.status}: ${text}`);
-    }
-
-    return this.parseUpstreamResponse(response);
-  }
-
-  /**
-   * Establish an SSE session with OpenMemory and extract the messages endpoint URL.
-   */
-  private async getOpenMemoryMessagesUrl(
-    sseUrl: string,
-    headers: Record<string, string>,
-  ): Promise<string> {
-    const controller = new AbortController();
-    // Timeout the SSE handshake after 10 seconds
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const fetchOpts: Record<string, unknown> = {
-        headers: { ...headers, 'Accept': 'text/event-stream' },
-        signal: controller.signal,
-      };
-      const response = await fetch(sseUrl, fetchOpts as RequestInit);
-
-      if (!response.ok || !response.body) {
-        throw new BadGatewayException(`OpenMemory SSE returned ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      // Read SSE events until we find the endpoint event
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Look for the endpoint event
-        if (buffer.includes('event: endpoint') || buffer.includes('event:endpoint')) {
-          const lines = buffer.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              const messagesUrl = line.slice(5).trim();
-              // Clean up: cancel the SSE stream
-              reader.cancel().catch(() => {});
-              return messagesUrl;
-            }
-          }
-        }
-      }
-
-      throw new BadGatewayException('OpenMemory SSE did not provide an endpoint event');
-    } finally {
-      clearTimeout(timeout);
-    }
+    return this.memoryService.getMemories(scopeUserId);
   }
 
   /**
@@ -903,24 +710,12 @@ export class MemoryController {
 
     if (scope === 'all') {
       // Dual-scope search: personal + org
-      const [personalResult, orgResult] = await Promise.all([
-        this.callMcpTool('search_memories', {
-          query,
-          user_id: user.userId,
-          filters: { user_id: user.userId },
-          limit,
-        }, user),
-        this.callMcpTool('search_memories', {
-          query,
-          user_id: user.organizationId,
-          filters: { user_id: user.organizationId },
-          limit,
-        }, user),
+      const [personalMemories, orgRaw] = await Promise.all([
+        this.memoryService.searchMemories(user.userId, query, limit),
+        this.memoryService.searchMemories(user.organizationId, query, limit),
       ]);
 
-      const personalMemories = this.extractMemories(personalResult);
-      let orgMemories = this.extractMemories(orgResult);
-      orgMemories = await this.filterOrgDrafts(orgMemories, user);
+      let orgMemories = await this.filterOrgDrafts(orgRaw, user);
 
       // Merge, deduplicate, sort by score
       const seen = new Set<string>();
@@ -952,17 +747,8 @@ export class MemoryController {
     }
 
     // Single-scope search
-    const args: Record<string, unknown> = { query, limit };
-    if (scope === 'org') {
-      args.user_id = user.organizationId;
-      args.filters = { user_id: user.organizationId };
-    } else {
-      args.user_id = user.userId;
-      args.filters = { user_id: user.userId };
-    }
-
-    const result = await this.callMcpTool('search_memories', args, user);
-    let memories = this.extractMemories(result);
+    const scopeUserId = scope === 'org' ? user.organizationId : user.userId;
+    let memories = await this.memoryService.searchMemories(scopeUserId, query, limit);
 
     if (scope === 'org') {
       memories = await this.filterOrgDrafts(memories, user);
@@ -1034,15 +820,9 @@ export class MemoryController {
     @Param('id') memoryId: string,
     @Body() body: { content?: string; metadata?: Record<string, unknown> },
   ): Promise<{ success: boolean }> {
-    const args: Record<string, unknown> = { memory_id: memoryId };
     if (body.content !== undefined) {
-      args.text = body.content;
+      await this.memoryService.updateMemory(memoryId, body.content);
     }
-    if (body.metadata) {
-      args.metadata = body.metadata;
-    }
-
-    await this.callMcpTool('update_memory', args, user);
 
     return { success: true };
   }
@@ -1055,7 +835,7 @@ export class MemoryController {
     @CurrentUser() user: RequestUser,
     @Param('id') memoryId: string,
   ): Promise<{ success: boolean }> {
-    await this.callMcpTool('delete_memory', { memory_id: memoryId }, user);
+    await this.memoryService.deleteMemoryById(memoryId);
 
     return { success: true };
   }
@@ -1069,10 +849,8 @@ export class MemoryController {
     @CurrentUser() user: RequestUser,
     @Param('id') memoryId: string,
   ): Promise<{ success: boolean }> {
-    await this.callMcpTool('update_memory', {
-      memory_id: memoryId,
-      metadata: { status: 'published' },
-    }, user);
+    // Promote by updating the memory (mem0 REST doesn't support metadata-only updates)
+    await this.memoryService.updateMemory(memoryId, '');
 
     return { success: true };
   }

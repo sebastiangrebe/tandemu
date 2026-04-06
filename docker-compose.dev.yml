@@ -55,7 +55,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      OPENMEMORY_HOST: openmemory
+      OPENMEMORY_HOST: mem0
+      OPENMEMORY_PORT: 8080
     depends_on:
       postgres:
         condition: service_healthy
