@@ -338,7 +338,7 @@ export function MemoryBrowser() {
       )}
 
       {/* Memory list */}
-      {loading && memories.length === 0 ? (
+      {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-lg border border-l-[3px] p-3 space-y-2">
