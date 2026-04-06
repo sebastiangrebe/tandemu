@@ -199,12 +199,12 @@ export default function DashboardPage() {
           {/* Charts Row */}
           <div className="grid gap-4 lg:grid-cols-2">
             <AIRatioChart data={aiData} />
-            <ToolUsageChart data={toolData} />
+            <VelocityChart data={velocityData} />
           </div>
 
-          {/* Velocity + Investment Row */}
+          {/* Tool Usage + Investment Row */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <VelocityChart data={velocityData} />
+            <ToolUsageChart data={toolData} />
             <InvestmentChart data={investment} />
           </div>
 
