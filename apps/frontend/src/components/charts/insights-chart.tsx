@@ -7,16 +7,34 @@ import {
 import { AXIS_TICK, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE, LEGEND_STYLE } from '@/lib/chart-theme';
 import type { InsightsDaily } from '@/lib/api';
 
-interface ThroughputChartProps {
-  data: InsightsDaily[];
+function fillDateRange(data: InsightsDaily[], startDate?: string, endDate?: string): InsightsDaily[] {
+  if (!startDate || !endDate) return data;
+  const map = new Map(data.map((d) => [d.date.slice(0, 10), d]));
+  const result: InsightsDaily[] = [];
+  const cursor = new Date(startDate.slice(0, 10));
+  const end = new Date(endDate.slice(0, 10));
+  while (cursor <= end) {
+    const key = cursor.toISOString().slice(0, 10);
+    result.push(map.get(key) ?? { date: key, aiCost: 0, aiLines: 0, manualLines: 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return result;
 }
 
-export function ThroughputChart({ data }: ThroughputChartProps) {
-  const chartData = data.map((d) => ({
+interface ThroughputChartProps {
+  data: InsightsDaily[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export function ThroughputChart({ data, startDate, endDate }: ThroughputChartProps) {
+  const filled = fillDateRange(data, startDate, endDate);
+  const chartData = filled.map((d) => ({
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     aiLines: d.aiLines,
     manualLines: d.manualLines,
   }));
+  const tickInterval = Math.max(0, Math.ceil(chartData.length / 8) - 1);
 
   if (chartData.length === 0) {
     return (
@@ -51,7 +69,7 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
                 <stop offset="95%" stopColor="#a1a1aa" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} interval={tickInterval} />
             <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={50} />
             <Tooltip
               contentStyle={TOOLTIP_CONTENT_STYLE}
@@ -70,14 +88,18 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
 
 interface CostEfficiencyChartProps {
   data: InsightsDaily[];
+  startDate?: string;
+  endDate?: string;
 }
 
-export function CostEfficiencyChart({ data }: CostEfficiencyChartProps) {
-  const chartData = data.map((d) => ({
+export function CostEfficiencyChart({ data, startDate, endDate }: CostEfficiencyChartProps) {
+  const filled = fillDateRange(data, startDate, endDate);
+  const chartData = filled.map((d) => ({
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     cost: d.aiCost,
     costPerLine: d.aiLines > 0 ? Math.round((d.aiCost / d.aiLines) * 10000) / 10000 : 0,
   }));
+  const tickInterval = Math.max(0, Math.ceil(chartData.length / 8) - 1);
 
   if (chartData.length === 0) {
     return (
@@ -108,7 +130,7 @@ export function CostEfficiencyChart({ data }: CostEfficiencyChartProps) {
                 <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} />
+            <XAxis dataKey="date" tick={AXIS_TICK} axisLine={false} tickLine={false} interval={tickInterval} />
             <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${v}`} />
             <Tooltip
               contentStyle={TOOLTIP_CONTENT_STYLE}
