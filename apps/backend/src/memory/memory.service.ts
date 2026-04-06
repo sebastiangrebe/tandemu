@@ -41,9 +41,10 @@ export class MemoryService {
   /** Memories endpoint path (Cloud uses /v1/, OSS has no prefix) */
   private memoriesUrl(memoryId?: string): string {
     const prefix = this.isMem0Cloud ? '/v1' : '';
+    const slash = this.isMem0Cloud ? '/' : '';
     return memoryId
-      ? `${this.baseUrl}${prefix}/memories/${memoryId}/`
-      : `${this.baseUrl}${prefix}/memories/`;
+      ? `${this.baseUrl}${prefix}/memories/${memoryId}${slash}`
+      : `${this.baseUrl}${prefix}/memories${slash}`;
   }
 
   /** Search endpoint path */
@@ -51,7 +52,7 @@ export class MemoryService {
     if (this.isMem0Cloud) {
       return `${this.baseUrl}/v1/memories/search/`;
     }
-    return `${this.baseUrl}/search/`;
+    return `${this.baseUrl}/search`;
   }
 
   private authHeaders(): Record<string, string> {
