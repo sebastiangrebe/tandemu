@@ -11,6 +11,7 @@ import {
   createIntegration,
   switchOrg,
   getGitHubOAuthIntegrationUrl,
+  checkSlugAvailability,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -434,6 +435,34 @@ function SetupPageInner() {
   const [orgName, setOrgName] = useState('');
   const [orgSlug, setOrgSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
+  const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced slug availability check
+  useEffect(() => {
+    if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current);
+    setSlugAvailable(null);
+
+    const slug = orgSlug.trim();
+    if (slug.length < 2) return;
+
+    setSlugChecking(true);
+    slugCheckTimer.current = setTimeout(async () => {
+      try {
+        const available = await checkSlugAvailability(slug);
+        setSlugAvailable(available);
+      } catch {
+        setSlugAvailable(null);
+      } finally {
+        setSlugChecking(false);
+      }
+    }, 300);
+
+    return () => {
+      if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current);
+    };
+  }, [orgSlug]);
 
   // Step 2: Teams
   const [teams, setTeams] = useState<TeamEntry[]>([]);
@@ -496,9 +525,9 @@ function SetupPageInner() {
   const removeInvite = (index: number) => setInvites(invites.filter((_, i) => i !== index));
 
   const canProceed = useCallback(() => {
-    if (step === 0) return orgName.trim().length > 0 && orgSlug.trim().length > 0;
+    if (step === 0) return orgName.trim().length > 0 && orgSlug.trim().length >= 2 && slugAvailable === true && !slugChecking;
     return true;
-  }, [step, orgName, orgSlug]);
+  }, [step, orgName, orgSlug, slugAvailable, slugChecking]);
 
   const handleComplete = async () => {
     setIsSubmitting(true);
@@ -621,9 +650,21 @@ function SetupPageInner() {
                     onChange={(e) => handleSlugChange(e.target.value)}
                     placeholder="acme-inc"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Used in URLs. Lowercase letters, numbers, and hyphens only.
-                  </p>
+                  {orgSlug.trim().length >= 2 && slugAvailable === false && (
+                    <p className="text-xs text-destructive">
+                      This slug is already taken. Please choose a different one.
+                    </p>
+                  )}
+                  {orgSlug.trim().length >= 2 && slugAvailable === true && (
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      Slug is available.
+                    </p>
+                  )}
+                  {(orgSlug.trim().length < 2 || slugAvailable === null) && (
+                    <p className="text-xs text-muted-foreground">
+                      Used in URLs. Lowercase letters, numbers, and hyphens only.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
