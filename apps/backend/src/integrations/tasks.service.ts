@@ -75,11 +75,13 @@ export class TasksService {
       return [];
     }
 
-    return taskProvider.fetchSubtasks({
+    const subtasks = await taskProvider.fetchSubtasks({
       accessToken: integration.access_token,
       taskId,
       config: integration.config,
     });
+
+    return subtasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled');
   }
 
   async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {
