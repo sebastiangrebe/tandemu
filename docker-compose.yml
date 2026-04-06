@@ -47,6 +47,11 @@ services:
     image: otel/opentelemetry-collector-contrib:0.114.0
     # No public ports — only reachable via Docker internal network
     # Backend proxies all external telemetry through /api/telemetry/ingest
+    environment:
+      CLICKHOUSE_ENDPOINT: ${CLICKHOUSE_ENDPOINT:-tcp://clickhouse:9000?dial_timeout=10s&compress=lz4}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-otel}
+      CLICKHOUSE_USERNAME: ${CLICKHOUSE_USERNAME:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
@@ -74,6 +79,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OPENMEMORY_HOST: openmemory
     depends_on:
       postgres:
         condition: service_healthy
