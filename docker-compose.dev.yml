@@ -47,6 +47,7 @@ services:
       DATABASE_URL: postgresql://tandemu:tandemu@postgres:5432/tandemu
       REDIS_URL: redis://redis:6379
       CLICKHOUSE_URL: http://clickhouse:8123
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       CORS_ORIGIN: http://localhost:3000
       JWT_SECRET: dev-secret-change-me
       APP_URL: http://localhost:3001
@@ -55,7 +56,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      OPENMEMORY_HOST: openmemory
+      OPENMEMORY_HOST: mem0
+      OPENMEMORY_PORT: 8000
     depends_on:
       postgres:
         condition: service_healthy

@@ -94,25 +94,17 @@ export class MemoryOpsProcessor extends SentryProcessor {
   private async mcpToolCall(
     toolName: string,
     args: Record<string, unknown>,
-    userId: string,
+    _userId: string,
   ): Promise<void> {
-    const upstreamUrl = this.memoryService.getUpstreamSseUrl(userId);
-    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
-
-    const res = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers: { ...upstreamHeaders, 'Accept': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: `queue-${toolName}-${Date.now()}`,
-        method: 'tools/call',
-        params: { name: toolName, arguments: args },
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`MCP tool call ${toolName} failed: ${res.status}`);
+    const memoryId = args.memory_id as string;
+    if (toolName === 'update_memory') {
+      await this.memoryService.updateMemory(memoryId, (args.text as string) ?? '');
+    } else if (toolName === 'delete_memory') {
+      await this.memoryService.deleteMemoryById(memoryId);
+    } else {
+      this.logger.warn(`Unknown tool call in queue: ${toolName}`);
     }
-    this.logger.debug(`MCP tool call ${toolName} completed`);
+    this.logger.debug(`REST tool call ${toolName} completed`);
   }
 
   private async cleanupUserMemories(userId: string, organizationId: string): Promise<void> {
