@@ -124,7 +124,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('tandemu_token', response.accessToken);
     setToken(response.accessToken);
     setUser(response.user);
-    router.push('/setup');
+
+    // Check if invites were auto-accepted during registration
+    const orgs = await getOrganizations();
+    setOrganizations(orgs);
+    resolveCurrentOrg(orgs);
+
+    if (orgs.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      let redirect = params.get('redirect') || localStorage.getItem('tandemu_auth_redirect');
+      localStorage.removeItem('tandemu_auth_redirect');
+      // Invites were auto-accepted during registration, skip the invite page
+      if (redirect?.startsWith('/invites/')) redirect = null;
+      router.push(redirect || '/');
+    } else {
+      router.push('/setup');
+    }
   };
 
   const switchOrg = async (organizationId: string) => {

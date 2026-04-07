@@ -411,6 +411,23 @@ export async function cancelInvite(orgId: string, inviteId: string): Promise<voi
   });
 }
 
+export async function getInviteDetails(inviteId: string): Promise<{
+  id: string;
+  organizationName: string;
+  inviterName: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+}> {
+  return fetchApi(`/api/invites/${inviteId}`);
+}
+
+export async function acceptInvite(inviteId: string): Promise<Invite> {
+  return fetchApi<Invite>(`/api/invites/${inviteId}/accept`, {
+    method: "POST",
+  });
+}
+
 // ---- CLI Auth ----
 
 export async function authorizeCli(code: string): Promise<void> {
