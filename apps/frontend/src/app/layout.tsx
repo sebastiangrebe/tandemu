@@ -45,8 +45,8 @@ export const metadata: Metadata = {
     description:
       "An AI that remembers you. A team that sees everything.",
   },
-  icons: {
-    icon: "/logo.svg",
+  other: {
+    "apple-mobile-web-app-title": "Tandemu",
   },
   robots: {
     index: true,

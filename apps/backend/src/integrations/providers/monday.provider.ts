@@ -2,7 +2,9 @@ import {
   BadGatewayException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import type { Task, TaskStatus, TaskPriority } from '@tandemu/types';
 import type {
   TaskProvider,
@@ -137,6 +139,8 @@ function getStatusColumnId(item: MondayItem): string {
   );
   return statusCol?.id ?? 'status';
 }
+
+const logger = new Logger('MondayProvider');
 
 export class MondayProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
@@ -489,7 +493,9 @@ export class MondayProvider implements TaskProvider {
         id: g.id,
         name: g.title,
       }));
-    } catch {
+    } catch (err) {
+      logger.warn(`Failed to fetch Monday sub-projects for board ${boardId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'provider-monday-sub-projects' }, extra: { boardId } });
       return [];
     }
   }

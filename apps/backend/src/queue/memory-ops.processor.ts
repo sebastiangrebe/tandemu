@@ -1,6 +1,7 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import * as Sentry from '@sentry/nestjs';
 import { SentryProcessor } from './sentry-processor.js';
 import { MemoryService } from '../memory/memory.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
@@ -93,25 +94,17 @@ export class MemoryOpsProcessor extends SentryProcessor {
   private async mcpToolCall(
     toolName: string,
     args: Record<string, unknown>,
-    userId: string,
+    _userId: string,
   ): Promise<void> {
-    const upstreamUrl = this.memoryService.getUpstreamSseUrl(userId);
-    const upstreamHeaders = this.memoryService.getUpstreamMessageHeaders();
-
-    const res = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers: { ...upstreamHeaders, 'Accept': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: `queue-${toolName}-${Date.now()}`,
-        method: 'tools/call',
-        params: { name: toolName, arguments: args },
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`MCP tool call ${toolName} failed: ${res.status}`);
+    const memoryId = args.memory_id as string;
+    if (toolName === 'update_memory') {
+      await this.memoryService.updateMemory(memoryId, (args.text as string) ?? '');
+    } else if (toolName === 'delete_memory') {
+      await this.memoryService.deleteMemoryById(memoryId);
+    } else {
+      this.logger.warn(`Unknown tool call in queue: ${toolName}`);
     }
-    this.logger.debug(`MCP tool call ${toolName} completed`);
+    this.logger.debug(`REST tool call ${toolName} completed`);
   }
 
   private async cleanupUserMemories(userId: string, organizationId: string): Promise<void> {
@@ -126,6 +119,7 @@ export class MemoryOpsProcessor extends SentryProcessor {
       }
     } catch (err) {
       this.logger.warn(`Failed to cleanup memories for user ${userId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'memory-cleanup-user' }, extra: { userId } });
     }
   }
 
@@ -154,6 +148,7 @@ export class MemoryOpsProcessor extends SentryProcessor {
         }
       } catch (err) {
         this.logger.warn(`Failed to clean stale drafts for org ${orgId}: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'memory-clean-stale-drafts' }, extra: { orgId } });
       }
     }
   }

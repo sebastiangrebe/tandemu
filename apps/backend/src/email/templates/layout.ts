@@ -1,4 +1,4 @@
-const BRAND_COLOR = '#6366f1';
+const LOGO_URL = 'https://app.tandemu.dev/web-app-manifest-192x192.png';
 
 export function emailLayout(content: string): string {
   return `<!DOCTYPE html>
@@ -7,23 +7,24 @@ export function emailLayout(content: string): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0; padding:0; background:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; padding:32px 16px;">
+<body style="margin:0; padding:0; background:#09090b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b; padding:40px 16px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden;">
+      <!-- Logo above card -->
+      <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr>
+        <td style="vertical-align:middle; padding-right:10px;"><img src="${LOGO_URL}" width="28" height="28" alt="Tandemu" style="display:block;" /></td>
+        <td style="vertical-align:middle;"><span style="font-size:20px; font-weight:700; color:#fafafa; letter-spacing:-0.5px;">Tandemu</span></td>
+      </tr></table>
+      <!-- Card -->
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#18181b; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
         <tr>
-          <td style="background:${BRAND_COLOR}; padding:24px 32px;">
-            <span style="font-size:20px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">Tandemu</span>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px;">
+          <td style="padding:32px 32px 40px;">
             ${content}
           </td>
         </tr>
         <tr>
-          <td style="padding:16px 32px; border-top:1px solid #e5e7eb;">
-            <p style="margin:0; font-size:12px; color:#9ca3af;">
+          <td style="padding:16px 32px; border-top:1px solid rgba(255,255,255,0.06);">
+            <p style="margin:0; font-size:12px; color:#71717a;">
               This is a transactional email from Tandemu. You received it because of an action in your organization.
             </p>
           </td>

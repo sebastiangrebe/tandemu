@@ -1,5 +1,6 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Post, UnauthorizedException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as Sentry from '@sentry/nestjs';
 import { DatabaseService } from '../database/database.service.js';
 
 /**
@@ -143,6 +144,7 @@ export class OtlpProxyController {
       }
     } catch (err) {
       this.logger.error(`Failed to forward to collector at ${endpoint}${path}`, err);
+      Sentry.captureException(err, { tags: { operation: 'otel-proxy-forward' }, extra: { path } });
     }
   }
 }

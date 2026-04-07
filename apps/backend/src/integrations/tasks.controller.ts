@@ -389,6 +389,7 @@ export class TasksController {
       assigneeEmail?: string;
       priority?: string;
       labels?: string[];
+      provider?: IntegrationProvider;
     },
   ): Promise<Task> {
     return this.tasksService.createTask(user.organizationId, body);

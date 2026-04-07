@@ -2,7 +2,9 @@ import {
   BadGatewayException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import type { Task, TaskStatus, TaskPriority } from '@tandemu/types';
 import type {
   TaskProvider,
@@ -126,6 +128,8 @@ function enrichSubtaskCounts(tasks: Task[]): Task[] {
   }));
 }
 
+const logger = new Logger('ClickUpProvider');
+
 export class ClickUpProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
     const { accessToken, externalProjectId, assigneeEmail, assigneeEmails, excludeDone, config } = params;
@@ -158,7 +162,9 @@ export class ClickUpProvider implements TaskProvider {
           );
           allTasks.push(...listData.tasks);
         }
-      } catch {
+      } catch (err) {
+        logger.warn(`ClickUp folder fetch failed for ${externalProjectId}, retrying as list: ${err}`);
+        Sentry.captureException(err, { tags: { operation: 'provider-clickup-folder-fallback' }, extra: { externalProjectId } });
         const listData = await clickupFetch<ClickUpTasksResponse>(
           `${CLICKUP_API}/list/${externalProjectId}/task?include_closed=${includeClosed}&subtasks=true`,
           accessToken,
@@ -344,7 +350,9 @@ export class ClickUpProvider implements TaskProvider {
         id: list.id,
         name: list.name,
       }));
-    } catch {
+    } catch (err) {
+      logger.warn(`Failed to fetch ClickUp sub-projects for folder ${folderId}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'provider-clickup-sub-projects' }, extra: { folderId } });
       return [];
     }
   }

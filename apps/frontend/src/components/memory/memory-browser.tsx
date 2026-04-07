@@ -210,6 +210,13 @@ export function MemoryBrowser() {
   useEffect(() => { setOffset(0); }, [activeScope, debouncedQuery]);
   useEffect(() => { loadMemories(); }, [loadMemories]);
 
+  // Auto-expand all repo groups when searching
+  useEffect(() => {
+    if (debouncedQuery && memories.length > 0) {
+      setExpandedRepos(new Set(memories.map((m) => m.metadata.repo ?? 'Uncategorized')));
+    }
+  }, [debouncedQuery, memories]);
+
   const filteredMemories = useMemo(() => {
     let filtered = memories;
     if (categoryFilter !== 'all') filtered = filtered.filter((m) => (m.metadata.category ?? 'uncategorized') === categoryFilter);
@@ -338,7 +345,7 @@ export function MemoryBrowser() {
       )}
 
       {/* Memory list */}
-      {loading && memories.length === 0 ? (
+      {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-lg border border-l-[3px] p-3 space-y-2">
@@ -384,9 +391,23 @@ export function MemoryBrowser() {
             <Search className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">{filteredMemories.length} results for &ldquo;{debouncedQuery}&rdquo;</span>
           </div>
-          <div className="space-y-3">
-            {filteredMemories.map((mem) => (
-              <MemoryCard key={mem.id} memory={mem} expanded={expandedIds.has(mem.id)} onToggleExpand={() => toggleExpand(mem.id)} onEdit={() => setEditMemory(mem)} onDelete={() => setDeleteMemoryId(mem.id)} onApprove={isAdmin ? () => handleApprove(mem.id) : undefined} showScore />
+          <div className="space-y-6">
+            {repoGroups.map((group) => (
+              <div key={group.repo}>
+                <button onClick={() => toggleRepo(group.repo)} className="flex items-center gap-2 text-sm font-medium hover:text-foreground transition-colors mb-3 group">
+                  {expandedRepos.has(group.repo) ? <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />}
+                  <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-mono text-xs">{group.repo}</span>
+                  <Badge variant="secondary" className="text-[10px] h-5">{group.memories.length}</Badge>
+                </button>
+                {expandedRepos.has(group.repo) && (
+                  <div className="space-y-3 ml-6">
+                    {group.memories.map((mem) => (
+                      <MemoryCard key={mem.id} memory={mem} expanded={expandedIds.has(mem.id)} onToggleExpand={() => toggleExpand(mem.id)} onEdit={() => setEditMemory(mem)} onDelete={() => setDeleteMemoryId(mem.id)} onApprove={isAdmin ? () => handleApprove(mem.id) : undefined} showScore />
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>

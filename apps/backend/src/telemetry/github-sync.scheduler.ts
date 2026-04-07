@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import * as Sentry from '@sentry/nestjs';
 import { DatabaseService } from '../database/database.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
 import type { GitHubSyncJobData } from '../queue/queue.types.js';
@@ -59,12 +60,14 @@ export class GitHubSyncScheduler implements OnModuleInit {
           succeeded++;
         } catch (err) {
           this.logger.warn(`GitHub sync failed for org ${organization_id}: ${err instanceof Error ? err.message : err}`);
+          Sentry.captureException(err, { tags: { operation: 'github-sync-per-org' }, extra: { organization_id } });
         }
       }
 
       this.logger.log(`Triggered GitHub sync for ${succeeded}/${orgs.rows.length} org(s)`);
     } catch (err) {
       this.logger.warn(`Failed to query orgs for GitHub sync: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'github-sync-query-orgs' } });
     }
   }
 
@@ -96,6 +99,7 @@ export class GitHubSyncScheduler implements OnModuleInit {
       }
     } catch (err) {
       this.logger.warn(`GitHub sync skipped for org ${organizationId}: ${err instanceof Error ? err.message : err}`);
+      Sentry.captureException(err, { tags: { operation: 'github-sync-trigger' }, extra: { organizationId } });
     }
   }
 }

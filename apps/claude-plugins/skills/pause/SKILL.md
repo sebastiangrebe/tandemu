@@ -19,7 +19,7 @@ Run all setup reads in a **single Bash call** ("Setup"):
 
 ```bash
 # Load Tandemu config
-source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"

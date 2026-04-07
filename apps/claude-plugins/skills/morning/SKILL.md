@@ -20,9 +20,11 @@ Help the developer start their work session by picking a task.
 
 ### 0. Greet personally (memory)
 
-Before anything else, search memories for the developer's personal context — their name, what they were working on recently, any preferences. Use this to greet them personally.
+**Do NOT greet the developer until Step 1 has completed.** You need `LOCAL_NOW` from the setup output to determine the correct time-of-day greeting. Run Step 1 first, then greet.
 
-Use the `LOCAL_NOW` from the setup step (Step 1) to determine the time-of-day greeting. Extract the hour from the output (format: `2026-04-01 21:20 +04`):
+Search memories for the developer's personal context — their name, what they were working on recently, any preferences. Use this to greet them personally.
+
+Use the `LOCAL_NOW` from the Step 1 output to determine the time-of-day greeting. Extract the hour from the output (format: `2026-04-01 21:20 +04`):
 - Hour < 12 → "Morning"
 - Hour 12–17 → "Afternoon"
 - Hour > 17 → "Evening"
@@ -40,7 +42,7 @@ Run all setup reads in a **single Bash call**:
 
 ```bash
 # Load Tandemu config
-source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
@@ -71,13 +73,11 @@ cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Collect task IDs from ALL active task files (other sessions/worktrees)
 echo "---OTHER_ACTIVE_TASKS---"
-for f in "$HOME"/.claude/tandemu-active-task-*.json 2>/dev/null; do
-  [ -f "$f" ] || continue
-  # Skip the current branch's task file
+find "$HOME/.claude" -maxdepth 1 -name 'tandemu-active-task-*.json' 2>/dev/null | while read -r f; do
   [ "$f" = "$TASK_FILE" ] && continue
   TASK_ID=$(python3 -c "import json; print(json.load(open('$f')).get('taskId',''))" 2>/dev/null)
   [ -n "$TASK_ID" ] && echo "$TASK_ID"
-done || true
+done
 
 # Check if we're inside a worktree
 echo "---WORKTREE---"
@@ -105,7 +105,7 @@ echo "LOCAL_YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' 
 
 # Refresh memory index for this repo
 REPO_NAME=$(basename "$REPO" 2>/dev/null || echo "unknown")
-PROJECT_DIR=$(pwd | sed 's/\//-/g')
+PROJECT_DIR=$(pwd | sed 's/[\/:\\]/-/g')
 MEMORY_DIR="$HOME/.claude/projects/${PROJECT_DIR}/memory"
 echo "---MEMORY_INDEX---"
 INDEX=$(curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/index?repo=$REPO_NAME" 2>/dev/null)
@@ -207,17 +207,17 @@ Once the developer picks a task (either a leaf subtask from drill-down, or a tas
 
 #### 5a. Check for uncommitted changes
 
-Use the git status output from the setup call. If it showed uncommitted changes, use AskUserQuestion:
-- Question: "You have uncommitted changes. What should I do before switching branches?"
+Use the git status output from the setup call. If it showed uncommitted changes, use AskUserQuestion. Detect the current branch name from setup and use it in the message:
+- Question: "You have uncommitted changes on **<current branch>**. These won't affect your new worktree, but you may want to save them."
 - Header: "Changes"
 - Options:
-  - Label: "Commit on current branch", Description: "Stage and commit changes with a conventional commit message before switching"
-  - Label: "Stash for later", Description: "Stash changes — you can restore them later with git stash pop"
-  - Label: "Bring to new branch", Description: "Carry uncommitted changes into the new feature branch"
+  - Label: "Commit on current branch", Description: "Stage and commit changes on <current branch> before proceeding"
+  - Label: "Stash for later", Description: "Stash changes — restore later with git stash pop"
+  - Label: "Leave them", Description: "Keep changes in working tree, proceed to worktree"
 
 If **Commit**: help write a commit message based on the diff, stage and commit, then proceed.
 If **Stash**: run `git stash push -m "WIP before <task.id>"`, then proceed.
-If **Bring to new branch**: do nothing — changes will carry over when creating the branch.
+If **Leave them**: do nothing — proceed directly to worktree creation.
 
 If the working tree is clean, skip this step.
 

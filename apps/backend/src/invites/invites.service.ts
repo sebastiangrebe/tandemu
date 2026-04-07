@@ -161,7 +161,59 @@ export class InvitesService {
       acceptedByUserId: userId,
       organizationId: invite.organization_id,
     } satisfies InviteAcceptedEvent);
+    this.eventEmitter.emit('organization.membership_changed', { organizationId: invite.organization_id });
     return this.mapInvite(result);
+  }
+
+  async getDetails(inviteId: string, userId: string): Promise<{
+    id: string;
+    organizationName: string;
+    inviterName: string;
+    role: string;
+    status: string;
+    expiresAt: string;
+  }> {
+    const result = await this.db.query<{
+      id: string;
+      email: string;
+      role: string;
+      status: string;
+      expires_at: Date;
+      org_name: string;
+      inviter_name: string;
+    }>(
+      `SELECT i.id, i.email, i.role, i.status, i.expires_at,
+              o.name AS org_name, u.name AS inviter_name
+       FROM invites i
+       JOIN organizations o ON o.id = i.organization_id
+       JOIN users u ON u.id = i.invited_by
+       WHERE i.id = $1`,
+      [inviteId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Invite with id ${inviteId} not found`);
+    }
+
+    const row = result.rows[0]!;
+
+    // Verify the requesting user's email matches the invite
+    const userResult = await this.db.query<{ email: string }>(
+      'SELECT email FROM users WHERE id = $1',
+      [userId],
+    );
+    if (userResult.rows.length === 0 || userResult.rows[0]!.email !== row.email) {
+      throw new ForbiddenException('This invite is not for your email address');
+    }
+
+    return {
+      id: row.id,
+      organizationName: row.org_name,
+      inviterName: row.inviter_name,
+      role: row.role.toUpperCase(),
+      status: row.status,
+      expiresAt: row.expires_at.toISOString(),
+    };
   }
 
   async cancel(inviteId: string): Promise<boolean> {

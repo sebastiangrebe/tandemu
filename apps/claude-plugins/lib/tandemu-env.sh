@@ -2,7 +2,7 @@
 # Shared Tandemu config loader — source this from skills to get env vars.
 # Usage: source "$(dirname "$0")/../lib/tandemu-env.sh"
 
-_TANDEMU_CONFIG=$(cat ~/.claude/tandemu.json 2>/dev/null)
+_TANDEMU_CONFIG=$(cat "$HOME/.claude/tandemu.json" 2>/dev/null)
 if [ -z "$_TANDEMU_CONFIG" ]; then
   echo "ERROR: Tandemu not configured. Run /tandemu:setup or install.sh to set up." >&2
   return 1 2>/dev/null || exit 1

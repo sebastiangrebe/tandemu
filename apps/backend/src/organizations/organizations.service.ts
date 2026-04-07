@@ -29,36 +29,51 @@ export class OrganizationsService {
   ) {}
 
   async create(dto: CreateOrganizationDto, userId: string): Promise<Organization> {
-    const result = await this.db.withTransaction(async (client) => {
-      const orgResult = await client.query<{
-        id: string;
-        name: string;
-        slug: string;
-        stripe_customer_id: string | null;
-        stripe_subscription_id: string | null;
-        plan_tier: string;
-        subscription_status: string;
-        settings: Record<string, unknown>;
-        created_at: Date;
-        updated_at: Date;
-      }>(
-        `INSERT INTO organizations (name, slug, plan_tier)
-         VALUES ($1, $2, $3)
-         RETURNING *`,
-        [dto.name, dto.slug, (dto.planTier ?? 'free').toLowerCase()],
-      );
-      const org = orgResult.rows[0]!;
+    try {
+      const result = await this.db.withTransaction(async (client) => {
+        const orgResult = await client.query<{
+          id: string;
+          name: string;
+          slug: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          plan_tier: string;
+          subscription_status: string;
+          settings: Record<string, unknown>;
+          created_at: Date;
+          updated_at: Date;
+        }>(
+          `INSERT INTO organizations (name, slug, plan_tier)
+           VALUES ($1, $2, $3)
+           RETURNING *`,
+          [dto.name, dto.slug, (dto.planTier ?? 'free').toLowerCase()],
+        );
+        const org = orgResult.rows[0]!;
 
-      // Create membership for the creating user
-      await client.query(
-        `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, $3)`,
-        [userId, org.id, 'owner'],
-      );
+        // Create membership for the creating user
+        await client.query(
+          `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, $3)`,
+          [userId, org.id, 'owner'],
+        );
 
-      return org;
-    });
+        return org;
+      });
 
-    return this.mapOrg(result);
+      return this.mapOrg(result);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && (error as { code: string }).code === '23505') {
+        throw new ConflictException('An organization with this slug already exists');
+      }
+      throw error;
+    }
+  }
+
+  async isSlugAvailable(slug: string): Promise<boolean> {
+    const result = await this.db.query(
+      'SELECT 1 FROM organizations WHERE slug = $1 LIMIT 1',
+      [slug],
+    );
+    return result.rows.length === 0;
   }
 
   async findAll(userId: string): Promise<Organization[]> {

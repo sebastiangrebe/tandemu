@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service.js';
@@ -47,6 +48,15 @@ export class OrganizationsController {
     @CurrentUser() user: RequestUser,
   ): Promise<Organization[]> {
     return this.organizationsService.findAll(user.userId);
+  }
+
+  // Any authenticated user can check slug availability
+  @Get('check-slug')
+  async checkSlug(
+    @Query('slug') slug: string,
+  ): Promise<{ available: boolean }> {
+    const available = await this.organizationsService.isSlugAvailable(slug);
+    return { available };
   }
 
   // Any member can view org details

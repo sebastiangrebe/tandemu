@@ -96,21 +96,38 @@ export function ActivitySkeleton() {
         {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
       </div>
       <ChartSkeleton height={280} />
-      {/* Leaderboard */}
+      {/* Leaderboard — matches Table: # | Developer | Sessions | Active Time | Total Lines | AI Adoption */}
       <Card>
         <CardHeader>
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-3 w-52" />
         </CardHeader>
-        <CardContent className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <Skeleton className="h-4 w-6" />
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-1.5 w-24 rounded-full" />
-              <Skeleton className="h-4 w-12" />
-            </div>
-          ))}
+        <CardContent>
+          {/* Table header */}
+          <div className="flex items-center gap-4 pb-3 border-b mb-3">
+            <Skeleton className="h-3 w-6 shrink-0" />
+            <Skeleton className="h-3 w-20 flex-1" />
+            <Skeleton className="h-3 w-14 shrink-0" />
+            <Skeleton className="h-3 w-16 shrink-0" />
+            <Skeleton className="h-3 w-16 shrink-0" />
+            <Skeleton className="h-3 w-32 shrink-0" />
+          </div>
+          {/* Table rows */}
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-4 w-6 shrink-0" />
+                <Skeleton className="h-4 w-28 flex-1" />
+                <Skeleton className="h-4 w-10 shrink-0" />
+                <Skeleton className="h-4 w-14 shrink-0" />
+                <Skeleton className="h-4 w-14 shrink-0" />
+                <div className="flex items-center gap-2 w-32 shrink-0">
+                  <Skeleton className="h-1.5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-8" />
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
       {/* Hot files + AI effectiveness */}

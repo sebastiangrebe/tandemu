@@ -17,8 +17,8 @@ Set up Tandemu for the current developer. This skill handles authentication, con
 ### 1. Check prerequisites
 
 ```bash
-command -v python3 &>/dev/null && echo "OK" || echo "MISSING: python3"
-command -v curl &>/dev/null && echo "OK" || echo "MISSING: curl"
+command -v python3 >/dev/null 2>&1 && echo "OK" || echo "MISSING: python3"
+command -v curl >/dev/null 2>&1 && echo "OK" || echo "MISSING: curl"
 ```
 
 If any are missing, tell the developer what to install and stop.
@@ -37,7 +37,7 @@ If **Self-hosted**: ask for the URL, strip trailing slash.
 
 Verify the instance is reachable:
 ```bash
-curl -sf "${API_URL}/api/health" &>/dev/null && echo "OK" || echo "UNREACHABLE"
+curl -sf "${API_URL}/api/health" >/dev/null 2>&1 && echo "OK" || echo "UNREACHABLE"
 ```
 
 ### 3. Authenticate via OAuth
@@ -56,12 +56,12 @@ Tell the developer: "Open this URL in your browser to authorize: <AUTH_URL>"
 
 Open the browser automatically:
 ```bash
-open "$AUTH_URL" 2>/dev/null || xdg-open "$AUTH_URL" 2>/dev/null || true
+open "$AUTH_URL" 2>/dev/null || xdg-open "$AUTH_URL" 2>/dev/null || cmd.exe /c start "$AUTH_URL" 2>/dev/null || true
 ```
 
 Poll for authorization (max 150 retries, 2 seconds apart):
 ```bash
-for i in $(seq 1 150); do
+i=0; while [ "$i" -lt 150 ]; do i=$((i + 1))
   POLL=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null)
   STATUS=$(echo "$POLL" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('status','pending'))" 2>/dev/null || echo "pending")
   if [ "$STATUS" = "authorized" ]; then
@@ -161,7 +161,7 @@ else:
 #### 5a. tandemu.json
 
 ```bash
-mkdir -p ~/.claude
+mkdir -p "$HOME/.claude"
 python3 << PYEOF
 import json
 
@@ -243,6 +243,11 @@ tandemu_perms = [
     f"Bash(rm {home}/.claude/tandemu*)",
     f"Bash(rm -f {home}/.claude/tandemu*)",
     f"Bash(curl*{api_url}*)",
+    f"Bash(curl*-X POST*{api_url}*)",
+    f"Bash(curl*-X PATCH*{api_url}*)",
+    "Bash(curl*$TANDEMU_API*)",
+    "Bash(curl*-X POST*$TANDEMU_API*)",
+    "Bash(curl*-X PATCH*$TANDEMU_API*)",
     "mcp__tandemu-memory",
 ]
 for p in tandemu_perms:
@@ -348,8 +353,8 @@ if [ -z "$PLUGIN_ROOT" ]; then
 fi
 
 if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
-  mkdir -p ~/.claude/lib
-  cp -r "$PLUGIN_ROOT/lib"/* ~/.claude/lib/
+  mkdir -p "$HOME/.claude"/lib
+  cp -r "$PLUGIN_ROOT/lib"/* "$HOME/.claude/lib/"
   echo "OK"
 fi
 ```
@@ -359,7 +364,7 @@ fi
 Write a `~/.claude/CLAUDE.md` that tells Claude the developer's actual name. The plugin's CLAUDE.md uses `{{DEV_NAME}}` as a placeholder — this file provides the real value:
 
 ```bash
-cat > ~/.claude/CLAUDE.md << EOF
+cat > "$HOME/.claude/CLAUDE.md" << EOF
 # Developer Context
 The developer's name is ${USER_NAME}. Use it naturally in conversation.
 EOF

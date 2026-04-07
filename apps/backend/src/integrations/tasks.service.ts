@@ -77,11 +77,13 @@ export class TasksService {
       return [];
     }
 
-    return taskProvider.fetchSubtasks({
+    const subtasks = await taskProvider.fetchSubtasks({
       accessToken: integration.access_token,
       taskId,
       config: integration.config,
     });
+
+    return subtasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled');
   }
 
   async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {
@@ -119,7 +121,7 @@ export class TasksService {
 
   async createTask(
     orgId: string,
-    params: { teamId: string; title: string; description?: string; assigneeEmail?: string; priority?: string; labels?: string[] },
+    params: { teamId: string; title: string; description?: string; assigneeEmail?: string; priority?: string; labels?: string[]; provider?: IntegrationProvider },
   ): Promise<Task> {
     const integrations = await this.integrationsService.findAll(orgId);
     if (integrations.length === 0) {
@@ -131,11 +133,17 @@ export class TasksService {
       integrations.map(async (integration) => {
         const rawIntegration = await this.integrationsService.findOne(orgId, integration.provider);
         const mappings = await this.integrationsService.getMappings(rawIntegration.id);
-        return { rawIntegration, mappings, provider: getProvider(integration.provider) };
+        return { rawIntegration, mappings, provider: getProvider(integration.provider), providerName: integration.provider };
       }),
     );
 
-    for (const { rawIntegration, mappings, provider } of integrationData) {
+    // If a specific provider was requested, try it first
+    // Otherwise sort GitHub last so dedicated project trackers take priority
+    const sorted = params.provider
+      ? integrationData.sort((a, b) => (a.providerName === params.provider ? -1 : b.providerName === params.provider ? 1 : 0))
+      : integrationData.sort((a, b) => (a.providerName === 'github' ? 1 : b.providerName === 'github' ? -1 : 0));
+
+    for (const { rawIntegration, mappings, provider } of sorted) {
       if (!provider) continue;
       const mapping = mappings.find((m) => m.teamId === params.teamId);
       if (!mapping) continue;

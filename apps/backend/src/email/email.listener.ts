@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import * as Sentry from '@sentry/nestjs';
 import { DatabaseService } from '../database/database.service.js';
 import type { EmailJobData } from '../queue/queue.types.js';
 import type {
@@ -93,6 +94,7 @@ export class EmailListener {
   private enqueue(jobName: string, data: EmailJobData): void {
     this.emailQueue.add(jobName, data).catch((err) => {
       this.logger.error(`Failed to enqueue email job ${jobName}`, err);
+      Sentry.captureException(err, { tags: { operation: 'email-enqueue' }, extra: { jobName } });
     });
   }
 

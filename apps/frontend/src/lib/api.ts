@@ -152,6 +152,11 @@ export async function getOrganizations(): Promise<Organization[]> {
   return fetchApi<Organization[]>("/api/organizations");
 }
 
+export async function checkSlugAvailability(slug: string): Promise<boolean> {
+  const result = await fetchApi<{ available: boolean }>(`/api/organizations/check-slug?slug=${encodeURIComponent(slug)}`);
+  return result.available;
+}
+
 export async function getOrganization(id: string): Promise<Organization> {
   return fetchApi<Organization>(`/api/organizations/${id}`);
 }
@@ -403,6 +408,23 @@ export async function createInvite(orgId: string, data: { email: string; role: s
 export async function cancelInvite(orgId: string, inviteId: string): Promise<void> {
   return fetchApi<void>(`/api/organizations/${orgId}/invites/${inviteId}`, {
     method: "DELETE",
+  });
+}
+
+export async function getInviteDetails(inviteId: string): Promise<{
+  id: string;
+  organizationName: string;
+  inviterName: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+}> {
+  return fetchApi(`/api/invites/${inviteId}`);
+}
+
+export async function acceptInvite(inviteId: string): Promise<Invite> {
+  return fetchApi<Invite>(`/api/invites/${inviteId}/accept`, {
+    method: "POST",
   });
 }
 

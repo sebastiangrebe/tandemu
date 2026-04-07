@@ -100,6 +100,11 @@ export class AuthService {
       autoAcceptedOrgIds: result.autoAcceptedOrgIds,
     } satisfies UserRegisteredEvent);
 
+    // Trigger seat sync for each auto-accepted org
+    for (const orgId of result.autoAcceptedOrgIds) {
+      this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
+    }
+
     return this.generateAuthResponse(result.user.id, result.user.email, result.user.name);
   }
 
@@ -327,6 +332,11 @@ export class AuthService {
       name,
       autoAcceptedOrgIds: result.autoAcceptedOrgIds,
     } satisfies UserRegisteredEvent);
+
+    // Trigger seat sync for each auto-accepted org
+    for (const orgId of result.autoAcceptedOrgIds) {
+      this.eventEmitter.emit('organization.membership_changed', { organizationId: orgId });
+    }
 
     return this.generateAuthResponse(result.user.id, result.user.email, result.user.name);
   }

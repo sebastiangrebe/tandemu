@@ -2,7 +2,9 @@ import {
   BadGatewayException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import type { Task, TaskStatus, TaskPriority } from '@tandemu/types';
 import type {
   TaskProvider,
@@ -85,6 +87,8 @@ interface JiraProject {
   key: string;
   name: string;
 }
+
+const logger = new Logger('JiraProvider');
 
 export class JiraProvider implements TaskProvider {
   async fetchTasks(params: TaskProviderFetchParams): Promise<Task[]> {
@@ -340,7 +344,9 @@ export class JiraProvider implements TaskProvider {
         id: c.id,
         name: c.name,
       }));
-    } catch {
+    } catch (err) {
+      logger.warn(`Failed to fetch Jira sub-projects for ${projectKey}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'provider-jira-sub-projects' }, extra: { projectKey } });
       return [];
     }
   }

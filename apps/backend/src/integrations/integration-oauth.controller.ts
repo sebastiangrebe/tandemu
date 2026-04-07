@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import type { Response } from 'express';
+import * as Sentry from '@sentry/nestjs';
 import { GithubOAuthService } from '../auth/strategies/github.strategy.js';
 import { IntegrationsService } from './integrations.service.js';
 import { AuthService } from '../auth/auth.service.js';
@@ -121,6 +122,7 @@ export class IntegrationOAuthController {
       res.redirect(redirectUrl.toString());
     } catch (error) {
       this.logger.error(`GitHub integration OAuth failed: ${error}`);
+      Sentry.captureException(error, { tags: { operation: 'oauth-callback-github' } });
       const redirectUrl = new URL(stateData.returnUrl, this.frontendUrl);
       redirectUrl.searchParams.set('github', 'error');
       res.redirect(redirectUrl.toString());

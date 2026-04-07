@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { githubFetch } from './github.provider.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -121,6 +122,7 @@ export class GitHubGitService {
       }));
     } catch (error) {
       this.logger.warn(`Failed to fetch commits for ${owner}/${repo} (token may lack repo access): ${error}`);
+      Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-commits' }, extra: { owner, repo } });
       return [];
     }
   }
@@ -159,6 +161,7 @@ export class GitHubGitService {
         }));
     } catch (error) {
       this.logger.warn(`Failed to fetch PRs for ${owner}/${repo} (token may lack repo access): ${error}`);
+      Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-prs' }, extra: { owner, repo } });
       return [];
     }
   }
@@ -190,6 +193,7 @@ export class GitHubGitService {
         }));
     } catch (error) {
       this.logger.warn(`Failed to search PRs for file ${filePath}: ${error}`);
+      Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-prs-for-file' }, extra: { filePath } });
       return [];
     }
   }

@@ -14,7 +14,7 @@ Create a new task in the team's ticket system. Use when you discover work that n
 ### 1. Setup
 
 ```bash
-source ~/.claude/lib/tandemu-env.sh 2>/dev/null || source "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
@@ -59,6 +59,8 @@ Then optionally ask for priority:
 
 Set `SELECTED_TEAM_ID` from the choice. If single team, use `$TANDEMU_TEAM_ID` directly.
 
+**Determine the provider**: If there's an active task (from step 1), use its `provider` field. Otherwise omit — the backend prefers dedicated trackers (Linear, Jira, etc.) over GitHub by default.
+
 ```bash
 RESULT=$(curl -sf -X POST "$TANDEMU_API/api/tasks" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
@@ -68,7 +70,8 @@ RESULT=$(curl -sf -X POST "$TANDEMU_API/api/tasks" \
     "title": "<title from step 2>",
     "description": "<description if provided>",
     "assigneeEmail": "'"$TANDEMU_USER_EMAIL"'",
-    "priority": "<priority from step 2>"
+    "priority": "<priority from step 2>",
+    "provider": "<provider from active task, or omit field if unknown>"
   }')
 echo "$RESULT"
 ```

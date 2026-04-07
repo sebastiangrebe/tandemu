@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     ports:
       - "5432:5432"
     environment:
@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: tandemu
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tandemu"]
       interval: 10s
@@ -47,6 +48,11 @@ services:
     image: otel/opentelemetry-collector-contrib:0.114.0
     # No public ports — only reachable via Docker internal network
     # Backend proxies all external telemetry through /api/telemetry/ingest
+    environment:
+      CLICKHOUSE_ENDPOINT: ${CLICKHOUSE_ENDPOINT:-tcp://clickhouse:9000?dial_timeout=10s&compress=lz4}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-otel}
+      CLICKHOUSE_USERNAME: ${CLICKHOUSE_USERNAME:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
@@ -74,6 +80,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OPENMEMORY_HOST: mem0
+      OPENMEMORY_PORT: 8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,30 +101,21 @@ services:
       - backend
     restart: unless-stopped
 
-  mem0_store:
-    image: qdrant/qdrant:latest
+  mem0:
+    build:
+      context: ./docker/mem0
     ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  openmemory:
-    image: mem0/openmemory-mcp:latest
-    ports:
-      - "8765:8765"
+      - "8000:8000"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MEM0_TELEMETRY: "false"
-    volumes:
-      - openmemory_data:/app/data
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: mem0
+      POSTGRES_USER: tandemu
+      POSTGRES_PASSWORD: tandemu
     depends_on:
-      mem0_store:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 
@@ -124,5 +123,3 @@ volumes:
   postgres_data:
   clickhouse_data:
   redis_data:
-  qdrant_data:
-  openmemory_data:
