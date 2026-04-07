@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain, Trash2 } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain, Trash2, Server, RefreshCw } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { RemoveMemberDialog } from '@/components/remove-member-dialog';
@@ -23,9 +23,13 @@ import {
   createCheckout,
   createBillingPortal,
   getInvoices,
+  checkForUpdate,
+  type VersionCheckResult,
 } from '@/lib/api';
 import type { Invoice } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { UpdateBanner } from '@/components/update-banner';
+import { VERSION } from '@tandemu/types';
 import type { Organization, Membership, Invite, Team } from '@tandemu/types';
 
 function generateSlug(name: string): string {
@@ -635,6 +639,28 @@ function SettingsPageContent() {
                 <p className="text-sm text-muted-foreground">No members yet.</p>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* System Info */}
+      {process.env.NEXT_PUBLIC_BILLING_ENABLED !== 'true' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              System
+            </CardTitle>
+            <CardDescription>Version information and updates</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <UpdateBanner />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Current Version</p>
+                <p className="text-sm text-muted-foreground">v{VERSION}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

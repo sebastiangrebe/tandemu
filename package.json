@@ -1,17 +1,50 @@
 {
   "name": "tandemu",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "release": "release-it",
+    "release:ci": "release-it --ci"
   },
   "devDependencies": {
+    "@release-it/bumper": "^7.0.0",
+    "@release-it/conventional-changelog": "^9.0.0",
     "@types/node": "^25.5.0",
+    "release-it": "^18.0.0",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0"
+  },
+  "release-it": {
+    "git": {
+      "commitMessage": "release: v${version}",
+      "tagName": "v${version}"
+    },
+    "github": {
+      "release": true
+    },
+    "plugins": {
+      "@release-it/bumper": {
+        "out": [
+          {
+            "path": "packages/types/src/version.ts",
+            "type": "text/plain",
+            "consumeWholeFile": true,
+            "data": "export const VERSION = '${version}';\n"
+          },
+          "apps/backend/package.json",
+          "apps/frontend/package.json"
+        ]
+      },
+      "@release-it/conventional-changelog": {
+        "preset": "conventionalcommits",
+        "infile": "CHANGELOG.md"
+      }
+    }
   },
   "packageManager": "pnpm@9.15.0"
 }

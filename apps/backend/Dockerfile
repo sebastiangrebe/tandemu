@@ -26,5 +26,8 @@ RUN pnpm --filter @tandemu/types build && \
     pnpm --filter @tandemu/telemetry build && \
     pnpm --filter @tandemu/backend build
 
+ARG APP_VERSION=0.0.0-dev
+ENV APP_VERSION=$APP_VERSION
+
 EXPOSE 3001
 CMD ["node", "apps/backend/dist/main.js"]
