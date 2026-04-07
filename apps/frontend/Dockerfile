@@ -21,5 +21,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @tandemu/types build && \
     pnpm --filter @tandemu/frontend build
 
+ARG APP_VERSION=0.0.0-dev
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+
 EXPOSE 3000
 CMD ["pnpm", "--filter", "@tandemu/frontend", "start"]

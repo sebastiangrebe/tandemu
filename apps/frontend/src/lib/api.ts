@@ -775,3 +775,32 @@ export interface DORAMetrics {
 export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {
   return fetchApi<DORAMetrics>(`/api/telemetry/dora-metrics${buildParams(filter)}`);
 }
+
+// ── Version & Updates ──
+
+export interface VersionCheckResult {
+  current: string;
+  latest: string | null;
+  updateType: 'major' | 'minor' | 'patch' | null;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+}
+
+export interface UpdateResult {
+  triggered: boolean;
+  error?: string;
+}
+
+export async function getVersion(): Promise<{ version: string }> {
+  return fetchApi<{ version: string }>('/api/health/version');
+}
+
+export async function checkForUpdate(): Promise<VersionCheckResult> {
+  return fetchApi<VersionCheckResult>('/api/health/version/check');
+}
+
+export async function triggerUpdate(): Promise<UpdateResult> {
+  return fetchApi<UpdateResult>('/api/health/update', { method: 'POST' });
+}
