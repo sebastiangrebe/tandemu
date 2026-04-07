@@ -161,6 +161,7 @@ export class InvitesService {
       acceptedByUserId: userId,
       organizationId: invite.organization_id,
     } satisfies InviteAcceptedEvent);
+    this.eventEmitter.emit('organization.membership_changed', { organizationId: invite.organization_id });
     return this.mapInvite(result);
   }
 
