@@ -25,6 +25,18 @@ export interface GitPRData {
   files?: string[];
 }
 
+export interface GitDeploymentData {
+  id: number;
+  sha: string;
+  ref: string;
+  environment: string;
+  creator: string;
+  createdAt: string;
+  description: string;
+  status: string;
+  statusUpdatedAt: string;
+}
+
 interface GitHubCommitResponse {
   sha: string;
   commit: {
@@ -43,6 +55,22 @@ interface GitHubPRResponse {
   html_url: string;
   user: { login: string } | null;
   labels: Array<{ name: string }>;
+}
+
+interface GitHubDeploymentResponse {
+  id: number;
+  sha: string;
+  ref: string;
+  environment: string;
+  description: string | null;
+  creator: { login: string } | null;
+  created_at: string;
+}
+
+interface GitHubDeploymentStatusResponse {
+  state: string;
+  created_at: string;
+  environment: string;
 }
 
 interface GitHubSearchResponse {
@@ -166,6 +194,61 @@ export class GitHubGitService {
     } catch (error) {
       this.logger.warn(`Failed to search PRs for file ${filePath}: ${error}`);
       Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-prs-for-file' }, extra: { filePath } });
+      return [];
+    }
+  }
+
+  async fetchDeployments(
+    token: string,
+    owner: string,
+    repo: string,
+    options?: { since?: string; environment?: string; perPage?: number },
+  ): Promise<GitDeploymentData[]> {
+    const params = new URLSearchParams({
+      per_page: String(options?.perPage ?? 50),
+    });
+    if (options?.environment) {
+      params.set('environment', options.environment);
+    }
+
+    const url = `${GITHUB_API}/repos/${owner}/${repo}/deployments?${params}`;
+    try {
+      const deployments = await githubFetch<GitHubDeploymentResponse[]>(url, token);
+
+      const results: GitDeploymentData[] = [];
+      for (const d of deployments) {
+        // Client-side date filter
+        if (options?.since && d.created_at < options.since) continue;
+
+        // Fetch latest status for this deployment (first item = most recent)
+        const statusUrl = `${GITHUB_API}/repos/${owner}/${repo}/deployments/${d.id}/statuses?per_page=1`;
+        try {
+          const statuses = await githubFetch<GitHubDeploymentStatusResponse[]>(statusUrl, token);
+          const latest = statuses[0];
+          if (!latest) continue;
+
+          // Only include successful deployments (actual production deploys)
+          if (latest.state !== 'success') continue;
+
+          results.push({
+            id: d.id,
+            sha: d.sha,
+            ref: d.ref,
+            environment: d.environment,
+            creator: d.creator?.login ?? 'unknown',
+            createdAt: d.created_at,
+            description: d.description ?? '',
+            status: latest.state,
+            statusUpdatedAt: latest.created_at,
+          });
+        } catch {
+          // Skip deployments where status fetch fails
+        }
+      }
+
+      return results;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch deployments for ${owner}/${repo}: ${error}`);
       return [];
     }
   }

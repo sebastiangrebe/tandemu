@@ -1,4 +1,4 @@
-export type IntegrationProvider = 'github' | 'jira' | 'linear' | 'clickup' | 'asana' | 'monday';
+export type IntegrationProvider = 'github' | 'jira' | 'linear' | 'clickup' | 'asana' | 'monday' | 'pagerduty' | 'opsgenie';
 
 export interface Integration {
   readonly id: string;

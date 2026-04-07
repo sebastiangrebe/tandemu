@@ -132,6 +132,56 @@ export class TelemetryService implements OnModuleDestroy {
       this.logger.warn(`Failed to create github_pull_requests table: ${err}`);
     });
 
+    // Auto-create github_deployments table for DORA deployment tracking
+    this.client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS github_deployments (
+          organization_id String,
+          repo String,
+          team_id String,
+          deployment_id UInt64,
+          environment String,
+          sha String,
+          ref String,
+          creator String,
+          status String,
+          created_at DateTime64(3),
+          status_updated_at DateTime64(3),
+          description String DEFAULT '',
+          synced_at DateTime DEFAULT now()
+        ) ENGINE = ReplacingMergeTree(synced_at)
+        ORDER BY (organization_id, repo, deployment_id)
+        TTL synced_at + INTERVAL 365 DAY
+      `,
+    }).then((rs) => rs.text()).catch((err) => {
+      this.logger.warn(`Failed to create github_deployments table: ${err}`);
+    });
+
+    // Auto-create incidents table for DORA CFR/MTTR
+    this.client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS incidents (
+          organization_id String,
+          team_id String,
+          incident_id String,
+          provider String,
+          title String,
+          severity String,
+          status String,
+          service_name String DEFAULT '',
+          created_at DateTime64(3),
+          resolved_at DateTime64(3),
+          url String DEFAULT '',
+          tags Array(String),
+          synced_at DateTime DEFAULT now()
+        ) ENGINE = ReplacingMergeTree(synced_at)
+        ORDER BY (organization_id, provider, incident_id)
+        TTL synced_at + INTERVAL 365 DAY
+      `,
+    }).then((rs) => rs.text()).catch((err) => {
+      this.logger.warn(`Failed to create incidents table: ${err}`);
+    });
+
     // Add skip indexes on OTEL tables for common query patterns.
     // These are idempotent (IF NOT EXISTS) and dramatically reduce scan time
     // by letting ClickHouse skip data granules that don't match our filters.
@@ -1595,6 +1645,125 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  async insertGitHubDeployments(
+    organizationId: string,
+    repo: string,
+    teamId: string,
+    deployments: Array<{
+      id: number;
+      sha: string;
+      ref: string;
+      environment: string;
+      creator: string;
+      createdAt: string;
+      description: string;
+      status: string;
+      statusUpdatedAt: string;
+    }>,
+  ): Promise<void> {
+    if (deployments.length === 0) return;
+
+    const values = deployments.map((d) => ({
+      organization_id: organizationId,
+      repo,
+      team_id: teamId,
+      deployment_id: d.id,
+      environment: d.environment,
+      sha: d.sha,
+      ref: d.ref,
+      creator: d.creator,
+      status: d.status,
+      created_at: TelemetryService.dt(d.createdAt),
+      status_updated_at: TelemetryService.dt(d.statusUpdatedAt),
+      description: d.description,
+    }));
+
+    try {
+      await this.client.insert({
+        table: 'github_deployments',
+        values,
+        format: 'JSONEachRow',
+      });
+      this.logger.log(`Inserted ${deployments.length} deployments for ${repo}`);
+    } catch (err) {
+      this.logger.warn(`Failed to insert GitHub deployments for ${repo}: ${err}`);
+    }
+  }
+
+  async insertIncidents(
+    organizationId: string,
+    teamId: string,
+    incidents: Array<{
+      incidentId: string;
+      provider: string;
+      title: string;
+      severity: string;
+      status: string;
+      serviceName?: string;
+      createdAt: string;
+      resolvedAt?: string;
+      url?: string;
+      tags?: string[];
+    }>,
+  ): Promise<void> {
+    if (incidents.length === 0) return;
+
+    const values = incidents.map((i) => ({
+      organization_id: organizationId,
+      team_id: teamId,
+      incident_id: i.incidentId,
+      provider: i.provider,
+      title: i.title,
+      severity: i.severity,
+      status: i.status,
+      service_name: i.serviceName ?? '',
+      created_at: TelemetryService.dt(i.createdAt),
+      resolved_at: i.resolvedAt ? TelemetryService.dt(i.resolvedAt) : '1970-01-01T00:00:00',
+      url: i.url ?? '',
+      tags: i.tags ?? [],
+    }));
+
+    try {
+      await this.client.insert({
+        table: 'incidents',
+        values,
+        format: 'JSONEachRow',
+      });
+      this.logger.log(`Inserted ${incidents.length} incidents`);
+    } catch (err) {
+      this.logger.warn(`Failed to insert incidents: ${err}`);
+    }
+  }
+
+  // DORA rating helpers
+  private static rateDeployFreq(avg: number): string {
+    if (avg >= 7) return 'elite';
+    if (avg >= 1) return 'high';
+    if (avg >= 0.25) return 'medium';
+    return 'low';
+  }
+
+  private static rateLeadTime(hours: number): string {
+    if (hours <= 1) return 'elite';
+    if (hours <= 24) return 'high';
+    if (hours <= 168) return 'medium';
+    return 'low';
+  }
+
+  private static rateCFR(rate: number): string {
+    if (rate < 0.05) return 'elite';
+    if (rate < 0.10) return 'high';
+    if (rate < 0.15) return 'medium';
+    return 'low';
+  }
+
+  private static rateMTTR(hours: number): string {
+    if (hours <= 1) return 'elite';
+    if (hours <= 24) return 'high';
+    if (hours <= 168) return 'medium';
+    return 'low';
+  }
+
   async getDORAMetrics(
     organizationId: string,
     startDate?: string,
@@ -1603,131 +1772,304 @@ export class TelemetryService implements OnModuleDestroy {
   ): Promise<{
     deploymentFrequency: { avgPerWeek: number; trend: Array<{ week: string; deployments: number }>; rating: string } | null;
     leadTimeForChanges: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null;
-    changeFailureRate: null;
-    meanTimeToRestore: null;
+    changeFailureRate: { rate: number; failedDeploys: number; totalDeploys: number; trend: Array<{ week: string; rate: number }>; rating: string } | null;
+    meanTimeToRestore: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null;
+    dataSource: 'deployments' | 'pull_requests';
   }> {
+    const nullResult = {
+      deploymentFrequency: null,
+      leadTimeForChanges: null,
+      changeFailureRate: null,
+      meanTimeToRestore: null,
+      dataSource: 'pull_requests' as const,
+    };
+
     try {
       const params: Record<string, string> = { organizationId };
-      let dateFilter = '';
+      if (startDate) params.startDate = TelemetryService.dt(startDate);
+      if (endDate) params.endDate = TelemetryService.dt(endDate);
+      if (teamId) params.teamId = teamId;
+      const teamFilter = teamId ? ` AND team_id = {teamId: String}` : '';
+
+      // Check if we have deployment data (prefer over PR merges)
+      const deployCountResult = await this.client.query({
+        query: `SELECT count(*) AS cnt FROM github_deployments FINAL
+                WHERE organization_id = {organizationId: String} AND status = 'success' ${teamFilter}`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const [deployCount] = await deployCountResult.json<{ cnt: number }>();
+      const hasDeployments = deployCount && Number(deployCount.cnt) > 0;
+
+      // Build date filters depending on data source
+      let dateFilterDeploy = '';
+      let dateFilterPR = '';
       if (startDate) {
-        dateFilter += ` AND merged_at >= {startDate: DateTime64(3)}`;
-        params.startDate = TelemetryService.dt(startDate);
+        dateFilterDeploy += ` AND status_updated_at >= {startDate: DateTime64(3)}`;
+        dateFilterPR += ` AND merged_at >= {startDate: DateTime64(3)}`;
       }
       if (endDate) {
-        dateFilter += ` AND merged_at <= {endDate: DateTime64(3)}`;
-        params.endDate = TelemetryService.dt(endDate);
-      }
-      const teamFilter = teamId ? ` AND team_id = {teamId: String}` : '';
-      if (teamId) params.teamId = teamId;
-
-      // Deployment frequency: merged PRs per week
-      const freqQuery = `
-        SELECT
-          toStartOfWeek(merged_at) AS week,
-          count(*) AS deployments
-        FROM github_pull_requests FINAL
-        WHERE organization_id = {organizationId: String}
-          ${dateFilter}
-          ${teamFilter}
-        GROUP BY week
-        ORDER BY week
-      `;
-
-      const freqResult = await this.client.query({
-        query: freqQuery,
-        query_params: params,
-        format: 'JSONEachRow',
-      });
-      const freqRows = await freqResult.json<{ week: string; deployments: number }>();
-
-      // Lead time: created_at → merged_at in hours
-      const leadQuery = `
-        SELECT
-          toStartOfWeek(merged_at) AS week,
-          quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
-          quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS p95Hours
-        FROM github_pull_requests FINAL
-        WHERE organization_id = {organizationId: String}
-          ${dateFilter}
-          ${teamFilter}
-        GROUP BY week
-        ORDER BY week
-      `;
-
-      const leadResult = await this.client.query({
-        query: leadQuery,
-        query_params: params,
-        format: 'JSONEachRow',
-      });
-      const leadRows = await leadResult.json<{ week: string; medianHours: number; p95Hours: number }>();
-
-      // Overall aggregates
-      const aggQuery = `
-        SELECT
-          count(*) AS totalPRs,
-          dateDiff('day', min(merged_at), max(merged_at)) AS daySpan,
-          quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallMedianHours,
-          quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallP95Hours
-        FROM github_pull_requests FINAL
-        WHERE organization_id = {organizationId: String}
-          ${dateFilter}
-          ${teamFilter}
-      `;
-
-      const aggResult = await this.client.query({
-        query: aggQuery,
-        query_params: params,
-        format: 'JSONEachRow',
-      });
-      const [agg] = await aggResult.json<{
-        totalPRs: number;
-        daySpan: number;
-        overallMedianHours: number;
-        overallP95Hours: number;
-      }>();
-
-      if (!agg || Number(agg.totalPRs) === 0) {
-        return { deploymentFrequency: null, leadTimeForChanges: null, changeFailureRate: null, meanTimeToRestore: null };
+        dateFilterDeploy += ` AND status_updated_at <= {endDate: DateTime64(3)}`;
+        dateFilterPR += ` AND merged_at <= {endDate: DateTime64(3)}`;
       }
 
-      const weeks = Math.max(Number(agg.daySpan) / 7, 1);
-      const avgPerWeek = Number(agg.totalPRs) / weeks;
-      const medianHours = Number(agg.overallMedianHours);
-      const p95Hours = Number(agg.overallP95Hours);
+      let freqRows: Array<{ week: string; deployments: number }>;
+      let leadRows: Array<{ week: string; medianHours: number; p95Hours: number }>;
+      let totalItems: number;
+      let daySpan: number;
+      let overallMedianHours: number;
+      let overallP95Hours: number;
 
-      // DORA ratings per industry benchmarks
-      const rateDeployFreq = (avg: number): string => {
-        if (avg >= 7) return 'elite';
-        if (avg >= 1) return 'high';
-        if (avg >= 0.25) return 'medium'; // ~1/month
-        return 'low';
-      };
-      const rateLeadTime = (hours: number): string => {
-        if (hours <= 1) return 'elite';
-        if (hours <= 24) return 'high';
-        if (hours <= 168) return 'medium'; // 1 week
-        return 'low';
-      };
+      if (hasDeployments) {
+        // ── Deployment-based metrics ──
+        const freqResult = await this.client.query({
+          query: `SELECT toStartOfWeek(status_updated_at) AS week, count(*) AS deployments
+                  FROM github_deployments FINAL
+                  WHERE organization_id = {organizationId: String} AND status = 'success'
+                    ${dateFilterDeploy} ${teamFilter}
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        freqRows = await freqResult.json<{ week: string; deployments: number }>();
+
+        // Lead time: PR created → deploy completed
+        const leadResult = await this.client.query({
+          query: `SELECT toStartOfWeek(d.status_updated_at) AS week,
+                    quantile(0.5)(CAST(dateDiff('second', pr.created_at, d.status_updated_at) AS Float64) / 3600.0) AS medianHours,
+                    quantile(0.95)(CAST(dateDiff('second', pr.created_at, d.status_updated_at) AS Float64) / 3600.0) AS p95Hours
+                  FROM github_deployments d FINAL
+                  INNER JOIN github_pull_requests pr FINAL
+                    ON d.organization_id = pr.organization_id AND d.repo = pr.repo
+                    AND pr.merged_at <= d.status_updated_at
+                    AND dateDiff('hour', pr.merged_at, d.status_updated_at) <= 24
+                  WHERE d.organization_id = {organizationId: String} AND d.status = 'success'
+                    ${dateFilterDeploy} ${teamFilter}
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        leadRows = await leadResult.json<{ week: string; medianHours: number; p95Hours: number }>();
+
+        // Overall aggregates from deployments
+        const aggResult = await this.client.query({
+          query: `SELECT count(*) AS total, dateDiff('day', min(status_updated_at), max(status_updated_at)) AS daySpan,
+                    quantile(0.5)(CAST(dateDiff('second', pr.created_at, d.status_updated_at) AS Float64) / 3600.0) AS overallMedianHours,
+                    quantile(0.95)(CAST(dateDiff('second', pr.created_at, d.status_updated_at) AS Float64) / 3600.0) AS overallP95Hours
+                  FROM github_deployments d FINAL
+                  LEFT JOIN github_pull_requests pr FINAL
+                    ON d.organization_id = pr.organization_id AND d.repo = pr.repo
+                    AND pr.merged_at <= d.status_updated_at
+                    AND dateDiff('hour', pr.merged_at, d.status_updated_at) <= 24
+                  WHERE d.organization_id = {organizationId: String} AND d.status = 'success'
+                    ${dateFilterDeploy} ${teamFilter}`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const [agg] = await aggResult.json<{ total: number; daySpan: number; overallMedianHours: number; overallP95Hours: number }>();
+        if (!agg || Number(agg.total) === 0) return nullResult;
+        totalItems = Number(agg.total);
+        daySpan = Number(agg.daySpan);
+        overallMedianHours = Number(agg.overallMedianHours);
+        overallP95Hours = Number(agg.overallP95Hours);
+      } else {
+        // ── PR-based metrics (fallback) ──
+        const freqResult = await this.client.query({
+          query: `SELECT toStartOfWeek(merged_at) AS week, count(*) AS deployments
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        freqRows = await freqResult.json<{ week: string; deployments: number }>();
+
+        const leadResult = await this.client.query({
+          query: `SELECT toStartOfWeek(merged_at) AS week,
+                    quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+                    quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS p95Hours
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        leadRows = await leadResult.json<{ week: string; medianHours: number; p95Hours: number }>();
+
+        const aggResult = await this.client.query({
+          query: `SELECT count(*) AS total, dateDiff('day', min(merged_at), max(merged_at)) AS daySpan,
+                    quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallMedianHours,
+                    quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS overallP95Hours
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const [agg] = await aggResult.json<{ total: number; daySpan: number; overallMedianHours: number; overallP95Hours: number }>();
+        if (!agg || Number(agg.total) === 0) return nullResult;
+        totalItems = Number(agg.total);
+        daySpan = Number(agg.daySpan);
+        overallMedianHours = Number(agg.overallMedianHours);
+        overallP95Hours = Number(agg.overallP95Hours);
+      }
+
+      const weeks = Math.max(daySpan / 7, 1);
+      const avgPerWeek = totalItems / weeks;
+      const medianHours = overallMedianHours;
+      const p95Hours = overallP95Hours;
+
+      // ── Change Failure Rate (requires both deployments + incidents) ──
+      let changeFailureRate: { rate: number; failedDeploys: number; totalDeploys: number; trend: Array<{ week: string; rate: number }>; rating: string } | null = null;
+
+      if (hasDeployments) {
+        try {
+          const cfrResult = await this.client.query({
+            query: `WITH failed AS (
+                      SELECT DISTINCT d.deployment_id
+                      FROM github_deployments d FINAL
+                      JOIN incidents i FINAL
+                        ON d.organization_id = i.organization_id AND d.team_id = i.team_id
+                      WHERE d.organization_id = {organizationId: String}
+                        AND d.status = 'success'
+                        AND i.created_at >= d.status_updated_at
+                        AND dateDiff('hour', d.status_updated_at, i.created_at) <= 4
+                        ${dateFilterDeploy} ${teamFilter}
+                    )
+                    SELECT
+                      count(DISTINCT d.deployment_id) AS totalDeploys,
+                      countIf(d.deployment_id IN (SELECT deployment_id FROM failed)) AS failedDeploys
+                    FROM github_deployments d FINAL
+                    WHERE d.organization_id = {organizationId: String} AND d.status = 'success'
+                      ${dateFilterDeploy} ${teamFilter}`,
+            query_params: params,
+            format: 'JSONEachRow',
+          });
+          const [cfr] = await cfrResult.json<{ totalDeploys: number; failedDeploys: number }>();
+
+          if (cfr && Number(cfr.totalDeploys) > 0) {
+            const total = Number(cfr.totalDeploys);
+            const failed = Number(cfr.failedDeploys);
+            const rate = failed / total;
+
+            // Weekly trend
+            const cfrTrendResult = await this.client.query({
+              query: `WITH failed AS (
+                        SELECT DISTINCT d.deployment_id, toStartOfWeek(d.status_updated_at) AS week
+                        FROM github_deployments d FINAL
+                        JOIN incidents i FINAL
+                          ON d.organization_id = i.organization_id AND d.team_id = i.team_id
+                        WHERE d.organization_id = {organizationId: String}
+                          AND d.status = 'success'
+                          AND i.created_at >= d.status_updated_at
+                          AND dateDiff('hour', d.status_updated_at, i.created_at) <= 4
+                          ${dateFilterDeploy} ${teamFilter}
+                      )
+                      SELECT
+                        toStartOfWeek(d.status_updated_at) AS week,
+                        count(DISTINCT d.deployment_id) AS totalDeploys,
+                        countIf(d.deployment_id IN (SELECT deployment_id FROM failed WHERE failed.week = toStartOfWeek(d.status_updated_at))) AS failedDeploys
+                      FROM github_deployments d FINAL
+                      WHERE d.organization_id = {organizationId: String} AND d.status = 'success'
+                        ${dateFilterDeploy} ${teamFilter}
+                      GROUP BY week ORDER BY week`,
+              query_params: params,
+              format: 'JSONEachRow',
+            });
+            const cfrTrendRows = await cfrTrendResult.json<{ week: string; totalDeploys: number; failedDeploys: number }>();
+
+            changeFailureRate = {
+              rate: Math.round(rate * 1000) / 1000,
+              failedDeploys: failed,
+              totalDeploys: total,
+              trend: cfrTrendRows.map((r) => ({
+                week: r.week,
+                rate: Number(r.totalDeploys) > 0 ? Math.round((Number(r.failedDeploys) / Number(r.totalDeploys)) * 1000) / 1000 : 0,
+              })),
+              rating: TelemetryService.rateCFR(rate),
+            };
+          }
+        } catch (err) {
+          this.logger.warn(`Failed to compute CFR: ${err}`);
+        }
+      }
+
+      // ── Mean Time to Restore (from incidents) ──
+      let meanTimeToRestore: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null = null;
+
+      try {
+        let incidentDateFilter = '';
+        if (startDate) incidentDateFilter += ` AND resolved_at >= {startDate: DateTime64(3)}`;
+        if (endDate) incidentDateFilter += ` AND resolved_at <= {endDate: DateTime64(3)}`;
+
+        const mttrResult = await this.client.query({
+          query: `SELECT
+                    quantile(0.5)(CAST(dateDiff('second', created_at, resolved_at) AS Float64) / 3600.0) AS medianHours,
+                    quantile(0.95)(CAST(dateDiff('second', created_at, resolved_at) AS Float64) / 3600.0) AS p95Hours
+                  FROM incidents FINAL
+                  WHERE organization_id = {organizationId: String}
+                    AND status = 'resolved'
+                    AND resolved_at > toDateTime64('1970-01-02', 3)
+                    ${incidentDateFilter} ${teamFilter}`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const [mttr] = await mttrResult.json<{ medianHours: number; p95Hours: number }>();
+
+        if (mttr && Number(mttr.medianHours) > 0) {
+          const mttrTrendResult = await this.client.query({
+            query: `SELECT toStartOfWeek(resolved_at) AS week,
+                      quantile(0.5)(CAST(dateDiff('second', created_at, resolved_at) AS Float64) / 3600.0) AS medianHours
+                    FROM incidents FINAL
+                    WHERE organization_id = {organizationId: String}
+                      AND status = 'resolved'
+                      AND resolved_at > toDateTime64('1970-01-02', 3)
+                      ${incidentDateFilter} ${teamFilter}
+                    GROUP BY week ORDER BY week`,
+            query_params: params,
+            format: 'JSONEachRow',
+          });
+          const mttrTrendRows = await mttrTrendResult.json<{ week: string; medianHours: number }>();
+
+          meanTimeToRestore = {
+            medianHours: Math.round(Number(mttr.medianHours) * 10) / 10,
+            p95Hours: Math.round(Number(mttr.p95Hours) * 10) / 10,
+            trend: mttrTrendRows.map((r) => ({ week: r.week, medianHours: Math.round(Number(r.medianHours) * 10) / 10 })),
+            rating: TelemetryService.rateMTTR(Number(mttr.medianHours)),
+          };
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to compute MTTR: ${err}`);
+      }
 
       return {
         deploymentFrequency: {
           avgPerWeek: Math.round(avgPerWeek * 10) / 10,
           trend: freqRows.map((r) => ({ week: r.week, deployments: Number(r.deployments) })),
-          rating: rateDeployFreq(avgPerWeek),
+          rating: TelemetryService.rateDeployFreq(avgPerWeek),
         },
         leadTimeForChanges: {
           medianHours: Math.round(medianHours * 10) / 10,
           p95Hours: Math.round(p95Hours * 10) / 10,
           trend: leadRows.map((r) => ({ week: r.week, medianHours: Math.round(Number(r.medianHours) * 10) / 10 })),
-          rating: rateLeadTime(medianHours),
+          rating: TelemetryService.rateLeadTime(medianHours),
         },
-        changeFailureRate: null,
-        meanTimeToRestore: null,
+        changeFailureRate,
+        meanTimeToRestore,
+        dataSource: hasDeployments ? 'deployments' : 'pull_requests',
       };
     } catch (err) {
       this.logger.warn(`Failed to get DORA metrics: ${err}`);
       Sentry.captureException(err, { tags: { operation: 'telemetry-dora-metrics' } });
-      return { deploymentFrequency: null, leadTimeForChanges: null, changeFailureRate: null, meanTimeToRestore: null };
+      return {
+        deploymentFrequency: null,
+        leadTimeForChanges: null,
+        changeFailureRate: null,
+        meanTimeToRestore: null,
+        dataSource: 'pull_requests',
+      };
     }
   }
 }

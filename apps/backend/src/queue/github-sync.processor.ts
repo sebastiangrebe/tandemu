@@ -50,5 +50,22 @@ export class GitHubSyncProcessor extends SentryProcessor {
     }
 
     this.logger.log(`Synced ${prs.length} merged PRs for ${repo}`);
+
+    // Sync GitHub Deployments (for proper DORA deployment tracking)
+    try {
+      const deployments = await this.gitHubGitService.fetchDeployments(token, owner, repoName, {
+        since,
+        environment: 'production',
+        perPage: 50,
+      });
+
+      if (deployments.length > 0) {
+        await this.telemetryService.insertGitHubDeployments(organizationId, repo, teamId, deployments);
+      }
+
+      this.logger.log(`Synced ${deployments.length} deployments for ${repo}`);
+    } catch (err) {
+      this.logger.warn(`Failed to sync deployments for ${repo}: ${err}`);
+    }
   }
 }

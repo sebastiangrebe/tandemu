@@ -38,6 +38,7 @@ export class TasksService {
     const fetchPromises: Promise<Task[]>[] = [];
 
     for (const { rawIntegration, mappings, provider } of integrationData) {
+      if (!provider) continue; // Skip incident-only providers (pagerduty, opsgenie)
       const targetMappings = params.teamId
         ? mappings.filter((m) => m.teamId === params.teamId)
         : mappings;
@@ -70,6 +71,7 @@ export class TasksService {
   async getSubtasks(orgId: string, taskId: string, provider: IntegrationProvider): Promise<Task[]> {
     const integration = await this.integrationsService.findOne(orgId, provider);
     const taskProvider = getProvider(provider);
+    if (!taskProvider) throw new NotFoundException(`Provider ${provider} does not support tasks`);
 
     if (!taskProvider.fetchSubtasks) {
       return [];
@@ -87,6 +89,7 @@ export class TasksService {
   async getTaskStatuses(orgId: string, taskId: string, provider: IntegrationProvider) {
     const integration = await this.integrationsService.findOne(orgId, provider);
     const taskProvider = getProvider(provider);
+    if (!taskProvider) throw new NotFoundException(`Provider ${provider} does not support tasks`);
 
     return taskProvider.getTaskStatuses({
       accessToken: integration.access_token,
@@ -103,6 +106,7 @@ export class TasksService {
   ): Promise<void> {
     const integration = await this.integrationsService.findOne(orgId, provider);
     const taskProvider = getProvider(provider);
+    if (!taskProvider) throw new NotFoundException(`Provider ${provider} does not support tasks`);
 
     await taskProvider.updateTask({
       accessToken: integration.access_token,
@@ -140,6 +144,7 @@ export class TasksService {
       : integrationData.sort((a, b) => (a.providerName === 'github' ? 1 : b.providerName === 'github' ? -1 : 0));
 
     for (const { rawIntegration, mappings, provider } of sorted) {
+      if (!provider) continue;
       const mapping = mappings.find((m) => m.teamId === params.teamId);
       if (!mapping) continue;
 
@@ -161,6 +166,7 @@ export class TasksService {
   async getProjects(orgId: string, providerName: IntegrationProvider): Promise<ExternalProject[]> {
     const integration = await this.integrationsService.findOne(orgId, providerName);
     const provider = getProvider(providerName);
+    if (!provider) throw new NotFoundException(`Provider ${providerName} does not support tasks`);
 
     return provider.fetchProjects({
       accessToken: integration.access_token,
