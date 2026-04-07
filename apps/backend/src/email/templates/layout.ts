@@ -1,4 +1,4 @@
-const LOGO_DATA_URI = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxNiAxNikgcm90YXRlKDQ1KSI+PHJlY3QgeD0iLTExLjMxNCIgeT0iLTExLjMxNCIgd2lkdGg9IjIyLjYyNyIgaGVpZ2h0PSIyMi42MjciIHJ4PSI0IiBmaWxsPSJ3aGl0ZSIvPjxyZWN0IHg9Ii04LjMxNCIgeT0iLTguMzE0IiB3aWR0aD0iMTYuNjI3IiBoZWlnaHQ9IjE2LjYyNyIgcng9IjMiIGZpbGw9IiMwOTA5MGIiLz48cmVjdCB4PSItNS4zMTQiIHk9Ii01LjMxNCIgd2lkdGg9IjEwLjYyNyIgaGVpZ2h0PSIxMC42MjciIHJ4PSIyIiBmaWxsPSJ3aGl0ZSIvPjwvZz48L3N2Zz4=';
+const LOGO_URL = 'https://app.tandemu.dev/logo-dark.svg';
 
 export function emailLayout(content: string): string {
   return `<!DOCTYPE html>
@@ -12,7 +12,7 @@ export function emailLayout(content: string): string {
     <tr><td align="center">
       <!-- Logo above card -->
       <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr>
-        <td style="vertical-align:middle; padding-right:10px;"><img src="${LOGO_DATA_URI}" width="28" height="28" alt="Tandemu" style="display:block;" /></td>
+        <td style="vertical-align:middle; padding-right:10px;"><img src="${LOGO_URL}" width="28" height="28" alt="Tandemu" style="display:block;" /></td>
         <td style="vertical-align:middle;"><span style="font-size:20px; font-weight:700; color:#fafafa; letter-spacing:-0.5px;">Tandemu</span></td>
       </tr></table>
       <!-- Card -->
