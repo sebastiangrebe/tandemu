@@ -839,14 +839,9 @@ function SetupPageInner() {
               )}
               <div className="flex-1" />
               {step < 2 ? (
-                <>
-                  {step > 0 && (
-                    <Button variant="ghost" onClick={() => setStep(step + 1)} disabled={isSubmitting}>Skip</Button>
-                  )}
-                  <Button onClick={() => setStep(step + 1)} disabled={!canProceed() || isSubmitting}>
-                    Continue
-                  </Button>
-                </>
+                <Button onClick={() => setStep(step + 1)} disabled={!canProceed() || isSubmitting}>
+                  {step === 1 && teams.length === 0 ? 'Skip' : 'Continue'}
+                </Button>
               ) : step === 2 ? (
                 <Button onClick={handleComplete} disabled={isSubmitting}>
                   {isSubmitting ? (
@@ -855,7 +850,7 @@ function SetupPageInner() {
                       Setting up...
                     </>
                   ) : (
-                    'Continue'
+                    invites.length === 0 ? 'Skip' : 'Continue'
                   )}
                 </Button>
               ) : (
