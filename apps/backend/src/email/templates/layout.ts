@@ -1,4 +1,4 @@
-const LOGO_URL = 'https://app.tandemu.dev/logo-dark.svg';
+const LOGO_URL = 'https://app.tandemu.dev/web-app-manifest-192x192.png';
 
 export function emailLayout(content: string): string {
   return `<!DOCTYPE html>
