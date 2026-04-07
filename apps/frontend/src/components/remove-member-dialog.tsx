@@ -59,7 +59,10 @@ export function RemoveMemberDialog({ open, onOpenChange, orgId, memberId, member
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button variant="destructive" onClick={handleRemove} disabled={removing}>
             {removing ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Removing...
+              </>
             ) : (
               'Remove Member'
             )}

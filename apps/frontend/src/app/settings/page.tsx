@@ -220,7 +220,10 @@ function SettingsPageContent() {
               disabled={savingOrg || !hasChanges}
             >
               {savingOrg ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                  Saving...
+                </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
@@ -292,7 +295,10 @@ function SettingsPageContent() {
               disabled={savingROI}
             >
               {savingROI ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                  Saving...
+                </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
@@ -348,7 +354,10 @@ function SettingsPageContent() {
               disabled={savingMemory}
             >
               {savingMemory ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                  Saving...
+                </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />

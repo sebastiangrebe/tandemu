@@ -59,7 +59,10 @@ export function DeleteTeamDialog({ open, onOpenChange, orgId, teamId, teamName, 
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
             {deleting ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Deleting...
+              </>
             ) : (
               'Delete Team'
             )}

@@ -979,7 +979,10 @@ function SetupPageInner() {
                     }
                   >
                     {setupConnecting ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                        Connecting...
+                      </>
                     ) : (
                       <>
                         <Plug className="h-4 w-4 mr-2" />

@@ -89,7 +89,10 @@ export function CreateTeamDialog({ open, onOpenChange, orgId, onCreated }: Creat
           </Button>
           <Button size="sm" onClick={handleCreate} disabled={creating || !name.trim()}>
             {creating ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Creating...
+              </>
             ) : (
               'Create'
             )}

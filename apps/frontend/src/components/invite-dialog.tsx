@@ -138,7 +138,10 @@ export function InviteDialog({ open, onOpenChange, orgId, teams, onInvitesSent }
             disabled={sending || !email.trim()}
           >
             {sending ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Sending...
+              </>
             ) : (
               <>
                 <Mail className="h-4 w-4 mr-2" />
