@@ -33,6 +33,12 @@ export default function LoginPage() {
   const hasGoogle = providers.includes('google');
   const hasGithub = providers.includes('github');
 
+  // Detect invite redirect to show contextual messaging
+  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const redirect = params?.get('redirect') || '';
+  const isInviteRedirect = redirect.startsWith('/invites/');
+  const registerHref = redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -75,10 +81,15 @@ export default function LoginPage() {
               <h1 className="text-xl font-semibold">Log In</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 New to Tandemu?{' '}
-                <Link href="/register" className="font-medium text-primary hover:underline">
+                <Link href={registerHref} className="font-medium text-primary hover:underline">
                   Sign up
                 </Link>
               </p>
+              {isInviteRedirect && (
+                <p className="mt-2 text-sm text-primary font-medium">
+                  You&apos;ve been invited to an organization. Log in or create an account to accept.
+                </p>
+              )}
             </div>
 
             {!configLoaded ? (

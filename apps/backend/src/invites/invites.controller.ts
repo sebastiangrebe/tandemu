@@ -44,6 +44,15 @@ export class InvitesController {
     return this.invitesService.findAllForOrg(orgId);
   }
 
+  // Any authenticated user can view their own invite details
+  @Get('invites/:inviteId')
+  async getDetails(
+    @Param('inviteId') inviteId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.invitesService.getDetails(inviteId, user.userId);
+  }
+
   // Any authenticated user can accept their own invite
   @Post('invites/:inviteId/accept')
   async accept(

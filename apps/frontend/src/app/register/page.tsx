@@ -34,6 +34,12 @@ export default function RegisterPage() {
   const hasGoogle = providers.includes('google');
   const hasGithub = providers.includes('github');
 
+  // Detect invite redirect to show contextual messaging
+  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const redirect = params?.get('redirect') || '';
+  const isInviteRedirect = redirect.startsWith('/invites/');
+  const loginHref = redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -87,10 +93,15 @@ export default function RegisterPage() {
               <h1 className="text-xl font-semibold">Sign Up</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <Link href="/login" className="font-medium text-primary hover:underline">
+                <Link href={loginHref} className="font-medium text-primary hover:underline">
                   Log in
                 </Link>
               </p>
+              {isInviteRedirect && (
+                <p className="mt-2 text-sm text-primary font-medium">
+                  You&apos;ve been invited to an organization. Create an account to accept.
+                </p>
+              )}
             </div>
 
             {!configLoaded ? (
@@ -120,7 +131,10 @@ export default function RegisterPage() {
                           variant="outline"
                           className="w-full"
                           type="button"
-                          onClick={() => { window.location.href = `${API_URL}/api/auth/google`; }}
+                          onClick={() => {
+                            if (redirect) localStorage.setItem('tandemu_auth_redirect', redirect);
+                            window.location.href = `${API_URL}/api/auth/google`;
+                          }}
                         >
                           <SiGoogle className="mr-2 h-4 w-4" />
                           Continue with Google
@@ -131,7 +145,10 @@ export default function RegisterPage() {
                           variant="outline"
                           className="w-full"
                           type="button"
-                          onClick={() => { window.location.href = `${API_URL}/api/auth/github`; }}
+                          onClick={() => {
+                            if (redirect) localStorage.setItem('tandemu_auth_redirect', redirect);
+                            window.location.href = `${API_URL}/api/auth/github`;
+                          }}
                         >
                           <SiGithub className="mr-2 h-4 w-4" />
                           Continue with GitHub
