@@ -71,7 +71,10 @@ export function RenameTeamDialog({ open, onOpenChange, orgId, teamId, currentNam
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleRename} disabled={renaming || !name.trim() || name.trim() === currentName}>
             {renaming ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Renaming...
+              </>
             ) : (
               'Rename'
             )}

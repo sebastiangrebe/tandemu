@@ -70,7 +70,14 @@ export function BillingBanner() {
           disabled={loading}
           className="shrink-0 sm:ml-auto"
         >
-          {loading ? 'Redirecting...' : 'Upgrade to Pro'}
+          {loading ? (
+            <>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+              Redirecting...
+            </>
+          ) : (
+            'Upgrade to Pro'
+          )}
         </Button>
       </div>
     </div>

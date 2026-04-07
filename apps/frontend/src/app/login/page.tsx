@@ -184,7 +184,10 @@ export default function LoginPage() {
                     />
                     <Button type="submit" className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                          Signing in...
+                        </>
                       ) : (
                         'Sign in'
                       )}

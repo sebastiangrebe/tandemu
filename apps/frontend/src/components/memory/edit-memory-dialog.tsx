@@ -110,7 +110,10 @@ export function EditMemoryDialog({ open, onOpenChange, memory, onUpdated }: Edit
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving || !content.trim()}>
             {saving ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                Saving...
+              </>
             ) : (
               'Save'
             )}

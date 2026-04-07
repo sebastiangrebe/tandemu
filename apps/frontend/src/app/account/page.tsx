@@ -135,8 +135,17 @@ export default function AccountPage() {
               disabled={addingAlias || !newAliasEmail.trim()}
               onClick={handleAddAlias}
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Add
+              {addingAlias ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </>
+              )}
             </Button>
           </div>
         </CardContent>

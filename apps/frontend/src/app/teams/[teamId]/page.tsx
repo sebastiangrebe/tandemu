@@ -315,7 +315,10 @@ export default function TeamDetailPage({ params }: { params: Promise<{ teamId: s
                 }}
               >
                 {savingSettings ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                    Saving...
+                  </>
                 ) : (
                   'Save'
                 )}
