@@ -24,13 +24,13 @@ export function renderInvoicePaid(data: {
     </table>
     <p style="margin:24px 0;">
       <a href="${data.invoiceUrl}"
-         style="display:inline-block; padding:12px 28px; background:#6366f1; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px;">
+         style="display:inline-block; padding:12px 28px; background:#fafafa; color:#09090b; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px;">
         View Invoice
       </a>
     </p>
     <p style="margin:0; font-size:13px; color:#a1a1aa;">
       You can also manage your subscription from the
-      <a href="${data.frontendUrl}/settings" style="color:#818cf8; text-decoration:none;">Settings</a> page.
+      <a href="${data.frontendUrl}/settings" style="color:#d4d4d8; text-decoration:none;">Settings</a> page.
     </p>
   `);
 }

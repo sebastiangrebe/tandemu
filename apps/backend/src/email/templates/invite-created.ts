@@ -15,7 +15,7 @@ export function renderInviteCreated(data: {
     </p>
     <p style="margin:24px 0;">
       <a href="${data.frontendUrl}/invites/${data.inviteId}"
-         style="display:inline-block; padding:12px 28px; background:#6366f1; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px;">
+         style="display:inline-block; padding:12px 28px; background:#fafafa; color:#09090b; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px;">
         Accept Invite
       </a>
     </p>
