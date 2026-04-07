@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "AI Teammate plugin for Claude Code",
-    "version": "1.9.5"
+    "version": "1.9.7"
   },
   "plugins": [
     {
       "name": "tandemu",
       "source": "./apps/claude-plugins",
       "description": "AI Teammate — task lifecycle, telemetry, and persistent memory",
-      "version": "1.9.5",
+      "version": "1.9.7",
       "author": {
         "name": "Tandemu"
       }
