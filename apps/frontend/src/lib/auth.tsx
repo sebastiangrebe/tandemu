@@ -103,9 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await apiLogin(email, password);
     localStorage.setItem('tandemu_token', response.accessToken);
     setToken(response.accessToken);
-    setUser(response.user);
 
-    const orgs = await getOrganizations();
+    const [fullUser, orgs] = await Promise.all([getMe(), getOrganizations()]);
+    setUser(fullUser);
     setOrganizations(orgs);
     resolveCurrentOrg(orgs);
 
@@ -123,10 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await apiRegister(email, name, password);
     localStorage.setItem('tandemu_token', response.accessToken);
     setToken(response.accessToken);
-    setUser(response.user);
 
     // Check if invites were auto-accepted during registration
-    const orgs = await getOrganizations();
+    const [fullUser, orgs] = await Promise.all([getMe(), getOrganizations()]);
+    setUser(fullUser);
     setOrganizations(orgs);
     resolveCurrentOrg(orgs);
 
