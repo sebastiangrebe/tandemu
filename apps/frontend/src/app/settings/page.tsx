@@ -81,6 +81,7 @@ function SettingsPageContent() {
   // ROI settings
   const [editHourlyRate, setEditHourlyRate] = useState(75);
   const [editSecsPerLine, setEditSecsPerLine] = useState(120);
+  const [editMonthlyBudget, setEditMonthlyBudget] = useState<number | undefined>(undefined);
   const [savingROI, setSavingROI] = useState(false);
 
   // Memory settings
@@ -102,6 +103,7 @@ function SettingsPageContent() {
       if (s?.developerHourlyRate) setEditHourlyRate(s.developerHourlyRate);
       if (s?.aiLineTimeEstimateSeconds) setEditSecsPerLine(s.aiLineTimeEstimateSeconds);
       if (s?.draftRetentionDays) setEditDraftRetention(s.draftRetentionDays);
+      if (s?.monthlyAICostBudget) setEditMonthlyBudget(s.monthlyAICostBudget);
 
       const [memberList, invites, teamList] = await Promise.all([
         getMembers(activeOrg.id),
@@ -275,6 +277,17 @@ function SettingsPageContent() {
                 <p className="text-xs text-muted-foreground">How long a developer takes to write one line manually</p>
               </div>
             </div>
+            <div className="max-w-xs space-y-2">
+              <label className="text-sm font-medium">Monthly AI Cost Budget ($)</label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="No budget set"
+                value={editMonthlyBudget ?? ''}
+                onChange={(e) => setEditMonthlyBudget(e.target.value ? Number(e.target.value) : undefined)}
+              />
+              <p className="text-xs text-muted-foreground">Optional. Shows a progress bar on the Insights page.</p>
+            </div>
             <p className="text-xs text-muted-foreground">
               These values estimate how much manual coding work AI replaces. They are used to calculate capacity freed on the Insights page.
             </p>
@@ -286,7 +299,7 @@ function SettingsPageContent() {
                 setSavingROI(true);
                 try {
                   const updated = await updateOrganization(org.id, {
-                    settings: { developerHourlyRate: editHourlyRate, aiLineTimeEstimateSeconds: editSecsPerLine },
+                    settings: { developerHourlyRate: editHourlyRate, aiLineTimeEstimateSeconds: editSecsPerLine, monthlyAICostBudget: editMonthlyBudget },
                   });
                   setOrg(updated);
                   toast.success('Insights settings saved.');

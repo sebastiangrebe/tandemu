@@ -67,6 +67,8 @@ export interface OrgSettings {
   readonly currency?: string;
   /** Days to keep draft org memories before cleanup. Default: 30 */
   readonly draftRetentionDays?: number;
+  /** Optional monthly AI cost budget in the org's currency. Null = no budget. */
+  readonly monthlyAICostBudget?: number;
 }
 
 export interface TeamSettings {
