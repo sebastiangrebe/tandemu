@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/auth.guard.js';
 import { OrgRequiredGuard } from '../auth/org-required.guard.js';
 import { CurrentUser } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
-import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, OrgSettings } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, DeveloperCostEntry, TaskVelocityEntry, InsightsMetrics, OrgSettings } from '@tandemu/types';
 import { DatabaseService } from '../database/database.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
 import { GitHubSyncScheduler } from './github-sync.scheduler.js';
@@ -135,6 +135,31 @@ export class TelemetryController {
     @Query('teamId') teamId?: string,
   ): Promise<ToolUsageStat[]> {
     return this.telemetryService.getToolUsageStats(user.organizationId, startDate, endDate, teamId);
+  }
+
+  @Get('developer-cost')
+  async getDeveloperCostBreakdown(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
+  ): Promise<DeveloperCostEntry[]> {
+    const stats = await this.telemetryService.getDeveloperCostBreakdown(user.organizationId, startDate, endDate, teamId);
+
+    const userIds = [...new Set(stats.map((s) => s.userId))];
+    if (userIds.length > 0) {
+      const result = await this.db.query<{ id: string; name: string }>(
+        `SELECT id, name FROM users WHERE id = ANY($1)`,
+        [userIds],
+      );
+      const nameMap = new Map(result.rows.map((r) => [r.id, r.name]));
+      return stats.map((s) => ({
+        ...s,
+        userName: nameMap.get(s.userId) ?? s.userId.slice(0, 8),
+      }));
+    }
+
+    return stats;
   }
 
   @Get('developer-stats')

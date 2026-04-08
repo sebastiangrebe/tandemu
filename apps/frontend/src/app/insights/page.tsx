@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, Clock, DollarSign, Info, Settings } from 'lucide-react';
-import { getInsightsMetrics, getTokenUsage } from '@/lib/api';
-import type { InsightsMetrics, TokenUsageEntry } from '@/lib/api';
+import { Zap, Clock, DollarSign, Info, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { getInsightsMetrics, getTokenUsage, getDeveloperCostBreakdown } from '@/lib/api';
+import type { InsightsMetrics, TokenUsageEntry, DeveloperCostEntry } from '@/lib/api';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
 import { TokenUsageChart } from '@/components/charts/token-usage-chart';
+import { DeveloperCostChart } from '@/components/charts/developer-cost-chart';
 import { InsightsSkeleton } from '@/components/ui/skeleton-helpers';
 
 function formatCurrency(value: number | null, currency = 'USD'): string {
@@ -24,6 +25,7 @@ function formatNumber(value: number | null): string {
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsMetrics | null>(null);
   const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
+  const [devCostData, setDevCostData] = useState<DeveloperCostEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate, teamId } = useFilterParams();
 
@@ -33,13 +35,15 @@ export default function InsightsPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate, teamId };
-        const [insights, tokens] = await Promise.allSettled([
+        const [insights, tokens, devCost] = await Promise.allSettled([
           getInsightsMetrics(f),
           getTokenUsage(f),
+          getDeveloperCostBreakdown(f),
         ]);
         if (cancelled) return;
         if (insights.status === 'fulfilled') setData(insights.value);
         if (tokens.status === 'fulfilled') setTokenData(tokens.value);
+        if (devCost.status === 'fulfilled') setDevCostData(devCost.value);
       } catch {
         // Non-critical
       } finally {
@@ -178,11 +182,44 @@ export default function InsightsPage() {
               <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
                 <div className="h-2 w-2 rounded-full bg-amber-400" />
                 <div>
-                  <p className="text-lg font-semibold leading-tight">{formatCurrency(data.totalAICost, data.assumptions.currency)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-semibold leading-tight">{formatCurrency(data.totalAICost, data.assumptions.currency)}</p>
+                    {data.costTrendPct !== null && (
+                      <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${data.costTrendPct > 0 ? 'text-red-500' : data.costTrendPct < 0 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                        {data.costTrendPct > 0 ? <TrendingUp className="h-3 w-3" /> : data.costTrendPct < 0 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                        {data.costTrendPct > 0 ? '+' : ''}{data.costTrendPct}%
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">Total AI Cost</p>
                 </div>
               </div>
             </div>
+
+            {/* Budget progress bar */}
+            {data.monthlyBudget && data.monthlyBudget > 0 && (() => {
+              const now = new Date();
+              const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+              const currentMonthCost = data.daily
+                .filter((d) => d.date >= monthStart)
+                .reduce((sum, d) => sum + d.aiCost, 0);
+              const pct = Math.min(Math.round((currentMonthCost / data.monthlyBudget) * 100), 100);
+              const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
+              return (
+                <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Monthly Budget</span>
+                    <span className="font-medium">
+                      {formatCurrency(currentMonthCost, data.assumptions.currency)} / {formatCurrency(data.monthlyBudget, data.assumptions.currency)}
+                      <span className="text-muted-foreground ml-1">({pct}%)</span>
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Charts */}
             <div className="grid gap-4 md:grid-cols-2">
@@ -190,7 +227,10 @@ export default function InsightsPage() {
               <CostEfficiencyChart data={data.daily} startDate={startDate} endDate={endDate} />
             </div>
 
-            <TokenUsageChart data={tokenData} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <TokenUsageChart data={tokenData} />
+              <DeveloperCostChart data={devCostData} currency={data.assumptions.currency} />
+            </div>
           </div>
 
         </>

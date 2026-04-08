@@ -89,6 +89,15 @@ export interface CostEntry {
   readonly totalCost: number;
 }
 
+export interface DeveloperCostEntry {
+  readonly userId: string;
+  readonly userName: string;
+  readonly totalCost: number;
+  readonly taskCount: number;
+  readonly aiLines: number;
+  readonly costPerLine: number | null;
+}
+
 export interface TokenUsageEntry {
   readonly tokenType: string;
   readonly model: string;
@@ -128,6 +137,13 @@ export interface InsightsMetrics {
   readonly frictionEventsReduced: number | null;
   /** Number of org-scoped memories shared across team */
   readonly orgMemoriesShared: number;
+
+  // Cost trend
+  /** % change in AI cost vs previous period (positive = increase) */
+  readonly costTrendPct: number | null;
+  readonly previousPeriodCost: number;
+  /** Optional monthly budget from org settings */
+  readonly monthlyBudget: number | null;
 
   // Charting
   readonly daily: readonly InsightsDaily[];

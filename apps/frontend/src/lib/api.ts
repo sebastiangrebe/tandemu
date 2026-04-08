@@ -317,6 +317,9 @@ export interface InsightsMetrics {
   memoryHits: number;
   frictionEventsReduced: number | null;
   orgMemoriesShared: number;
+  costTrendPct: number | null;
+  previousPeriodCost: number;
+  monthlyBudget: number | null;
   daily: InsightsDaily[];
   assumptions: {
     developerHourlyRate: number;
@@ -325,8 +328,21 @@ export interface InsightsMetrics {
   };
 }
 
+export interface DeveloperCostEntry {
+  userId: string;
+  userName: string;
+  totalCost: number;
+  taskCount: number;
+  aiLines: number;
+  costPerLine: number | null;
+}
+
 export async function getInsightsMetrics(filter?: TelemetryFilter): Promise<InsightsMetrics> {
   return fetchApi<InsightsMetrics>(`/api/telemetry/insights${buildParams(filter)}`);
+}
+
+export async function getDeveloperCostBreakdown(filter?: TelemetryFilter): Promise<DeveloperCostEntry[]> {
+  return fetchApi<DeveloperCostEntry[]>(`/api/telemetry/developer-cost${buildParams(filter)}`);
 }
 
 // ---- Organizations (mutations) ----
@@ -338,7 +354,7 @@ export async function createOrganization(data: { name: string; slug: string }): 
   });
 }
 
-export async function updateOrganization(orgId: string, data: { name?: string; slug?: string; settings?: { developerHourlyRate?: number; aiLineTimeEstimateSeconds?: number; currency?: string; draftRetentionDays?: number } }): Promise<Organization> {
+export async function updateOrganization(orgId: string, data: { name?: string; slug?: string; settings?: { developerHourlyRate?: number; aiLineTimeEstimateSeconds?: number; currency?: string; draftRetentionDays?: number; monthlyAICostBudget?: number } }): Promise<Organization> {
   return fetchApi<Organization>(`/api/organizations/${orgId}`, {
     method: "PATCH",
     body: JSON.stringify(data),

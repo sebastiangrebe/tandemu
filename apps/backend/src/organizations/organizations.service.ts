@@ -19,6 +19,7 @@ const DEFAULT_ORG_SETTINGS: Required<OrgSettings> = {
   aiLineTimeEstimateSeconds: 120,
   currency: 'USD',
   draftRetentionDays: 30,
+  monthlyAICostBudget: 0,
 };
 
 @Injectable()

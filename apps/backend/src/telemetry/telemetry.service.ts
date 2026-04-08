@@ -6,7 +6,7 @@ import { createClient } from '@clickhouse/client';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { randomBytes } from 'crypto';
 import * as Sentry from '@sentry/nestjs';
-import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, InsightsDaily, OrgSettings } from '@tandemu/types';
+import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, InsightsDaily, OrgSettings, DeveloperCostEntry } from '@tandemu/types';
 import { MemoryService } from '../memory/memory.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
@@ -64,6 +64,8 @@ export interface FinishTaskResult {
   readonly totalCommits: number;
   readonly durationSeconds: number;
   readonly filesChanged: number;
+  readonly taskCost: number;
+  readonly taskTokens: number;
 }
 
 @Injectable()
@@ -323,6 +325,49 @@ export class TelemetryService implements OnModuleDestroy {
       }
     }
 
+    // Step 2.5: Query native OTEL for cost/token data in this task's time window
+    let taskCost = 0;
+    let taskTokens = 0;
+    try {
+      const costParams = {
+        organizationId,
+        taskStart: TelemetryService.dt(input.startedAt),
+        taskEnd: TelemetryService.dt(now.toISOString()),
+      };
+      const [costResult, tokenResult] = await Promise.all([
+        this.client.query({
+          query: `
+            SELECT sum(Value) AS total_cost
+            FROM otel_metrics_sum
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND MetricName = 'claude_code.cost.usage'
+              AND TimeUnix >= {taskStart: DateTime64(3)}
+              AND TimeUnix <= {taskEnd: DateTime64(3)}
+          `,
+          query_params: costParams,
+          format: 'JSONEachRow',
+        }),
+        this.client.query({
+          query: `
+            SELECT sum(Value) AS total_tokens
+            FROM otel_metrics_sum
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND MetricName = 'claude_code.token.usage'
+              AND TimeUnix >= {taskStart: DateTime64(3)}
+              AND TimeUnix <= {taskEnd: DateTime64(3)}
+          `,
+          query_params: costParams,
+          format: 'JSONEachRow',
+        }),
+      ]);
+      const costRows = await costResult.json<{ total_cost: number }>();
+      taskCost = Math.round(Number(costRows[0]?.total_cost ?? 0) * 100) / 100;
+      const tokenRows = await tokenResult.json<{ total_tokens: number }>();
+      taskTokens = Number(tokenRows[0]?.total_tokens ?? 0);
+    } catch (err) {
+      this.logger.warn('Failed to query task cost/token data', err);
+    }
+
     // Step 3: Send OTLP telemetry
     const otelEndpoint = this.configService.get<string>('otel.endpoint', 'http://localhost:4318');
     const traceId = randomBytes(16).toString('hex');
@@ -370,6 +415,8 @@ export class TelemetryService implements OnModuleDestroy {
                 { key: 'task_labels', value: { stringValue: (input.labels ?? []).join(',') } },
                 { key: 'repo', value: { stringValue: input.repo ?? '' } },
                 { key: 'deployment', value: { stringValue: 'true' } },
+                { key: 'task_cost', value: { stringValue: String(taskCost) } },
+                { key: 'task_tokens', value: { stringValue: String(taskTokens) } },
               ],
               status: {},
             }],
@@ -421,6 +468,8 @@ export class TelemetryService implements OnModuleDestroy {
       totalCommits: input.commits.length,
       durationSeconds,
       filesChanged: input.changedFilesList.length,
+      taskCost,
+      taskTokens,
     };
   }
 
@@ -1094,6 +1143,88 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  async getDeveloperCostBreakdown(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    teamId?: string,
+  ): Promise<Array<{ userId: string; userName: string; totalCost: number; taskCount: number; aiLines: number; costPerLine: number | null }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND TimeUnix >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND TimeUnix <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dt(endDate); }
+      const metricsTeamFilter = teamId ? ` AND Attributes['team_id'] = {teamId: String}` : '';
+      const tracesTeamFilter = teamId ? ` AND SpanAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
+
+      // Query cost grouped by user from native OTEL
+      const [costResult, devStatsResult] = await Promise.all([
+        this.client.query({
+          query: `
+            SELECT
+              Attributes['user.account_uuid'] AS user_id,
+              sum(Value) AS total_cost
+            FROM otel_metrics_sum
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND MetricName = 'claude_code.cost.usage'
+              AND Attributes['user.account_uuid'] != ''
+              ${dateFilter}
+              ${metricsTeamFilter}
+            GROUP BY user_id
+            ORDER BY total_cost DESC
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+        // Per-developer task count and AI lines from task_session spans
+        this.client.query({
+          query: `
+            SELECT
+              SpanAttributes['user_id'] AS user_id,
+              count(*) AS task_count,
+              sum(toFloat64OrZero(SpanAttributes['ai_lines'])) AS ai_lines
+            FROM otel_traces
+            WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+              AND SpanName = 'task_session'
+              ${dateFilter.replace(/TimeUnix/g, 'Timestamp')}
+              ${tracesTeamFilter}
+            GROUP BY user_id
+          `,
+          query_params: params,
+          format: 'JSONEachRow',
+        }),
+      ]);
+
+      const costRows = await costResult.json<{ user_id: string; total_cost: number }>();
+      const devRows = await devStatsResult.json<{ user_id: string; task_count: number; ai_lines: number }>();
+
+      // Build dev stats lookup
+      const devMap = new Map(devRows.map((r) => [r.user_id, { taskCount: Number(r.task_count), aiLines: Number(r.ai_lines) }]));
+
+      // Merge: cost rows are the primary source, enrich with dev stats
+      const allUserIds = new Set([...costRows.map((r) => r.user_id), ...devRows.map((r) => r.user_id)]);
+      return [...allUserIds].map((userId) => {
+        const cost = costRows.find((r) => r.user_id === userId);
+        const dev = devMap.get(userId);
+        const totalCost = Math.round(Number(cost?.total_cost ?? 0) * 100) / 100;
+        const aiLines = dev?.aiLines ?? 0;
+        return {
+          userId,
+          userName: userId.slice(0, 8), // Resolved to real name by controller
+          totalCost,
+          taskCount: dev?.taskCount ?? 0,
+          aiLines,
+          costPerLine: aiLines > 0 ? Math.round((totalCost / aiLines) * 10000) / 10000 : null,
+        };
+      }).sort((a, b) => b.totalCost - a.totalCost);
+    } catch (err) {
+      this.logger.warn(`Failed to get developer cost breakdown: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-developer-cost' } });
+      return [];
+    }
+  }
+
   async getTokenUsage(
     organizationId: string,
     startDate?: string,
@@ -1424,7 +1555,7 @@ export class TelemetryService implements OnModuleDestroy {
 
     try {
       // Run all queries in parallel
-      const [dailyResult, taskResult, memoryHitsResult, frictionCurrentResult, frictionPrevResult] = await Promise.all([
+      const [dailyResult, taskResult, memoryHitsResult, frictionCurrentResult, frictionPrevResult, costPrevResult] = await Promise.all([
         // Query 1: Daily cost + AI/manual lines
         this.client.query({
           query: `
@@ -1504,6 +1635,22 @@ export class TelemetryService implements OnModuleDestroy {
               format: 'JSONEachRow',
             })
           : Promise.resolve(null),
+
+        // Query 6: Previous-period cost (for cost trend)
+        prevDateFilter
+          ? this.client.query({
+              query: `
+                SELECT sum(Value) AS total_cost
+                FROM otel_metrics_sum
+                WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+                  AND MetricName = 'claude_code.cost.usage'
+                  ${prevDateFilter.replace(/Timestamp/g, 'TimeUnix')}
+                  ${metricsTeamFilter}
+              `,
+              query_params: prevParams,
+              format: 'JSONEachRow',
+            })
+          : Promise.resolve(null),
       ]);
 
       // Parse results
@@ -1532,6 +1679,13 @@ export class TelemetryService implements OnModuleDestroy {
         }
       }
 
+      let costTrendPct: number | null = null;
+      let previousPeriodCost = 0;
+      if (costPrevResult) {
+        const prevCostRows = await costPrevResult.json<{ total_cost: number }>();
+        previousPeriodCost = Math.round(Number(prevCostRows[0]?.total_cost ?? 0) * 100) / 100;
+      }
+
       // Aggregate totals from daily rows
       let totalAICost = 0;
       let totalAILines = 0;
@@ -1547,6 +1701,11 @@ export class TelemetryService implements OnModuleDestroy {
       });
 
       totalAICost = Math.round(totalAICost * 100) / 100;
+
+      // Cost trend
+      if (previousPeriodCost > 0) {
+        costTrendPct = Math.round(((totalAICost - previousPeriodCost) / previousPeriodCost) * 100);
+      }
 
       // Derived metrics
       const productivityMultiplier = totalManualLines > 0
@@ -1575,6 +1734,9 @@ export class TelemetryService implements OnModuleDestroy {
         memoryHits,
         frictionEventsReduced,
         orgMemoriesShared: 0, // Populated by controller from memory service
+        costTrendPct,
+        previousPeriodCost,
+        monthlyBudget: settings?.monthlyAICostBudget ?? null,
         daily,
         assumptions: { developerHourlyRate: hourlyRate, aiLineTimeEstimateSeconds: secsPerLine, currency },
       };
@@ -1593,6 +1755,9 @@ export class TelemetryService implements OnModuleDestroy {
         memoryHits: 0,
         frictionEventsReduced: null,
         orgMemoriesShared: 0,
+        costTrendPct: null,
+        previousPeriodCost: 0,
+        monthlyBudget: settings?.monthlyAICostBudget ?? null,
         daily: [],
         assumptions: { developerHourlyRate: hourlyRate, aiLineTimeEstimateSeconds: secsPerLine, currency },
       };
