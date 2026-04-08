@@ -671,7 +671,7 @@ function SettingsPageContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Current Version</p>
-                <p className="text-sm text-muted-foreground">v{VERSION}</p>
+                <p className="text-sm text-muted-foreground">v{process.env.NEXT_PUBLIC_APP_VERSION || VERSION}</p>
               </div>
             </div>
           </CardContent>

@@ -29,6 +29,7 @@ interface UpdateResult {
 @Controller('health')
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
+  private readonly version = process.env.APP_VERSION || VERSION;
 
   // In-memory cache for GitHub release check
   private cachedRelease: { data: VersionCheckResult; expiresAt: number } | null =
@@ -39,13 +40,13 @@ export class HealthController {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      version: VERSION,
+      version: this.version,
     };
   }
 
   @Get('version')
   getVersion(): { version: string } {
-    return { version: VERSION };
+    return { version: this.version };
   }
 
   @Get('version/check')
@@ -53,7 +54,7 @@ export class HealthController {
     // SaaS gating: skip GitHub fetch on managed deployments
     if (process.env.BILLING_ENABLED === 'true') {
       return {
-        current: VERSION,
+        current: this.version,
         latest: null,
         updateType: null,
         updateAvailable: false,
@@ -71,7 +72,7 @@ export class HealthController {
         {
           headers: {
             Accept: 'application/vnd.github.v3+json',
-            'User-Agent': `tandemu/${VERSION}`,
+            'User-Agent': `tandemu/${this.version}`,
           },
         },
       );
@@ -87,10 +88,10 @@ export class HealthController {
         published_at: string;
       };
       const latestVersion = release.tag_name.replace(/^v/, '');
-      const updateType = compareVersions(VERSION, latestVersion);
+      const updateType = compareVersions(this.version, latestVersion);
 
       const result: VersionCheckResult = {
-        current: VERSION,
+        current: this.version,
         latest: latestVersion,
         updateType,
         updateAvailable: updateType !== null,
@@ -156,7 +157,7 @@ export class HealthController {
 
   private noUpdateResult(): VersionCheckResult {
     return {
-      current: VERSION,
+      current: this.version,
       latest: null,
       updateType: null,
       updateAvailable: false,
