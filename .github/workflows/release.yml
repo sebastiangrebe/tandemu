@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use VERSION.ts)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(grep -oP "VERSION = '\K[^']+" packages/types/src/version.ts)
+          fi
+          MAJOR="${VERSION%%.*}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "Releasing v$VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tandemu-backend:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/tandemu-backend:${{ steps.version.outputs.major }}
+            ghcr.io/${{ github.repository_owner }}/tandemu-backend:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/frontend/Dockerfile
+          push: true
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tandemu-frontend:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/tandemu-frontend:${{ steps.version.outputs.major }}
+            ghcr.io/${{ github.repository_owner }}/tandemu-frontend:latest
+
+      - name: Build and push mem0
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/mem0
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tandemu-mem0:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/tandemu-mem0:latest
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          make_latest: true
