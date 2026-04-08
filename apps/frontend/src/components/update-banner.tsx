@@ -97,8 +97,31 @@ export function UpdateBanner() {
         }
       }, 5000);
     } catch {
-      setUpdateError('Failed to trigger update');
-      setUpdating(false);
+      // Connection error likely means Watchtower already restarted the backend.
+      // Start polling — if the version changes, the update worked.
+      setPolling(true);
+      const startTime = Date.now();
+      const interval = setInterval(async () => {
+        try {
+          const v = await getVersion();
+          if (v.version !== result?.current) {
+            clearInterval(interval);
+            setPolling(false);
+            window.location.reload();
+          }
+        } catch {
+          // Backend still restarting — keep polling
+        }
+
+        if (Date.now() - startTime > 120_000) {
+          clearInterval(interval);
+          setPolling(false);
+          setUpdating(false);
+          setUpdateError(
+            'Update is taking longer than expected. The containers may still be restarting — check back in a moment.',
+          );
+        }
+      }, 5000);
     }
   }, [result]);
 
