@@ -2,10 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
-import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, Server } from 'lucide-react';
+import { TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
+import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, ArrowRight } from 'lucide-react';
 import type { DORAMetrics } from '@/lib/api';
 
 const RATING_COLORS: Record<string, string> = {
@@ -25,8 +25,8 @@ const RATING_LABELS: Record<string, string> = {
 function RatingBadge({ rating }: { rating: string }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: `${RATING_COLORS[rating]}20`, color: RATING_COLORS[rating] }}
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+      style={{ backgroundColor: `${RATING_COLORS[rating]}1f`, color: RATING_COLORS[rating] }}
     >
       {RATING_LABELS[rating] ?? rating}
     </span>
@@ -37,6 +37,50 @@ function formatDuration(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   if (hours < 24) return `${Math.round(hours * 10) / 10}h`;
   return `${Math.round(hours / 24 * 10) / 10}d`;
+}
+
+function SectionLabel({ children, hint }: { children: React.ReactNode; hint?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-baseline justify-between gap-3">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {children}
+      </span>
+      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+    </div>
+  );
+}
+
+interface HeroTileProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  unit?: string;
+  rating?: string;
+  accent?: string;
+  children?: React.ReactNode;
+}
+
+function HeroTile({ icon, label, value, unit, rating, accent, children }: HeroTileProps) {
+  return (
+    <div className="relative flex min-h-[148px] flex-col justify-between overflow-hidden rounded-xl border border-border/60 bg-card/40 p-4">
+      {accent ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-px"
+          style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+        />
+      ) : null}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
+        {unit ? <span className="text-sm text-muted-foreground">{unit}</span> : null}
+        {rating ? <RatingBadge rating={rating} /> : null}
+      </div>
+      {children ? <div className="-mx-4 -mb-4 mt-2 h-11">{children}</div> : <div className="h-11" />}
+    </div>
+  );
 }
 
 interface DORAMetricsCardProps {
@@ -74,7 +118,15 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
     deployments: d.deployments,
   })) ?? [];
 
+  const freqAccent = freq ? RATING_COLORS[freq.rating] : undefined;
+  const leadAccent = lead ? RATING_COLORS[lead.rating] : undefined;
+  const cfrAccent = cfr ? RATING_COLORS[cfr.rating] : undefined;
+  const mttrAccent = mttr ? RATING_COLORS[mttr.rating] : undefined;
+
   const sourceLabel = data.dataSource === 'deployments' ? 'GitHub Deployments' : 'PR merges';
+  const sparklineLabel = data.dataSource === 'deployments' ? 'Deploys / week' : 'PRs merged / week';
+
+  const reliabilityConnected = !!(cfr || mttr || data.incidentProviderConnected);
 
   return (
     <Card>
@@ -84,119 +136,124 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
             <CardTitle>DORA Metrics</CardTitle>
             <CardDescription>Software delivery performance</CardDescription>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] text-muted-foreground">
             {data.dataSource === 'deployments' ? <Rocket className="size-3" /> : <GitPullRequest className="size-3" />}
             {sourceLabel}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Metric rows */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Deployment Frequency */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <GitPullRequest className="size-4" />
-              Deployment Frequency
-            </div>
-            {freq ? (
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold">{freq.avgPerWeek}</span>
-                <span className="text-sm text-muted-foreground">/ week</span>
-                <RatingBadge rating={freq.rating} />
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground">No data</span>
-            )}
-          </div>
+        {/* Delivery tier */}
+        <section>
+          <SectionLabel hint={chartData.length > 1 ? sparklineLabel : undefined}>Delivery</SectionLabel>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <HeroTile
+              icon={<GitPullRequest className="size-3.5" />}
+              label="Deployment Frequency"
+              value={freq ? String(freq.avgPerWeek) : '—'}
+              unit={freq ? '/ week' : undefined}
+              rating={freq?.rating}
+              accent={freqAccent}
+            >
+              {chartData.length > 1 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="doraFreqGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={freqAccent ?? '#71717a'} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={freqAccent ?? '#71717a'} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="week" hide />
+                    <YAxis hide domain={[0, 'dataMax']} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_CONTENT_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                      itemStyle={TOOLTIP_ITEM_STYLE}
+                      cursor={{ stroke: freqAccent ?? '#71717a', strokeOpacity: 0.25 }}
+                      formatter={(value: number) => [
+                        `${value} ${data.dataSource === 'deployments' ? 'deploys' : 'PRs'}`,
+                        data.dataSource === 'deployments' ? 'Deployed' : 'Merged',
+                      ]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="deployments"
+                      stroke={freqAccent ?? '#71717a'}
+                      strokeWidth={1.5}
+                      fill="url(#doraFreqGrad)"
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : null}
+            </HeroTile>
 
-          {/* Lead Time */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="size-4" />
-              Lead Time for Changes
-            </div>
-            {lead ? (
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold">{formatDuration(lead.medianHours)}</span>
-                <span className="text-sm text-muted-foreground">median</span>
-                <RatingBadge rating={lead.rating} />
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground">No data</span>
-            )}
+            <HeroTile
+              icon={<Clock className="size-3.5" />}
+              label="Lead Time for Changes"
+              value={lead ? formatDuration(lead.medianHours) : '—'}
+              unit={lead ? 'median' : undefined}
+              rating={lead?.rating}
+              accent={leadAccent}
+            />
           </div>
+        </section>
 
-          {/* Change Failure Rate */}
-          <div className={`space-y-1${!cfr && !data.incidentProviderConnected ? ' opacity-50' : ''}`}>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <AlertTriangle className="size-4" />
-              Change Failure Rate
-            </div>
-            {cfr ? (
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold">{Math.round(cfr.rate * 100)}%</span>
-                <span className="text-sm text-muted-foreground">{cfr.failedDeploys} of {cfr.totalDeploys}</span>
-                <RatingBadge rating={cfr.rating} />
-              </div>
-            ) : data.incidentProviderConnected ? (
-              <span className="text-sm text-muted-foreground">Syncing incident data...</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Connect PagerDuty or Opsgenie</span>
-            )}
-          </div>
+        {/* Reliability tier */}
+        <section>
+          <SectionLabel
+            hint={
+              !reliabilityConnected ? (
+                <a
+                  href="/settings/integrations"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/80 transition-colors hover:text-foreground"
+                >
+                  Connect incident provider
+                  <ArrowRight className="size-3" />
+                </a>
+              ) : data.incidentProviderConnected && (!cfr || !mttr) ? (
+                'Syncing incident data…'
+              ) : undefined
+            }
+          >
+            Reliability
+          </SectionLabel>
 
-          {/* Mean Time to Restore */}
-          <div className={`space-y-1${!mttr && !data.incidentProviderConnected ? ' opacity-50' : ''}`}>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Wrench className="size-4" />
-              Mean Time to Restore
+          {reliabilityConnected ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <HeroTile
+                icon={<AlertTriangle className="size-3.5" />}
+                label="Change Failure Rate"
+                value={cfr ? `${Math.round(cfr.rate * 100)}%` : '—'}
+                unit={cfr ? `${cfr.failedDeploys} of ${cfr.totalDeploys}` : undefined}
+                rating={cfr?.rating}
+                accent={cfrAccent}
+              />
+              <HeroTile
+                icon={<Wrench className="size-3.5" />}
+                label="Mean Time to Restore"
+                value={mttr ? formatDuration(mttr.medianHours) : '—'}
+                unit={mttr ? 'median' : undefined}
+                rating={mttr?.rating}
+                accent={mttrAccent}
+              />
             </div>
-            {mttr ? (
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold">{formatDuration(mttr.medianHours)}</span>
-                <span className="text-sm text-muted-foreground">median</span>
-                <RatingBadge rating={mttr.rating} />
+          ) : (
+            <div className="flex items-center gap-4 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3">
+              <div className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span>Change Failure Rate</span>
               </div>
-            ) : data.incidentProviderConnected ? (
-              <span className="text-sm text-muted-foreground">Syncing incident data...</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Connect PagerDuty or Opsgenie</span>
-            )}
-          </div>
-        </div>
-
-        {/* Deployment trend chart */}
-        {chartData.length > 1 && (
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              {data.dataSource === 'deployments' ? 'Deployments per Week' : 'PRs Merged per Week'}
-            </p>
-            <ResponsiveContainer width="100%" height={140}>
-              <LineChart data={chartData} margin={{ top: 4 }}>
-                <XAxis dataKey="week" tick={AXIS_TICK_SM} axisLine={false} tickLine={false} />
-                <YAxis tick={AXIS_TICK_SM} axisLine={false} tickLine={false} width={24} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={TOOLTIP_CONTENT_STYLE}
-                  labelStyle={TOOLTIP_LABEL_STYLE}
-                  itemStyle={TOOLTIP_ITEM_STYLE}
-                  formatter={(value: number) => [
-                    `${value} ${data.dataSource === 'deployments' ? 'deploys' : 'PRs'}`,
-                    data.dataSource === 'deployments' ? 'Deployed' : 'Merged',
-                  ]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="deployments"
-                  stroke={freq ? RATING_COLORS[freq.rating] : '#71717a'}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+              <div className="h-4 w-px bg-border/60" />
+              <div className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
+                <Wrench className="size-3.5 shrink-0" />
+                <span>Mean Time to Restore</span>
+              </div>
+            </div>
+          )}
+        </section>
       </CardContent>
     </Card>
   );
