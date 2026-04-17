@@ -49,8 +49,8 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-title": "Tandemu",
   },
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
   },
 };
 
