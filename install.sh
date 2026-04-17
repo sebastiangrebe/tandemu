@@ -605,6 +605,13 @@ install_assets() {
   # Skills are distributed via the plugin marketplace — no need to copy them.
   # Users install via: /plugin marketplace add sebastiangrebe/tandemu && /plugin install tandemu
   ok "Skills available via plugin marketplace"
+
+  # Track installed plugin version for --check
+  local plugin_manifest="${skills_src}/.claude-plugin/plugin.json"
+  if [ -f "$plugin_manifest" ]; then
+    python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$plugin_manifest" \
+      > "$VERSION_FILE" 2>/dev/null || true
+  fi
 }
 
 # ─────────────────────────────────────────────────────────

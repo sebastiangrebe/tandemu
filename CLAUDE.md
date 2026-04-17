@@ -27,6 +27,9 @@ tandemu/
 ### Developer setup
 Two installation paths: plugin marketplace (`/plugin marketplace add sebastiangrebe/tandemu` → `/plugin install tandemu` → `/tandemu:setup`) or `install.sh` script. Both handle OAuth, config, skills, MCP, and CLAUDE.md. The plugin approach is preferred for distribution; install.sh is kept for scripted onboarding and CI/CD.
 
+### Updating
+Updates propagate only when `plugin.json`'s `version` field changes — Claude Code's `/plugin update` compares that field, not the git SHA. `pnpm release` (via `scripts/bump-plugin-versions.mjs`) bumps both `apps/claude-plugins/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` automatically. Plugin users run `/plugin marketplace update` then `/plugin update tandemu@tandemu`; install.sh users run `./install.sh --check` then `./install.sh`. `install.sh --uninstall` remains the full-reset path. See README "Updating" section for the user-facing flow.
+
 ### Worktree-per-task
 Each task gets its own git worktree inside `.worktrees/<task-id>/`. Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can run concurrently in separate worktrees and Claude Code sessions. `/morning` creates the worktree, `/finish` cleans it up.
 

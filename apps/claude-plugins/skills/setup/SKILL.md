@@ -357,6 +357,18 @@ if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
   cp -r "$PLUGIN_ROOT/lib"/* "$HOME/.claude/lib/"
   echo "OK"
 fi
+
+# Track installed plugin version so `install.sh --check` can compare against it
+PLUGIN_MANIFEST=""
+if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/.claude-plugin/plugin.json" ]; then
+  PLUGIN_MANIFEST="$PLUGIN_ROOT/.claude-plugin/plugin.json"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" ]; then
+  PLUGIN_MANIFEST="$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json"
+fi
+if [ -n "$PLUGIN_MANIFEST" ]; then
+  python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$PLUGIN_MANIFEST" \
+    > "$HOME/.claude/tandemu-version.txt" 2>/dev/null || true
+fi
 ```
 
 ### 7. Write personal CLAUDE.md
