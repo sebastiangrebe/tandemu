@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { AXIS_TICK_SM, TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
 import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, Server } from 'lucide-react';
@@ -173,7 +173,7 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
               {data.dataSource === 'deployments' ? 'Deployments per Week' : 'PRs Merged per Week'}
             </p>
             <ResponsiveContainer width="100%" height={140}>
-              <BarChart data={chartData} margin={{ top: 4 }}>
+              <LineChart data={chartData} margin={{ top: 4 }}>
                 <XAxis dataKey="week" tick={AXIS_TICK_SM} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS_TICK_SM} axisLine={false} tickLine={false} width={24} allowDecimals={false} />
                 <Tooltip
@@ -185,12 +185,15 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
                     data.dataSource === 'deployments' ? 'Deployed' : 'Merged',
                   ]}
                 />
-                <Bar dataKey="deployments" radius={[4, 4, 0, 0]}>
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={freq ? RATING_COLORS[freq.rating] : '#71717a'} />
-                  ))}
-                </Bar>
-              </BarChart>
+                <Line
+                  type="monotone"
+                  dataKey="deployments"
+                  stroke={freq ? RATING_COLORS[freq.rating] : '#71717a'}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         )}
