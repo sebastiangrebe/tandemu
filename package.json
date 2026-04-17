@@ -27,6 +27,9 @@
     "github": {
       "release": true
     },
+    "hooks": {
+      "after:bump": "node scripts/bump-plugin-versions.mjs ${version}"
+    },
     "plugins": {
       "@release-it/bumper": {
         "out": [

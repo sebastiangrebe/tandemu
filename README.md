@@ -154,13 +154,35 @@ Full documentation is available at **[tandemu.dev/docs](https://tandemu.dev/docs
 - [Dashboard & Metrics](https://tandemu.dev/docs/lead/dashboard)
 - [Self-Hosting Configuration](https://tandemu.dev/docs/self-hosting/configuration)
 
+## Updating
+
+### Plugin users
+
+```bash
+# In Claude Code:
+/plugin marketplace update        # refresh the catalog (does NOT upgrade the plugin)
+/plugin update tandemu@tandemu    # upgrade the installed plugin
+```
+
+Then restart Claude Code so skills reload.
+
+### install.sh users
+
+```bash
+cd tandemu && git pull
+./install.sh --check              # see installed vs latest
+./install.sh                      # re-run to update in place (config preserved)
+```
+
+Updates only propagate when `plugin.json`'s `version` field changes. `pnpm release` bumps it automatically — if you're testing a fork, bump it by hand before pushing.
+
 ## Uninstalling
 
 ```bash
-./install.sh --uninstall
+./install.sh --uninstall          # preferred: cleans config, skills, MCP, cache
 ```
 
-For a full clean-slate reset, see [UNINSTALL.md](UNINSTALL.md).
+For a full clean-slate reset, see [UNINSTALL.md](UNINSTALL.md). The plugin can also be removed via `/plugin uninstall tandemu@tandemu` in Claude Code.
 
 ## License
 
