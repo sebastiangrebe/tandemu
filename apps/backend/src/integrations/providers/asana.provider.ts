@@ -13,6 +13,7 @@ import type {
   TaskProviderFetchSubtasksParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -363,5 +364,49 @@ export class AsanaProvider implements TaskProvider {
       const projectGid = task.memberships?.[0]?.project?.gid ?? '';
       return mapTask(task, projectGid);
     });
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { accessToken, query, externalProjectId, limit = 20 } = params;
+    if (!externalProjectId) return [];
+
+    try {
+      // Resolve workspace gid from the project — Asana's task search is
+      // workspace-scoped, not project-scoped.
+      const projectInfo = await asanaFetch<{ data: { workspace: { gid: string } } }>(
+        `/projects/${externalProjectId}?opt_fields=workspace`,
+        accessToken,
+      );
+      const workspaceGid = projectInfo?.data?.workspace?.gid;
+      if (!workspaceGid) return [];
+
+      const searchUrl = `/workspaces/${workspaceGid}/tasks/search?text=${encodeURIComponent(query)}&limit=${limit}&opt_fields=${TASK_OPT_FIELDS}`;
+
+      // Direct fetch (bypass asanaFetch) so we can detect 402 cleanly —
+      // /workspaces/{gid}/tasks/search is premium-only and returns
+      // HTTP 402 Payment Required on free workspaces.
+      const response = await fetch(`${ASANA_API}${searchUrl}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      });
+      if (response.status === 402) {
+        logger.debug('Asana task search requires a premium workspace (402)');
+        return [];
+      }
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        logger.warn(`Asana /tasks/search ${response.status}: ${text}`);
+        return [];
+      }
+
+      const body = (await response.json()) as { data: AsanaTask[] };
+      // Scope to the requested project (search is workspace-wide).
+      const projectFiltered = body.data.filter((t) =>
+        t.memberships?.some((m) => m.project?.gid === externalProjectId),
+      );
+      return projectFiltered.map((t) => mapTask(t, externalProjectId));
+    } catch (err) {
+      logger.warn(`Asana searchTasks failed: ${err}`);
+      return [];
+    }
   }
 }
