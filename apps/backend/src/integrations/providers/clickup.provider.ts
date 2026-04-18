@@ -342,10 +342,12 @@ export class ClickUpProvider implements TaskProvider {
   }
 
   async searchTasks(_params: TaskProviderSearchParams): Promise<Task[]> {
-    // ClickUp's REST API has no documented full-text search endpoint
-    // (open feature request since 2023). Returning [] is more honest than
-    // pulling all tasks and substring-filtering, which would mislead the
-    // ranker about how relevant each result actually is.
+    // ClickUp's UI search is backed by an internal endpoint surfaced only via
+    // their first-party MCP server (mcp.clickup.com); the public REST v2/v3
+    // task endpoints expose no `search`/`query` parameter (feature request
+    // open since 2020). Substring-filtering the full task list would mislead
+    // the ranker about how relevant each hit actually is, so return [] until
+    // a public endpoint exists.
     return [];
   }
 
