@@ -341,14 +341,35 @@ export class ClickUpProvider implements TaskProvider {
     return projects;
   }
 
-  async searchTasks(_params: TaskProviderSearchParams): Promise<Task[]> {
-    // ClickUp's UI search is backed by an internal endpoint surfaced only via
-    // their first-party MCP server (mcp.clickup.com); the public REST v2/v3
-    // task endpoints expose no `search`/`query` parameter (feature request
-    // open since 2020). Substring-filtering the full task list would mislead
-    // the ranker about how relevant each hit actually is, so return [] until
-    // a public endpoint exists.
-    return [];
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { query, limit = 20 } = params;
+    if (!params.externalProjectId) return [];
+
+    // ClickUp's public REST has no `search` parameter — feature request
+    // open since 2020, the UI search hits an internal MCP-only endpoint.
+    // We mirror Monday's name-substring shape by fetching one page of
+    // recently-updated tasks and substring-matching client-side. Same
+    // weak relevance signal as Monday's contains_text rule (no semantic
+    // match, no fuzzy), but RRF blends it with the higher-quality
+    // memory + Linear + GitHub sources.
+    try {
+      const tasks = await this.fetchTasks({
+        accessToken: params.accessToken,
+        externalProjectId: params.externalProjectId,
+        config: params.config,
+      });
+      const lower = query.toLowerCase();
+      return tasks
+        .filter((t) => {
+          const title = t.title?.toLowerCase() ?? '';
+          const desc = t.description?.toLowerCase() ?? '';
+          return title.includes(lower) || desc.includes(lower);
+        })
+        .slice(0, limit);
+    } catch (err) {
+      logger.warn(`ClickUp searchTasks failed: ${err}`);
+      return [];
+    }
   }
 
   async fetchSubProjects(accessToken: string, folderId: string): Promise<ExternalProject[]> {
