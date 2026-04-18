@@ -13,6 +13,7 @@ import type {
   TaskProviderFetchSubtasksParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -338,6 +339,30 @@ export class ClickUpProvider implements TaskProvider {
     }
 
     return projects;
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { query, limit = 20 } = params;
+    if (!params.externalProjectId) return [];
+
+    try {
+      const tasks = await this.fetchTasks({
+        accessToken: params.accessToken,
+        externalProjectId: params.externalProjectId,
+        config: params.config,
+      });
+      const lower = query.toLowerCase();
+      return tasks
+        .filter((t) => {
+          const title = t.title?.toLowerCase() ?? '';
+          const desc = t.description?.toLowerCase() ?? '';
+          return title.includes(lower) || desc.includes(lower);
+        })
+        .slice(0, limit);
+    } catch (err) {
+      logger.warn(`ClickUp searchTasks failed: ${err}`);
+      return [];
+    }
   }
 
   async fetchSubProjects(accessToken: string, folderId: string): Promise<ExternalProject[]> {

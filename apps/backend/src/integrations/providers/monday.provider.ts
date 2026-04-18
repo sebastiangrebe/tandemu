@@ -13,6 +13,7 @@ import type {
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
   TaskProviderFetchSubtasksParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -496,6 +497,30 @@ export class MondayProvider implements TaskProvider {
     } catch (err) {
       logger.warn(`Failed to fetch Monday sub-projects for board ${boardId}: ${err}`);
       Sentry.captureException(err, { tags: { operation: 'provider-monday-sub-projects' }, extra: { boardId } });
+      return [];
+    }
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { query, limit = 20 } = params;
+    if (!params.externalProjectId) return [];
+
+    try {
+      const tasks = await this.fetchTasks({
+        accessToken: params.accessToken,
+        externalProjectId: params.externalProjectId,
+        config: params.config,
+      });
+      const lower = query.toLowerCase();
+      return tasks
+        .filter((t) => {
+          const title = t.title?.toLowerCase() ?? '';
+          const desc = t.description?.toLowerCase() ?? '';
+          return title.includes(lower) || desc.includes(lower);
+        })
+        .slice(0, limit);
+    } catch (err) {
+      logger.warn(`Monday searchTasks failed: ${err}`);
       return [];
     }
   }

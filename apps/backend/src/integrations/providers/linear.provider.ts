@@ -11,6 +11,7 @@ import type {
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
   TaskProviderFetchSubtasksParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -325,6 +326,61 @@ export class LinearProvider implements TaskProvider {
       externalProjectId,
       updatedAt: issue.updatedAt,
     };
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { accessToken, query, externalProjectId, limit = 20 } = params;
+
+    const filters: string[] = [];
+    if (externalProjectId) filters.push(`team: { id: { eq: "${externalProjectId}" } }`);
+
+    const filterClause = filters.length ? `, filter: { ${filters.join(', ')} }` : '';
+    const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    const gql = `
+      query {
+        searchIssues(term: "${escapedQuery}", first: ${limit}${filterClause}) {
+          nodes {
+            identifier
+            title
+            description
+            state { name }
+            priority
+            assignee { name email }
+            labels { nodes { name } }
+            cycle { name number }
+            parent { identifier }
+            children { nodes { identifier } }
+            team { id }
+            url
+            updatedAt
+          }
+        }
+      }
+    `;
+
+    const data = await linearFetch<{
+      searchIssues: { nodes: Array<LinearIssueNode & { team: { id: string } }> };
+    }>(accessToken, gql);
+
+    return data.searchIssues.nodes.map((issue): Task => ({
+      id: issue.identifier,
+      title: issue.title,
+      description: issue.description ?? undefined,
+      status: mapStatus(issue.state.name),
+      priority: mapPriority(issue.priority),
+      assigneeName: issue.assignee?.name,
+      assigneeEmail: issue.assignee?.email,
+      labels: issue.labels.nodes.map((l) => l.name),
+      sprint: issue.cycle ? issue.cycle.name ?? `Cycle ${issue.cycle.number}` : undefined,
+      url: issue.url,
+      provider: 'linear',
+      externalProjectId: issue.team.id,
+      updatedAt: issue.updatedAt,
+      parentId: issue.parent?.identifier ?? undefined,
+      hasSubtasks: (issue.children?.nodes?.length ?? 0) > 0,
+      subtaskCount: issue.children?.nodes?.length ?? 0,
+    }));
   }
 
   async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {

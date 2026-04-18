@@ -198,6 +198,69 @@ export class GitHubGitService {
     }
   }
 
+  async searchPullRequests(
+    token: string,
+    repos: Array<{ owner: string; repo: string }>,
+    query: string,
+    limit = 20,
+  ): Promise<GitPRData[]> {
+    if (repos.length === 0 || !query.trim()) return [];
+
+    const repoQualifiers = repos.map((r) => `repo:${r.owner}/${r.repo}`).join(' ');
+    const q = encodeURIComponent(`${query} type:pr ${repoQualifiers}`);
+    const url = `${GITHUB_API}/search/issues?q=${q}&sort=updated&order=desc&per_page=${limit}`;
+
+    try {
+      const result = await githubFetch<GitHubSearchResponse>(url, token);
+      return result.items
+        .filter((item) => item.pull_request)
+        .map((item) => ({
+          number: item.number,
+          title: item.title,
+          body: item.body ?? '',
+          createdAt: item.created_at,
+          mergedAt: item.pull_request!.merged_at ?? '',
+          author: { login: item.user?.login ?? 'unknown' },
+          url: item.pull_request!.html_url,
+          labels: item.labels.map((l) => l.name),
+        }));
+    } catch (error) {
+      this.logger.warn(`searchPullRequests failed: ${error}`);
+      return [];
+    }
+  }
+
+  async searchCommits(
+    token: string,
+    repos: Array<{ owner: string; repo: string }>,
+    query: string,
+    limit = 20,
+  ): Promise<GitCommitData[]> {
+    if (repos.length === 0 || !query.trim()) return [];
+
+    const repoQualifiers = repos.map((r) => `repo:${r.owner}/${r.repo}`).join(' ');
+    const q = encodeURIComponent(`${query} ${repoQualifiers}`);
+    const url = `${GITHUB_API}/search/commits?q=${q}&sort=author-date&order=desc&per_page=${limit}`;
+
+    try {
+      const result = await githubFetch<{ items: GitHubCommitResponse[] }>(url, token);
+      return result.items.map((c) => ({
+        sha: c.sha,
+        message: c.commit.message.split('\n')[0]!,
+        author: {
+          name: c.commit.author.name,
+          email: c.commit.author.email,
+          login: c.author?.login,
+        },
+        date: c.commit.author.date,
+        hasCoAuthorClaude: c.commit.message.includes('Co-Authored-By: Claude'),
+      }));
+    } catch (error) {
+      this.logger.warn(`searchCommits failed: ${error}`);
+      return [];
+    }
+  }
+
   async fetchDeployments(
     token: string,
     owner: string,

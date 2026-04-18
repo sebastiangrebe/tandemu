@@ -13,6 +13,7 @@ import type {
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
   TaskProviderFetchSubtasksParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -294,6 +295,28 @@ export class JiraProvider implements TaskProvider {
       hasSubtasks: (issue.fields.subtasks?.length ?? 0) > 0,
       subtaskCount: issue.fields.subtasks?.length ?? 0,
     };
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { accessToken, query, externalProjectId, limit = 20, config } = params;
+    const siteId = config.siteId as string | undefined;
+    if (!siteId) return [];
+
+    const escaped = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    let jql = `text ~ "${escaped}"`;
+    if (externalProjectId) jql += ` AND project = "${externalProjectId}"`;
+    jql += ' ORDER BY updated DESC';
+
+    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
+    const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=${limit}&fields=summary,description,status,priority,assignee,labels,sprint,updated,subtasks,parent`;
+
+    try {
+      const data = await jiraFetch<JiraSearchResponse>(url, accessToken);
+      return data.issues.map((issue) => this.mapTask(issue, siteId, externalProjectId ?? issue.key.split('-')[0] ?? ''));
+    } catch (err) {
+      logger.warn(`Jira searchTasks failed: ${err}`);
+      return [];
+    }
   }
 
   async fetchSubtasks(params: TaskProviderFetchSubtasksParams): Promise<Task[]> {

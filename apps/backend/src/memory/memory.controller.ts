@@ -32,13 +32,13 @@ import { IntegrationsService } from '../integrations/integrations.service.js';
 import { githubFetch } from '../integrations/providers/github.provider.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { AuthService } from '../auth/auth.service.js';
+import { SearchService } from '../search/search.service.js';
 import type { MemoryOpsJobData, TelemetryJobData } from '../queue/queue.types.js';
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MemoryController {
   private readonly logger = new Logger(MemoryController.name);
-  private readonly publishedTaskCache = new Map<string, boolean>();
   private readonly userNameCache = new Map<string, string>();
 
   constructor(
@@ -47,6 +47,7 @@ export class MemoryController {
     private readonly integrationsService: IntegrationsService,
     private readonly telemetryService: TelemetryService,
     private readonly authService: AuthService,
+    private readonly searchService: SearchService,
     @InjectQueue('memory-ops') private readonly memoryOpsQueue: Queue<MemoryOpsJobData>,
     @InjectQueue('telemetry') private readonly telemetryQueue: Queue<TelemetryJobData>,
   ) {}
@@ -87,6 +88,37 @@ export class MemoryController {
   ): Promise<void> {
     const rpc = body as Record<string, unknown> | null;
 
+    // Tandemu-owned tools: handled regardless of OSS/SaaS upstream
+    if (rpc?.method === 'tools/call') {
+      const toolName = (rpc.params as Record<string, unknown> | undefined)?.name;
+      if (toolName === 'search_knowledge') {
+        await this.handleSearchKnowledge(rpc, user, res);
+        return;
+      }
+      if (toolName === 'search_memories') {
+        res.json({
+          jsonrpc: '2.0',
+          id: rpc.id,
+          error: {
+            code: -32601,
+            message: 'search_memories has been removed. Use search_knowledge.',
+          },
+        });
+        return;
+      }
+    }
+
+    // tools/list: always serve our own tool list, never proxy upstream.
+    // This guarantees Claude sees exactly our advertised surface.
+    if (rpc?.method === 'tools/list') {
+      res.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        result: { tools: this.toolListing() },
+      });
+      return;
+    }
+
     // OSS: translate MCP tool calls → REST API calls
     if (!this.memoryService.isMem0Cloud) {
       if (rpc?.method === 'tools/call') {
@@ -99,19 +131,6 @@ export class MemoryController {
             protocolVersion: '2024-11-05',
             capabilities: { tools: { listChanged: false } },
             serverInfo: { name: 'tandemu-memory', version: '1.0.0' },
-          },
-        });
-      } else if (rpc?.method === 'tools/list') {
-        res.json({
-          jsonrpc: '2.0', id: rpc.id,
-          result: {
-            tools: [
-              { name: 'add_memory', description: 'Store a new memory', inputSchema: { type: 'object', properties: { text: { type: 'string' }, user_id: { type: 'string' }, metadata: { type: 'object' } }, required: ['text'] } },
-              { name: 'search_memories', description: 'Search memories', inputSchema: { type: 'object', properties: { query: { type: 'string' }, user_id: { type: 'string' }, limit: { type: 'number' } }, required: ['query'] } },
-              { name: 'get_memories', description: 'List all memories', inputSchema: { type: 'object', properties: { user_id: { type: 'string' } } } },
-              { name: 'delete_memory', description: 'Delete a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' } }, required: ['memory_id'] } },
-              { name: 'update_memory', description: 'Update a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' }, text: { type: 'string' } }, required: ['memory_id'] } },
-            ],
           },
         });
       } else {
@@ -192,6 +211,81 @@ export class MemoryController {
   }
 
   /**
+   * The MCP tools advertised by tandemu-memory. `search_memories` is intentionally
+   * absent — `search_knowledge` replaces it (cross-source: memories + tasks + git).
+   */
+  private toolListing(): Array<Record<string, unknown>> {
+    return [
+      {
+        name: 'search_knowledge',
+        description:
+          'Search across memories, recent tickets, PRs, and commits. Returns ranked results with citations to the original source. Use this for any "why does X work this way" / "what do I know about Y" / "has anyone touched Z" question.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Natural-language query.' },
+            fileContext: { type: 'string', description: 'Optional current file path. Boosts results that mention it.' },
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+          required: ['query'],
+        },
+      },
+      { name: 'add_memory', description: 'Store a new memory', inputSchema: { type: 'object', properties: { text: { type: 'string' }, user_id: { type: 'string' }, metadata: { type: 'object' } }, required: ['text'] } },
+      { name: 'get_memories', description: 'List all memories', inputSchema: { type: 'object', properties: { user_id: { type: 'string' } } } },
+      { name: 'delete_memory', description: 'Delete a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' } }, required: ['memory_id'] } },
+      { name: 'update_memory', description: 'Update a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' }, text: { type: 'string' } }, required: ['memory_id'] } },
+    ];
+  }
+
+  /**
+   * Dispatch the `search_knowledge` MCP tool call to SearchService.
+   */
+  private async handleSearchKnowledge(
+    rpc: Record<string, unknown>,
+    user: RequestUser,
+    res: Response,
+  ): Promise<void> {
+    const params = (rpc.params ?? {}) as Record<string, unknown>;
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+    const query = String(args.query ?? '').trim();
+
+    if (!query) {
+      res.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        error: { code: -32602, message: 'query is required' },
+      });
+      return;
+    }
+
+    const fileContext = typeof args.fileContext === 'string' ? args.fileContext : undefined;
+    const limitRaw = typeof args.limit === 'number' ? args.limit : 20;
+    const limit = Math.min(Math.max(limitRaw, 1), 100);
+
+    try {
+      const response = await this.searchService.search(user, {
+        query,
+        sources: ['memory', 'tasks', 'git'],
+        limit,
+        fileContext,
+      });
+      res.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        result: { content: [{ type: 'text', text: JSON.stringify(response) }] },
+      });
+    } catch (err) {
+      this.logger.error(`search_knowledge failed: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'mcp-search-knowledge' } });
+      res.json({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        error: { code: -32000, message: `search failed: ${String(err)}` },
+      });
+    }
+  }
+
+  /**
    * Handle MCP tool calls by translating them to mem0 REST API calls (OSS path).
    */
   private async handleMcpToolCallViaRest(
@@ -210,13 +304,6 @@ export class MemoryController {
           const metadata = args.metadata as Record<string, unknown> | undefined;
           await this.memoryService.addMemory(userId, text, metadata);
           return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }] };
-        }
-        case 'search_memories':
-        case 'search_memory': {
-          const query = (args.query as string) ?? '';
-          const limit = (args.limit as number) ?? 10;
-          const memories = await this.memoryService.searchMemories(userId, query, limit);
-          return { content: [{ type: 'text', text: JSON.stringify(memories) }] };
         }
         case 'get_memories':
         case 'list_memories': {
@@ -411,7 +498,7 @@ export class MemoryController {
           // For other users' drafts: check if the work is finalized
           const taskId = metadata.taskId as string | undefined;
           if (taskId) {
-            const taskStatus = await this.getTaskFinalStatus(taskId, metadata, user);
+            const taskStatus = await this.memoryService.getTaskFinalStatus(taskId, metadata, user);
             if (taskStatus === 'done') {
               // Promote to published — update the memory asynchronously
               metadata.status = 'published';
@@ -548,63 +635,6 @@ export class MemoryController {
     }
   }
 
-  /**
-   * Check task status for draft memory promotion.
-   * Returns: 'done' (promote), 'cancelled' (delete), 'pending' (keep as draft)
-   */
-  private async getTaskFinalStatus(
-    taskId: string,
-    metadata: Record<string, unknown>,
-    user: RequestUser,
-  ): Promise<'done' | 'cancelled' | 'pending'> {
-    const cacheKey = metadata.prUrl ? `${taskId}:${metadata.prNumber}` : taskId;
-    const cached = this.publishedTaskCache.get(cacheKey);
-    if (cached === true) return 'done';
-    if (cached === false) return 'pending';
-
-    // If the org has a GitHub integration and the memory has PR info,
-    // check if the PR was actually merged (not just task marked done)
-    const repo = metadata.repo as string | undefined;
-    const prNumber = metadata.prNumber as number | undefined;
-    if (repo && prNumber) {
-      try {
-        const ghIntegration = await this.integrationsService.findOne(user.organizationId, 'github');
-        const pr = await githubFetch<{ merged: boolean; state: string }>(
-          `https://api.github.com/repos/${repo}/pulls/${prNumber}`,
-          ghIntegration.access_token,
-        );
-        if (pr.merged) {
-          this.publishedTaskCache.set(cacheKey, true);
-          return 'done';
-        }
-        if (pr.state === 'closed' && !pr.merged) {
-          return 'cancelled';
-        }
-        this.publishedTaskCache.set(cacheKey, false);
-        return 'pending';
-      } catch {
-        // No GitHub integration or API error — fall through to task status check
-      }
-    }
-
-    // Fallback: check task status from ticket system
-    try {
-      const tasks = await this.tasksService.getTasks(user.organizationId, {});
-      const task = tasks.find((t) => t.id === taskId);
-      if (task?.status === 'done') {
-        this.publishedTaskCache.set(cacheKey, true);
-        return 'done';
-      }
-      if (task?.status === 'cancelled') {
-        return 'cancelled';
-      }
-      this.publishedTaskCache.set(cacheKey, false);
-      return 'pending';
-    } catch {
-      return 'pending';
-    }
-  }
-
 
   // ---- Shared REST helper ----
 
@@ -618,84 +648,12 @@ export class MemoryController {
     return this.memoryService.getMemories(scopeUserId);
   }
 
-  /**
-   * Filter org memories by draft gating rules.
-   * - Published or no status: always included
-   * - Author's own drafts: included
-   * - Other users' drafts: promoted if task done, deleted if cancelled, hidden if pending
-   */
+  /** Delegate to MemoryService.filterOrgDrafts (single source of truth). */
   private async filterOrgDrafts(
     memories: Array<Record<string, unknown>>,
     user: RequestUser,
   ): Promise<Array<Record<string, unknown>>> {
-    // Collect all unique task IDs from drafts to batch-lookup statuses
-    const draftTaskIds = new Set<string>();
-    for (const mem of memories) {
-      const metadata = mem.metadata as Record<string, unknown> | null;
-      if (!metadata) continue;
-      const status = metadata.status as string | undefined;
-      if (status === 'draft' && metadata.author_id !== user.userId) {
-        const taskId = metadata.taskId as string | undefined;
-        if (taskId && !this.publishedTaskCache.has(taskId)) {
-          draftTaskIds.add(taskId);
-        }
-      }
-    }
-
-    // Single batch fetch of all tasks (instead of N+1 per draft)
-    if (draftTaskIds.size > 0) {
-      try {
-        const tasks = await this.tasksService.getTasks(user.organizationId, {});
-        const taskMap = new Map(tasks.map((t) => [t.id, t.status]));
-        for (const taskId of draftTaskIds) {
-          const s = taskMap.get(taskId);
-          if (s === 'done') this.publishedTaskCache.set(taskId, true);
-          else if (s === 'cancelled') this.publishedTaskCache.set(taskId, false);
-          else this.publishedTaskCache.set(taskId, false);
-        }
-      } catch {
-        // If task fetch fails, treat all as pending
-      }
-    }
-
-    const filtered: Array<Record<string, unknown>> = [];
-
-    for (const mem of memories) {
-      const metadata = mem.metadata as Record<string, unknown> | null;
-      if (!metadata) { filtered.push(mem); continue; }
-
-      const status = metadata.status as string | undefined;
-      if (status === 'published' || !status) { filtered.push(mem); continue; }
-
-      if (status === 'draft') {
-        if (metadata.author_id === user.userId) { filtered.push(mem); continue; }
-
-        const taskId = metadata.taskId as string | undefined;
-        if (taskId) {
-          const taskStatus = await this.getTaskFinalStatus(taskId, metadata, user);
-          if (taskStatus === 'done') {
-            metadata.status = 'published';
-            this.memoryOpsQueue.add('mcp-tool-call', {
-              type: 'mcp-tool-call',
-              toolName: 'update_memory',
-              args: { memory_id: mem.id as string, metadata: { status: 'published' } },
-              userId: user.userId,
-            });
-            filtered.push(mem);
-          } else if (taskStatus === 'cancelled') {
-            this.memoryOpsQueue.add('mcp-tool-call', {
-              type: 'mcp-tool-call',
-              toolName: 'delete_memory',
-              args: { memory_id: mem.id as string },
-              userId: user.userId,
-            });
-          }
-          // 'pending' — skip
-        }
-      }
-    }
-
-    return filtered;
+    return this.memoryService.filterOrgDrafts(memories, user);
   }
 
   // ---- Dashboard REST endpoints ----
