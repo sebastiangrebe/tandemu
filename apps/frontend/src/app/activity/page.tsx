@@ -56,7 +56,6 @@ export default function ActivityPage() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Activity</h1>
             <p className="text-muted-foreground">Development sessions and time tracking.</p>
           </div>
           <TelemetryFilters />
@@ -70,7 +69,6 @@ export default function ActivityPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Activity</h1>
           <p className="text-muted-foreground">Development sessions and time tracking.</p>
         </div>
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
@@ -88,7 +86,6 @@ export default function ActivityPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Activity</h1>
           <p className="text-muted-foreground">Development sessions and time tracking.</p>
         </div>
         <TelemetryFilters />

@@ -229,7 +229,6 @@ export default function FrictionMapPage() {
   const header = (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Friction Map</h1>
         <p className="text-muted-foreground">Identify areas in your codebase where developers face the most friction.</p>
       </div>
       <TelemetryFilters />

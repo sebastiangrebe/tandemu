@@ -59,7 +59,6 @@ export default function InsightsPage() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
             <p className="text-muted-foreground">Honest assessment of AI investment value</p>
           </div>
           <TelemetryFilters showTeamFilter={true} />
@@ -76,7 +75,6 @@ export default function InsightsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
           <p className="text-muted-foreground">Honest assessment of AI investment value</p>
         </div>
         <TelemetryFilters showTeamFilter={true} />

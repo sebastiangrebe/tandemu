@@ -3,7 +3,9 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { usePathname, useRouter } from 'next/navigation';
-import { Header } from './header';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { AppSidebar } from './sidebar';
+import { AppTopBar } from './top-bar';
 import { LoadingScreen } from '@/components/loading-screen';
 
 const PUBLIC_PATHS = ['/login', '/register', '/setup', '/cli-auth', '/auth/callback'];
@@ -37,6 +39,14 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, isAuthenticated, isAdmin, pathname, router]);
 
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID) {
+      import('crisp-sdk-web').then(({ Crisp }) => {
+        Crisp.configure(process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID!);
+      });
+    }
+  }, []);
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -50,12 +60,12 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
-        {children}
-      </main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <AppTopBar />
+        <main className="flex-1 p-4 lg:p-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
-
