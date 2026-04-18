@@ -31,7 +31,6 @@ export default function MemoryPage() {
     <MemoryStatsContext.Provider value={{ stats, loading }}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">AI Memory</h1>
           <p className="text-muted-foreground">Your AI teammate&apos;s persistent knowledge base.</p>
         </div>
 

@@ -403,7 +403,6 @@ function IntegrationsPageInner() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
           <p className="text-muted-foreground">Connect your ticket system and map projects to teams.</p>
         </div>
         <IntegrationsSkeleton />
@@ -414,7 +413,6 @@ function IntegrationsPageInner() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
         <p className="text-muted-foreground">Connect your ticket system and map projects to teams.</p>
       </div>
 
@@ -950,7 +948,6 @@ export default function IntegrationsPage() {
     <Suspense fallback={
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
           <p className="text-muted-foreground">Connect your ticket system and map projects to teams.</p>
         </div>
         <IntegrationsSkeleton />
