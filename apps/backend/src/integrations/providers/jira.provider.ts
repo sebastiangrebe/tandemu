@@ -302,17 +302,41 @@ export class JiraProvider implements TaskProvider {
     const siteId = config.siteId as string | undefined;
     if (!siteId) return [];
 
-    const escaped = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    let jql = `text ~ "${escaped}"`;
+    // Escape JQL reserved chars then JSON-encode the surrounding string.
+    const jqlEscaped = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    let jql = `text ~ "${jqlEscaped}"`;
     if (externalProjectId) jql += ` AND project = "${externalProjectId}"`;
     jql += ' ORDER BY updated DESC';
 
-    const baseUrl = `https://${siteId}.atlassian.net/rest/api/3`;
-    const url = `${baseUrl}/search?jql=${encodeURIComponent(jql)}&maxResults=${limit}&fields=summary,description,status,priority,assignee,labels,sprint,updated,subtasks,parent`;
+    // /rest/api/3/search returns 410 Gone on Cloud — must use /search/jql (POST).
+    const url = `https://${siteId}.atlassian.net/rest/api/3/search/jql`;
 
     try {
-      const data = await jiraFetch<JiraSearchResponse>(url, accessToken);
-      return data.issues.map((issue) => this.mapTask(issue, siteId, externalProjectId ?? issue.key.split('-')[0] ?? ''));
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jql,
+          maxResults: limit,
+          fields: ['summary', 'description', 'status', 'priority', 'assignee', 'labels', 'sprint', 'updated', 'subtasks', 'parent'],
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        logger.warn(`Jira /search/jql ${response.status}: ${text}`);
+        return [];
+      }
+
+      // /search/jql returns { issues, nextPageToken? } — no `total`.
+      const data = (await response.json()) as { issues: JiraIssue[] };
+      return data.issues.map((issue) =>
+        this.mapTask(issue, siteId, externalProjectId ?? issue.key.split('-')[0] ?? ''),
+      );
     } catch (err) {
       logger.warn(`Jira searchTasks failed: ${err}`);
       return [];

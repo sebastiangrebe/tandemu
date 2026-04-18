@@ -331,15 +331,16 @@ export class LinearProvider implements TaskProvider {
   async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
     const { accessToken, query, externalProjectId, limit = 20 } = params;
 
-    const filters: string[] = [];
-    if (externalProjectId) filters.push(`team: { id: { eq: "${externalProjectId}" } }`);
+    // Linear's `searchIssues(term:)` returns ranked free-text results. The
+    // public schema doesn't expose a server-side team filter on this query,
+    // so we over-fetch and post-filter when externalProjectId (team id) is set.
+    const fetchSize = externalProjectId ? Math.min(limit * 4, 100) : limit;
 
-    const filterClause = filters.length ? `, filter: { ${filters.join(', ')} }` : '';
-    const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-    const gql = `
-      query {
-        searchIssues(term: "${escapedQuery}", first: ${limit}${filterClause}) {
+    const data = await linearFetch<{
+      searchIssues: { nodes: Array<LinearIssueNode & { team: { id: string } }> };
+    }>(accessToken, `
+      query Search($term: String!, $first: Int!) {
+        searchIssues(term: $term, first: $first) {
           nodes {
             identifier
             title
@@ -357,13 +358,14 @@ export class LinearProvider implements TaskProvider {
           }
         }
       }
-    `;
+    `, { term: query, first: fetchSize });
 
-    const data = await linearFetch<{
-      searchIssues: { nodes: Array<LinearIssueNode & { team: { id: string } }> };
-    }>(accessToken, gql);
+    const all = data.searchIssues.nodes;
+    const filtered = externalProjectId
+      ? all.filter((issue) => issue.team.id === externalProjectId)
+      : all;
 
-    return data.searchIssues.nodes.map((issue): Task => ({
+    return filtered.slice(0, limit).map((issue): Task => ({
       id: issue.identifier,
       title: issue.title,
       description: issue.description ?? undefined,

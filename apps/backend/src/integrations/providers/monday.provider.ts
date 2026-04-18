@@ -501,27 +501,12 @@ export class MondayProvider implements TaskProvider {
     }
   }
 
-  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
-    const { query, limit = 20 } = params;
-    if (!params.externalProjectId) return [];
-
-    try {
-      const tasks = await this.fetchTasks({
-        accessToken: params.accessToken,
-        externalProjectId: params.externalProjectId,
-        config: params.config,
-      });
-      const lower = query.toLowerCase();
-      return tasks
-        .filter((t) => {
-          const title = t.title?.toLowerCase() ?? '';
-          const desc = t.description?.toLowerCase() ?? '';
-          return title.includes(lower) || desc.includes(lower);
-        })
-        .slice(0, limit);
-    } catch (err) {
-      logger.warn(`Monday searchTasks failed: ${err}`);
-      return [];
-    }
+  async searchTasks(_params: TaskProviderSearchParams): Promise<Task[]> {
+    // Monday has no documented free-text item-search API — items_page_by_column_values
+    // is exact-match only, and the contains_text rule on the synthetic `name`
+    // column is widely reported as unreliable (returns empty for matching items).
+    // Returning [] is more honest than fetching all items and substring-filtering,
+    // which would mislead the ranker about how relevant each result actually is.
+    return [];
   }
 }

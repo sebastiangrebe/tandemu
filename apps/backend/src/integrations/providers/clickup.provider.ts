@@ -341,28 +341,12 @@ export class ClickUpProvider implements TaskProvider {
     return projects;
   }
 
-  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
-    const { query, limit = 20 } = params;
-    if (!params.externalProjectId) return [];
-
-    try {
-      const tasks = await this.fetchTasks({
-        accessToken: params.accessToken,
-        externalProjectId: params.externalProjectId,
-        config: params.config,
-      });
-      const lower = query.toLowerCase();
-      return tasks
-        .filter((t) => {
-          const title = t.title?.toLowerCase() ?? '';
-          const desc = t.description?.toLowerCase() ?? '';
-          return title.includes(lower) || desc.includes(lower);
-        })
-        .slice(0, limit);
-    } catch (err) {
-      logger.warn(`ClickUp searchTasks failed: ${err}`);
-      return [];
-    }
+  async searchTasks(_params: TaskProviderSearchParams): Promise<Task[]> {
+    // ClickUp's REST API has no documented full-text search endpoint
+    // (open feature request since 2023). Returning [] is more honest than
+    // pulling all tasks and substring-filtering, which would mislead the
+    // ranker about how relevant each result actually is.
+    return [];
   }
 
   async fetchSubProjects(accessToken: string, folderId: string): Promise<ExternalProject[]> {
