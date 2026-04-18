@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -161,9 +162,20 @@ export function AppSidebar() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton size="lg">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                      {orgInitial}
-                    </div>
+                    <Image
+                      src="/logo.svg"
+                      alt="Tandemu"
+                      width={28}
+                      height={28}
+                      className="shrink-0 dark:hidden"
+                    />
+                    <Image
+                      src="/logo-dark.svg"
+                      alt="Tandemu"
+                      width={28}
+                      height={28}
+                      className="hidden shrink-0 dark:block"
+                    />
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">
                         {currentOrg?.name ?? "Tandemu"}
