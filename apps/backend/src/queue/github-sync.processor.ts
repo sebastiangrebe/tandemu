@@ -51,6 +51,21 @@ export class GitHubSyncProcessor extends SentryProcessor {
 
     this.logger.log(`Synced ${prs.length} merged PRs for ${repo}`);
 
+    // Sync PR reviews for the fetched PRs (review-latency metrics)
+    try {
+      let reviewCount = 0;
+      for (const pr of prs) {
+        const reviews = await this.gitHubGitService.fetchPRReviews(token, owner, repoName, pr.number);
+        if (reviews.length > 0) {
+          await this.telemetryService.insertGitHubPRReviews(organizationId, repo, teamId, pr, reviews);
+          reviewCount += reviews.length;
+        }
+      }
+      this.logger.log(`Synced ${reviewCount} PR reviews across ${prs.length} PRs for ${repo}`);
+    } catch (err) {
+      this.logger.warn(`Failed to sync PR reviews for ${repo}: ${err}`);
+    }
+
     // Sync GitHub Deployments (for proper DORA deployment tracking)
     try {
       const deployments = await this.gitHubGitService.fetchDeployments(token, owner, repoName, {

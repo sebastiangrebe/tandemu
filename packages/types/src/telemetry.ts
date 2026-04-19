@@ -189,8 +189,49 @@ export interface DORAMetrics {
   readonly leadTimeForChanges: DORALeadTime | null;
   readonly changeFailureRate: DORAChangeFailureRate | null;
   readonly meanTimeToRestore: DORAMeanTimeToRestore | null;
+  readonly reviewLatency: ReviewLatencySummary | null;
   readonly dataSource: 'deployments' | 'pull_requests';
   readonly githubConnected: boolean;
   readonly githubReposMapped: boolean;
   readonly incidentProviderConnected: boolean;
+}
+
+export interface ReviewLatencySummary {
+  readonly timeToFirstReview: {
+    readonly medianHours: number;
+    readonly trend: ReadonlyArray<{ readonly week: string; readonly medianHours: number }>;
+    readonly rating: 'elite' | 'high' | 'medium' | 'low';
+  } | null;
+  readonly timeToMerge: {
+    readonly medianHours: number;
+    readonly trend: ReadonlyArray<{ readonly week: string; readonly medianHours: number }>;
+    readonly rating: 'elite' | 'high' | 'medium' | 'low';
+  } | null;
+}
+
+export interface ReviewLatencyStat {
+  readonly medianHours: number;
+  readonly p95Hours: number;
+  readonly sampleCount: number;
+  readonly trend: ReadonlyArray<{ readonly week: string; readonly medianHours: number; readonly sampleCount: number }>;
+  readonly splitByAI: {
+    readonly ai: { readonly medianHours: number; readonly sampleCount: number } | null;
+    readonly human: { readonly medianHours: number; readonly sampleCount: number } | null;
+    readonly trend: ReadonlyArray<{ readonly week: string; readonly aiMedianHours: number | null; readonly humanMedianHours: number | null }>;
+  };
+  readonly rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface ReviewerLoadEntry {
+  readonly reviewer: string;
+  readonly prsReviewed: number;
+  readonly medianTurnaroundHours: number;
+}
+
+export interface ReviewLatencyMetrics {
+  readonly timeToFirstReview: ReviewLatencyStat | null;
+  readonly timeToMerge: ReviewLatencyStat | null;
+  readonly reviewerLoad: ReadonlyArray<ReviewerLoadEntry>;
+  readonly githubConnected: boolean;
+  readonly githubReposMapped: boolean;
 }

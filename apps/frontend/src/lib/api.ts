@@ -777,11 +777,25 @@ export interface DORAMeanTimeToRestore {
   rating: 'elite' | 'high' | 'medium' | 'low';
 }
 
+export interface ReviewLatencySummary {
+  timeToFirstReview: {
+    medianHours: number;
+    trend: Array<{ week: string; medianHours: number }>;
+    rating: 'elite' | 'high' | 'medium' | 'low';
+  } | null;
+  timeToMerge: {
+    medianHours: number;
+    trend: Array<{ week: string; medianHours: number }>;
+    rating: 'elite' | 'high' | 'medium' | 'low';
+  } | null;
+}
+
 export interface DORAMetrics {
   deploymentFrequency: DORADeploymentFrequency | null;
   leadTimeForChanges: DORALeadTime | null;
   changeFailureRate: DORAChangeFailureRate | null;
   meanTimeToRestore: DORAMeanTimeToRestore | null;
+  reviewLatency: ReviewLatencySummary | null;
   dataSource: 'deployments' | 'pull_requests';
   githubConnected: boolean;
   githubReposMapped: boolean;
@@ -790,6 +804,39 @@ export interface DORAMetrics {
 
 export async function getDORAMetrics(filter?: TelemetryFilter): Promise<DORAMetrics> {
   return fetchApi<DORAMetrics>(`/api/telemetry/dora-metrics${buildParams(filter)}`);
+}
+
+// ── Review Latency ──
+
+export interface ReviewLatencyStat {
+  medianHours: number;
+  p95Hours: number;
+  sampleCount: number;
+  trend: Array<{ week: string; medianHours: number; sampleCount: number }>;
+  splitByAI: {
+    ai: { medianHours: number; sampleCount: number } | null;
+    human: { medianHours: number; sampleCount: number } | null;
+    trend: Array<{ week: string; aiMedianHours: number | null; humanMedianHours: number | null }>;
+  };
+  rating: 'elite' | 'high' | 'medium' | 'low';
+}
+
+export interface ReviewerLoadEntry {
+  reviewer: string;
+  prsReviewed: number;
+  medianTurnaroundHours: number;
+}
+
+export interface ReviewLatencyMetrics {
+  timeToFirstReview: ReviewLatencyStat | null;
+  timeToMerge: ReviewLatencyStat | null;
+  reviewerLoad: ReviewerLoadEntry[];
+  githubConnected: boolean;
+  githubReposMapped: boolean;
+}
+
+export async function getReviewLatencyMetrics(filter?: TelemetryFilter): Promise<ReviewLatencyMetrics> {
+  return fetchApi<ReviewLatencyMetrics>(`/api/telemetry/review-latency${buildParams(filter)}`);
 }
 
 // ── Version & Updates ──
