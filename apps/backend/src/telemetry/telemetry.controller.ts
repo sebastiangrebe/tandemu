@@ -318,6 +318,29 @@ export class TelemetryController {
     return { ...metrics, githubConnected, githubReposMapped, incidentProviderConnected };
   }
 
+  @Get('review-latency')
+  async getReviewLatencyMetrics(
+    @CurrentUser() user: RequestUser,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('teamId') teamId?: string,
+  ) {
+    const metrics = await this.telemetryService.getReviewLatencyMetrics(user.organizationId, startDate, endDate, teamId);
+
+    let githubConnected = false;
+    let githubReposMapped = false;
+    try {
+      const integration = await this.integrationsService.findOne(user.organizationId, 'github');
+      githubConnected = true;
+      const mappings = await this.integrationsService.getMappings(integration.id);
+      githubReposMapped = mappings.length > 0;
+    } catch {
+      // Not found — no GitHub integration
+    }
+
+    return { ...metrics, githubConnected, githubReposMapped };
+  }
+
   @Post('github-sync')
   @HttpCode(HttpStatus.OK)
   async triggerGitHubSync(

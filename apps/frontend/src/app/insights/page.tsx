@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Zap, Clock, DollarSign, Info, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { getInsightsMetrics, getTokenUsage, getDeveloperCostBreakdown } from '@/lib/api';
-import type { InsightsMetrics, TokenUsageEntry, DeveloperCostEntry } from '@/lib/api';
+import { getInsightsMetrics, getTokenUsage, getDeveloperCostBreakdown, getReviewLatencyMetrics } from '@/lib/api';
+import type { InsightsMetrics, TokenUsageEntry, DeveloperCostEntry, ReviewLatencyMetrics } from '@/lib/api';
 import { TelemetryFilters, useFilterParams } from '@/components/filters/telemetry-filters';
 import { ThroughputChart, CostEfficiencyChart } from '@/components/charts/insights-chart';
 import { TokenUsageChart } from '@/components/charts/token-usage-chart';
 import { DeveloperCostChart } from '@/components/charts/developer-cost-chart';
+import { ReviewLatencyCard } from '@/components/charts/review-latency-card';
 import { InsightsSkeleton } from '@/components/ui/skeleton-helpers';
 
 function formatCurrency(value: number | null, currency = 'USD'): string {
@@ -26,6 +27,7 @@ export default function InsightsPage() {
   const [data, setData] = useState<InsightsMetrics | null>(null);
   const [tokenData, setTokenData] = useState<TokenUsageEntry[]>([]);
   const [devCostData, setDevCostData] = useState<DeveloperCostEntry[]>([]);
+  const [reviewLatency, setReviewLatency] = useState<ReviewLatencyMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const { startDate, endDate, teamId } = useFilterParams();
 
@@ -35,15 +37,17 @@ export default function InsightsPage() {
       setLoading(true);
       try {
         const f = { startDate, endDate, teamId };
-        const [insights, tokens, devCost] = await Promise.allSettled([
+        const [insights, tokens, devCost, review] = await Promise.allSettled([
           getInsightsMetrics(f),
           getTokenUsage(f),
           getDeveloperCostBreakdown(f),
+          getReviewLatencyMetrics(f),
         ]);
         if (cancelled) return;
         if (insights.status === 'fulfilled') setData(insights.value);
         if (tokens.status === 'fulfilled') setTokenData(tokens.value);
         if (devCost.status === 'fulfilled') setDevCostData(devCost.value);
+        if (review.status === 'fulfilled') setReviewLatency(review.value);
       } catch {
         // Non-critical
       } finally {
@@ -229,6 +233,12 @@ export default function InsightsPage() {
               <TokenUsageChart data={tokenData} />
               <DeveloperCostChart data={devCostData} currency={data.assumptions.currency} />
             </div>
+          </div>
+
+          {/* Review Latency */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">Review Velocity</h2>
+            <ReviewLatencyCard data={reviewLatency} startDate={startDate} endDate={endDate} />
           </div>
 
         </>
