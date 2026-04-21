@@ -134,6 +134,30 @@ export class TelemetryService implements OnModuleDestroy {
       this.logger.warn(`Failed to create github_pull_requests table: ${err}`);
     });
 
+    // Auto-create github_pr_reviews table for review-latency metrics
+    this.client.query({
+      query: `
+        CREATE TABLE IF NOT EXISTS github_pr_reviews (
+          organization_id String,
+          repo String,
+          team_id String,
+          pr_number UInt32,
+          review_id UInt64,
+          reviewer String,
+          state String,
+          submitted_at DateTime64(3),
+          pr_author String,
+          pr_created_at DateTime64(3),
+          pr_has_ai_coauthor UInt8 DEFAULT 0,
+          synced_at DateTime DEFAULT now()
+        ) ENGINE = ReplacingMergeTree(synced_at)
+        ORDER BY (organization_id, repo, pr_number, review_id)
+        TTL synced_at + INTERVAL 365 DAY
+      `,
+    }).then((rs) => rs.text()).catch((err) => {
+      this.logger.warn(`Failed to create github_pr_reviews table: ${err}`);
+    });
+
     // Auto-create github_deployments table for DORA deployment tracking
     this.client.query({
       query: `
@@ -1810,6 +1834,48 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  async insertGitHubPRReviews(
+    organizationId: string,
+    repo: string,
+    teamId: string,
+    pr: {
+      number: number;
+      author: { login: string };
+      createdAt: string;
+      body: string;
+      title: string;
+    },
+    reviews: Array<{ id: number; reviewer: string; state: string; submittedAt: string }>,
+  ): Promise<void> {
+    if (reviews.length === 0) return;
+
+    const hasAiCoauthor = (pr.body?.includes('Co-Authored-By: Claude') || pr.title?.toLowerCase().includes('[ai]')) ? 1 : 0;
+    const values = reviews.map((r) => ({
+      organization_id: organizationId,
+      repo,
+      team_id: teamId,
+      pr_number: pr.number,
+      review_id: r.id,
+      reviewer: r.reviewer,
+      state: r.state,
+      submitted_at: TelemetryService.dt(r.submittedAt),
+      pr_author: pr.author.login,
+      pr_created_at: TelemetryService.dt(pr.createdAt),
+      pr_has_ai_coauthor: hasAiCoauthor,
+    }));
+
+    try {
+      await this.client.insert({
+        table: 'github_pr_reviews',
+        values,
+        format: 'JSONEachRow',
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to insert PR reviews for ${repo}#${pr.number}: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-insert-github-pr-reviews' }, extra: { repo, prNumber: pr.number } });
+    }
+  }
+
   async insertGitHubDeployments(
     organizationId: string,
     repo: string,
@@ -1929,6 +1995,20 @@ export class TelemetryService implements OnModuleDestroy {
     return 'low';
   }
 
+  private static rateTimeToFirstReview(hours: number): 'elite' | 'high' | 'medium' | 'low' {
+    if (hours < 4) return 'elite';
+    if (hours < 24) return 'high';
+    if (hours < 72) return 'medium';
+    return 'low';
+  }
+
+  private static rateTimeToMerge(hours: number): 'elite' | 'high' | 'medium' | 'low' {
+    if (hours < 24) return 'elite';
+    if (hours < 24 * 3) return 'high';
+    if (hours < 24 * 7) return 'medium';
+    return 'low';
+  }
+
   async getDORAMetrics(
     organizationId: string,
     startDate?: string,
@@ -1939,6 +2019,10 @@ export class TelemetryService implements OnModuleDestroy {
     leadTimeForChanges: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null;
     changeFailureRate: { rate: number; failedDeploys: number; totalDeploys: number; trend: Array<{ week: string; rate: number }>; rating: string } | null;
     meanTimeToRestore: { medianHours: number; p95Hours: number; trend: Array<{ week: string; medianHours: number }>; rating: string } | null;
+    reviewLatency: {
+      timeToFirstReview: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+      timeToMerge: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+    } | null;
     dataSource: 'deployments' | 'pull_requests';
   }> {
     const nullResult = {
@@ -1946,6 +2030,7 @@ export class TelemetryService implements OnModuleDestroy {
       leadTimeForChanges: null,
       changeFailureRate: null,
       meanTimeToRestore: null,
+      reviewLatency: null,
       dataSource: 'pull_requests' as const,
     };
 
@@ -2209,6 +2294,17 @@ export class TelemetryService implements OnModuleDestroy {
         this.logger.warn(`Failed to compute MTTR: ${err}`);
       }
 
+      // ── Review latency summary (for dashboard card) ──
+      let reviewLatencySummary: {
+        timeToFirstReview: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+        timeToMerge: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+      } | null = null;
+      try {
+        reviewLatencySummary = await this.computeReviewLatencySummary(organizationId, startDate, endDate, teamId);
+      } catch (err) {
+        this.logger.warn(`Failed to compute review latency summary: ${err}`);
+      }
+
       return {
         deploymentFrequency: {
           avgPerWeek: Math.round(avgPerWeek * 10) / 10,
@@ -2223,6 +2319,7 @@ export class TelemetryService implements OnModuleDestroy {
         },
         changeFailureRate,
         meanTimeToRestore,
+        reviewLatency: reviewLatencySummary,
         dataSource: hasDeployments ? 'deployments' : 'pull_requests',
       };
     } catch (err) {
@@ -2233,8 +2330,415 @@ export class TelemetryService implements OnModuleDestroy {
         leadTimeForChanges: null,
         changeFailureRate: null,
         meanTimeToRestore: null,
+        reviewLatency: null,
         dataSource: 'pull_requests',
       };
+    }
+  }
+
+  private async computeReviewLatencySummary(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    teamId?: string,
+  ): Promise<{
+    timeToFirstReview: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+    timeToMerge: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null;
+  } | null> {
+    const params: Record<string, string> = { organizationId };
+    if (startDate) params.startDate = TelemetryService.dt(startDate);
+    if (endDate) params.endDate = TelemetryService.dt(endDate);
+    if (teamId) params.teamId = teamId;
+    const teamFilter = teamId ? ` AND team_id = {teamId: String}` : '';
+
+    let dateFilterReview = '';
+    let dateFilterPR = '';
+    if (startDate) {
+      dateFilterReview += ` AND pr_created_at >= {startDate: DateTime64(3)}`;
+      dateFilterPR += ` AND merged_at >= {startDate: DateTime64(3)}`;
+    }
+    if (endDate) {
+      dateFilterReview += ` AND pr_created_at <= {endDate: DateTime64(3)}`;
+      dateFilterPR += ` AND merged_at <= {endDate: DateTime64(3)}`;
+    }
+
+    // ── Time to first review ──
+    const ttfrResult = await this.client.query({
+      query: `SELECT
+                quantile(0.5)(hours) AS medianHours,
+                count(*) AS sampleCount
+              FROM (
+                SELECT CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                FROM github_pr_reviews FINAL
+                WHERE organization_id = {organizationId: String}
+                  AND reviewer != pr_author
+                  ${dateFilterReview} ${teamFilter}
+                GROUP BY repo, pr_number, pr_created_at
+              )`,
+      query_params: params,
+      format: 'JSONEachRow',
+    });
+    const [ttfrAgg] = await ttfrResult.json<{ medianHours: number; sampleCount: number }>();
+    const ttfrSample = ttfrAgg ? Number(ttfrAgg.sampleCount) : 0;
+
+    let timeToFirstReview: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null = null;
+    if (ttfrSample > 0 && Number(ttfrAgg.medianHours) > 0) {
+      const ttfrTrendResult = await this.client.query({
+        query: `SELECT week, quantile(0.5)(hours) AS medianHours
+                FROM (
+                  SELECT toStartOfWeek(pr_created_at) AS week,
+                         CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                  FROM github_pr_reviews FINAL
+                  WHERE organization_id = {organizationId: String}
+                    AND reviewer != pr_author
+                    ${dateFilterReview} ${teamFilter}
+                  GROUP BY week, repo, pr_number, pr_created_at
+                )
+                GROUP BY week ORDER BY week`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const ttfrTrendRows = await ttfrTrendResult.json<{ week: string; medianHours: number }>();
+      const median = Number(ttfrAgg.medianHours);
+      timeToFirstReview = {
+        medianHours: Math.round(median * 10) / 10,
+        trend: ttfrTrendRows.map((r) => ({ week: r.week, medianHours: Math.round(Number(r.medianHours) * 10) / 10 })),
+        rating: TelemetryService.rateTimeToFirstReview(median),
+      };
+    }
+
+    // ── Time to merge ──
+    const ttmResult = await this.client.query({
+      query: `SELECT
+                quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+                count(*) AS sampleCount
+              FROM github_pull_requests FINAL
+              WHERE organization_id = {organizationId: String}
+                ${dateFilterPR} ${teamFilter}`,
+      query_params: params,
+      format: 'JSONEachRow',
+    });
+    const [ttmAgg] = await ttmResult.json<{ medianHours: number; sampleCount: number }>();
+    const ttmSample = ttmAgg ? Number(ttmAgg.sampleCount) : 0;
+
+    let timeToMerge: { medianHours: number; trend: Array<{ week: string; medianHours: number }>; rating: 'elite' | 'high' | 'medium' | 'low' } | null = null;
+    if (ttmSample > 0 && Number(ttmAgg.medianHours) > 0) {
+      const ttmTrendResult = await this.client.query({
+        query: `SELECT toStartOfWeek(merged_at) AS week,
+                  quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours
+                FROM github_pull_requests FINAL
+                WHERE organization_id = {organizationId: String}
+                  ${dateFilterPR} ${teamFilter}
+                GROUP BY week ORDER BY week`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const ttmTrendRows = await ttmTrendResult.json<{ week: string; medianHours: number }>();
+      const median = Number(ttmAgg.medianHours);
+      timeToMerge = {
+        medianHours: Math.round(median * 10) / 10,
+        trend: ttmTrendRows.map((r) => ({ week: r.week, medianHours: Math.round(Number(r.medianHours) * 10) / 10 })),
+        rating: TelemetryService.rateTimeToMerge(median),
+      };
+    }
+
+    if (!timeToFirstReview && !timeToMerge) return null;
+    return { timeToFirstReview, timeToMerge };
+  }
+
+  async getReviewLatencyMetrics(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    teamId?: string,
+  ): Promise<{
+    timeToFirstReview: {
+      medianHours: number;
+      p95Hours: number;
+      sampleCount: number;
+      trend: Array<{ week: string; medianHours: number; sampleCount: number }>;
+      splitByAI: {
+        ai: { medianHours: number; sampleCount: number } | null;
+        human: { medianHours: number; sampleCount: number } | null;
+        trend: Array<{ week: string; aiMedianHours: number | null; humanMedianHours: number | null }>;
+      };
+      rating: 'elite' | 'high' | 'medium' | 'low';
+    } | null;
+    timeToMerge: {
+      medianHours: number;
+      p95Hours: number;
+      sampleCount: number;
+      trend: Array<{ week: string; medianHours: number; sampleCount: number }>;
+      splitByAI: {
+        ai: { medianHours: number; sampleCount: number } | null;
+        human: { medianHours: number; sampleCount: number } | null;
+        trend: Array<{ week: string; aiMedianHours: number | null; humanMedianHours: number | null }>;
+      };
+      rating: 'elite' | 'high' | 'medium' | 'low';
+    } | null;
+    reviewerLoad: Array<{ reviewer: string; prsReviewed: number; medianTurnaroundHours: number }>;
+  }> {
+    const nullResult = {
+      timeToFirstReview: null,
+      timeToMerge: null,
+      reviewerLoad: [] as Array<{ reviewer: string; prsReviewed: number; medianTurnaroundHours: number }>,
+    };
+    try {
+      const params: Record<string, string> = { organizationId };
+      if (startDate) params.startDate = TelemetryService.dt(startDate);
+      if (endDate) params.endDate = TelemetryService.dt(endDate);
+      if (teamId) params.teamId = teamId;
+      const teamFilter = teamId ? ` AND team_id = {teamId: String}` : '';
+
+      let dateFilterReview = '';
+      let dateFilterPR = '';
+      if (startDate) {
+        dateFilterReview += ` AND pr_created_at >= {startDate: DateTime64(3)}`;
+        dateFilterPR += ` AND merged_at >= {startDate: DateTime64(3)}`;
+      }
+      if (endDate) {
+        dateFilterReview += ` AND pr_created_at <= {endDate: DateTime64(3)}`;
+        dateFilterPR += ` AND merged_at <= {endDate: DateTime64(3)}`;
+      }
+
+      // ── Time to first review ──
+      const ttfrAggResult = await this.client.query({
+        query: `SELECT
+                  quantile(0.5)(hours) AS medianHours,
+                  quantile(0.95)(hours) AS p95Hours,
+                  count(*) AS sampleCount
+                FROM (
+                  SELECT CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                  FROM github_pr_reviews FINAL
+                  WHERE organization_id = {organizationId: String}
+                    AND reviewer != pr_author
+                    ${dateFilterReview} ${teamFilter}
+                  GROUP BY repo, pr_number, pr_created_at
+                )`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const [ttfrAgg] = await ttfrAggResult.json<{ medianHours: number; p95Hours: number; sampleCount: number }>();
+
+      let timeToFirstReview: {
+        medianHours: number;
+        p95Hours: number;
+        sampleCount: number;
+        trend: Array<{ week: string; medianHours: number; sampleCount: number }>;
+        splitByAI: {
+          ai: { medianHours: number; sampleCount: number } | null;
+          human: { medianHours: number; sampleCount: number } | null;
+          trend: Array<{ week: string; aiMedianHours: number | null; humanMedianHours: number | null }>;
+        };
+        rating: 'elite' | 'high' | 'medium' | 'low';
+      } | null = null;
+
+      if (ttfrAgg && Number(ttfrAgg.sampleCount) > 0) {
+        const ttfrTrendResult = await this.client.query({
+          query: `SELECT week, quantile(0.5)(hours) AS medianHours, count(*) AS sampleCount
+                  FROM (
+                    SELECT toStartOfWeek(pr_created_at) AS week,
+                           CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                    FROM github_pr_reviews FINAL
+                    WHERE organization_id = {organizationId: String}
+                      AND reviewer != pr_author
+                      ${dateFilterReview} ${teamFilter}
+                    GROUP BY week, repo, pr_number, pr_created_at
+                  )
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const ttfrTrendRows = await ttfrTrendResult.json<{ week: string; medianHours: number; sampleCount: number }>();
+
+        const ttfrSplitResult = await this.client.query({
+          query: `SELECT pr_has_ai_coauthor AS isAi, quantile(0.5)(hours) AS medianHours, count(*) AS sampleCount
+                  FROM (
+                    SELECT pr_has_ai_coauthor,
+                           CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                    FROM github_pr_reviews FINAL
+                    WHERE organization_id = {organizationId: String}
+                      AND reviewer != pr_author
+                      ${dateFilterReview} ${teamFilter}
+                    GROUP BY repo, pr_number, pr_created_at, pr_has_ai_coauthor
+                  )
+                  GROUP BY isAi`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const splitRows = await ttfrSplitResult.json<{ isAi: number; medianHours: number; sampleCount: number }>();
+        const aiRow = splitRows.find((r) => Number(r.isAi) === 1);
+        const humanRow = splitRows.find((r) => Number(r.isAi) === 0);
+
+        const ttfrSplitTrendResult = await this.client.query({
+          query: `SELECT week, pr_has_ai_coauthor AS isAi, quantile(0.5)(hours) AS medianHours
+                  FROM (
+                    SELECT toStartOfWeek(pr_created_at) AS week,
+                           pr_has_ai_coauthor,
+                           CAST(dateDiff('second', pr_created_at, min(submitted_at)) AS Float64) / 3600.0 AS hours
+                    FROM github_pr_reviews FINAL
+                    WHERE organization_id = {organizationId: String}
+                      AND reviewer != pr_author
+                      ${dateFilterReview} ${teamFilter}
+                    GROUP BY week, repo, pr_number, pr_created_at, pr_has_ai_coauthor
+                  )
+                  GROUP BY week, isAi ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const splitTrendRows = await ttfrSplitTrendResult.json<{ week: string; isAi: number; medianHours: number }>();
+        const trendMap = new Map<string, { aiMedianHours: number | null; humanMedianHours: number | null }>();
+        for (const r of splitTrendRows) {
+          const entry = trendMap.get(r.week) ?? { aiMedianHours: null, humanMedianHours: null };
+          if (Number(r.isAi) === 1) entry.aiMedianHours = Math.round(Number(r.medianHours) * 10) / 10;
+          else entry.humanMedianHours = Math.round(Number(r.medianHours) * 10) / 10;
+          trendMap.set(r.week, entry);
+        }
+
+        const median = Number(ttfrAgg.medianHours);
+        timeToFirstReview = {
+          medianHours: Math.round(median * 10) / 10,
+          p95Hours: Math.round(Number(ttfrAgg.p95Hours) * 10) / 10,
+          sampleCount: Number(ttfrAgg.sampleCount),
+          trend: ttfrTrendRows.map((r) => ({
+            week: r.week,
+            medianHours: Math.round(Number(r.medianHours) * 10) / 10,
+            sampleCount: Number(r.sampleCount),
+          })),
+          splitByAI: {
+            ai: aiRow ? { medianHours: Math.round(Number(aiRow.medianHours) * 10) / 10, sampleCount: Number(aiRow.sampleCount) } : null,
+            human: humanRow ? { medianHours: Math.round(Number(humanRow.medianHours) * 10) / 10, sampleCount: Number(humanRow.sampleCount) } : null,
+            trend: Array.from(trendMap.entries())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([week, v]) => ({ week, aiMedianHours: v.aiMedianHours, humanMedianHours: v.humanMedianHours })),
+          },
+          rating: TelemetryService.rateTimeToFirstReview(median),
+        };
+      }
+
+      // ── Time to merge ──
+      const ttmAggResult = await this.client.query({
+        query: `SELECT
+                  quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+                  quantile(0.95)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS p95Hours,
+                  count(*) AS sampleCount
+                FROM github_pull_requests FINAL
+                WHERE organization_id = {organizationId: String}
+                  ${dateFilterPR} ${teamFilter}`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const [ttmAgg] = await ttmAggResult.json<{ medianHours: number; p95Hours: number; sampleCount: number }>();
+
+      let timeToMerge: {
+        medianHours: number;
+        p95Hours: number;
+        sampleCount: number;
+        trend: Array<{ week: string; medianHours: number; sampleCount: number }>;
+        splitByAI: {
+          ai: { medianHours: number; sampleCount: number } | null;
+          human: { medianHours: number; sampleCount: number } | null;
+          trend: Array<{ week: string; aiMedianHours: number | null; humanMedianHours: number | null }>;
+        };
+        rating: 'elite' | 'high' | 'medium' | 'low';
+      } | null = null;
+
+      if (ttmAgg && Number(ttmAgg.sampleCount) > 0) {
+        const ttmTrendResult = await this.client.query({
+          query: `SELECT toStartOfWeek(merged_at) AS week,
+                    quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+                    count(*) AS sampleCount
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}
+                  GROUP BY week ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const ttmTrendRows = await ttmTrendResult.json<{ week: string; medianHours: number; sampleCount: number }>();
+
+        const ttmSplitResult = await this.client.query({
+          query: `SELECT has_ai_coauthor AS isAi,
+                    quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours,
+                    count(*) AS sampleCount
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}
+                  GROUP BY isAi`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const ttmSplitRows = await ttmSplitResult.json<{ isAi: number; medianHours: number; sampleCount: number }>();
+        const ttmAiRow = ttmSplitRows.find((r) => Number(r.isAi) === 1);
+        const ttmHumanRow = ttmSplitRows.find((r) => Number(r.isAi) === 0);
+
+        const ttmSplitTrendResult = await this.client.query({
+          query: `SELECT toStartOfWeek(merged_at) AS week, has_ai_coauthor AS isAi,
+                    quantile(0.5)(CAST(dateDiff('second', created_at, merged_at) AS Float64) / 3600.0) AS medianHours
+                  FROM github_pull_requests FINAL
+                  WHERE organization_id = {organizationId: String}
+                    ${dateFilterPR} ${teamFilter}
+                  GROUP BY week, isAi ORDER BY week`,
+          query_params: params,
+          format: 'JSONEachRow',
+        });
+        const ttmSplitTrendRows = await ttmSplitTrendResult.json<{ week: string; isAi: number; medianHours: number }>();
+        const ttmTrendMap = new Map<string, { aiMedianHours: number | null; humanMedianHours: number | null }>();
+        for (const r of ttmSplitTrendRows) {
+          const entry = ttmTrendMap.get(r.week) ?? { aiMedianHours: null, humanMedianHours: null };
+          if (Number(r.isAi) === 1) entry.aiMedianHours = Math.round(Number(r.medianHours) * 10) / 10;
+          else entry.humanMedianHours = Math.round(Number(r.medianHours) * 10) / 10;
+          ttmTrendMap.set(r.week, entry);
+        }
+
+        const median = Number(ttmAgg.medianHours);
+        timeToMerge = {
+          medianHours: Math.round(median * 10) / 10,
+          p95Hours: Math.round(Number(ttmAgg.p95Hours) * 10) / 10,
+          sampleCount: Number(ttmAgg.sampleCount),
+          trend: ttmTrendRows.map((r) => ({
+            week: r.week,
+            medianHours: Math.round(Number(r.medianHours) * 10) / 10,
+            sampleCount: Number(r.sampleCount),
+          })),
+          splitByAI: {
+            ai: ttmAiRow ? { medianHours: Math.round(Number(ttmAiRow.medianHours) * 10) / 10, sampleCount: Number(ttmAiRow.sampleCount) } : null,
+            human: ttmHumanRow ? { medianHours: Math.round(Number(ttmHumanRow.medianHours) * 10) / 10, sampleCount: Number(ttmHumanRow.sampleCount) } : null,
+            trend: Array.from(ttmTrendMap.entries())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([week, v]) => ({ week, aiMedianHours: v.aiMedianHours, humanMedianHours: v.humanMedianHours })),
+          },
+          rating: TelemetryService.rateTimeToMerge(median),
+        };
+      }
+
+      // ── Reviewer load ──
+      const loadResult = await this.client.query({
+        query: `SELECT reviewer,
+                  count(DISTINCT repo, pr_number) AS prsReviewed,
+                  quantile(0.5)(CAST(dateDiff('second', pr_created_at, submitted_at) AS Float64) / 3600.0) AS medianTurnaroundHours
+                FROM github_pr_reviews FINAL
+                WHERE organization_id = {organizationId: String}
+                  AND reviewer != pr_author
+                  ${dateFilterReview} ${teamFilter}
+                GROUP BY reviewer
+                ORDER BY prsReviewed DESC
+                LIMIT 10`,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+      const loadRows = await loadResult.json<{ reviewer: string; prsReviewed: number; medianTurnaroundHours: number }>();
+      const reviewerLoad = loadRows.map((r) => ({
+        reviewer: r.reviewer,
+        prsReviewed: Number(r.prsReviewed),
+        medianTurnaroundHours: Math.round(Number(r.medianTurnaroundHours) * 10) / 10,
+      }));
+
+      return { timeToFirstReview, timeToMerge, reviewerLoad };
+    } catch (err) {
+      this.logger.warn(`Failed to get review latency metrics: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-review-latency' } });
+      return nullResult;
     }
   }
 }

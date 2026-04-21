@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TOOLTIP_CONTENT_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_ITEM_STYLE } from '@/lib/chart-theme';
-import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, ArrowRight } from 'lucide-react';
+import { Clock, GitPullRequest, AlertTriangle, Wrench, Rocket, ArrowRight, MessageSquare, GitMerge } from 'lucide-react';
 import type { DORAMetrics } from '@/lib/api';
 
 const RATING_COLORS: Record<string, string> = {
@@ -122,6 +122,11 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
   const leadAccent = lead ? RATING_COLORS[lead.rating] : undefined;
   const cfrAccent = cfr ? RATING_COLORS[cfr.rating] : undefined;
   const mttrAccent = mttr ? RATING_COLORS[mttr.rating] : undefined;
+  const reviewLatency = data.reviewLatency;
+  const ttfr = reviewLatency?.timeToFirstReview ?? null;
+  const ttm = reviewLatency?.timeToMerge ?? null;
+  const ttfrAccent = ttfr ? RATING_COLORS[ttfr.rating] : undefined;
+  const ttmAccent = ttm ? RATING_COLORS[ttm.rating] : undefined;
 
   const sourceLabel = data.dataSource === 'deployments' ? 'GitHub Deployments' : 'PR merges';
   const sparklineLabel = data.dataSource === 'deployments' ? 'Deploys / week' : 'PRs merged / week';
@@ -254,6 +259,31 @@ export function DORAMetricsCard({ data }: DORAMetricsCardProps) {
             </div>
           )}
         </section>
+
+        {/* Review tier */}
+        {reviewLatency ? (
+          <section>
+            <SectionLabel>Review</SectionLabel>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <HeroTile
+                icon={<MessageSquare className="size-3.5" />}
+                label="Time to First Review"
+                value={ttfr ? formatDuration(ttfr.medianHours) : '—'}
+                unit={ttfr ? 'median' : undefined}
+                rating={ttfr?.rating}
+                accent={ttfrAccent}
+              />
+              <HeroTile
+                icon={<GitMerge className="size-3.5" />}
+                label="Time to Merge"
+                value={ttm ? formatDuration(ttm.medianHours) : '—'}
+                unit={ttm ? 'median' : undefined}
+                rating={ttm?.rating}
+                accent={ttmAccent}
+              />
+            </div>
+          </section>
+        ) : null}
       </CardContent>
     </Card>
   );

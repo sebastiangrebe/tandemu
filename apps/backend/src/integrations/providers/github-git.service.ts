@@ -37,6 +37,13 @@ export interface GitDeploymentData {
   statusUpdatedAt: string;
 }
 
+export interface GitPRReviewData {
+  id: number;
+  reviewer: string;
+  state: string;
+  submittedAt: string;
+}
+
 interface GitHubCommitResponse {
   sha: string;
   commit: {
@@ -55,6 +62,13 @@ interface GitHubPRResponse {
   html_url: string;
   user: { login: string } | null;
   labels: Array<{ name: string }>;
+}
+
+interface GitHubReviewResponse {
+  id: number;
+  user: { login: string } | null;
+  state: string;
+  submitted_at: string | null;
 }
 
 interface GitHubDeploymentResponse {
@@ -162,6 +176,30 @@ export class GitHubGitService {
     } catch (error) {
       this.logger.warn(`Failed to fetch PRs for ${owner}/${repo} (token may lack repo access): ${error}`);
       Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-prs' }, extra: { owner, repo } });
+      return [];
+    }
+  }
+
+  async fetchPRReviews(
+    token: string,
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<GitPRReviewData[]> {
+    const url = `${GITHUB_API}/repos/${owner}/${repo}/pulls/${prNumber}/reviews?per_page=100`;
+    try {
+      const reviews = await githubFetch<GitHubReviewResponse[]>(url, token);
+      return reviews
+        .filter((r) => r.submitted_at && r.user?.login)
+        .map((r) => ({
+          id: r.id,
+          reviewer: r.user!.login,
+          state: r.state,
+          submittedAt: r.submitted_at!,
+        }));
+    } catch (error) {
+      this.logger.warn(`Failed to fetch reviews for ${owner}/${repo}#${prNumber}: ${error}`);
+      Sentry.captureException(error, { tags: { operation: 'provider-github-fetch-pr-reviews' }, extra: { owner, repo, prNumber } });
       return [];
     }
   }
