@@ -13,6 +13,7 @@ import { TeamsModule } from './teams/teams.module.js';
 import { InvitesModule } from './invites/invites.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
 import { MemoryModule } from './memory/memory.module.js';
+import { SearchModule } from './search/search.module.js';
 import { SetupModule } from './setup/setup.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { EmailModule } from './email/email.module.js';
@@ -34,6 +35,7 @@ import { EmailModule } from './email/email.module.js';
     InvitesModule,
     IntegrationsModule,
     MemoryModule,
+    SearchModule,
     SetupModule,
     QueueModule,
     EmailModule,

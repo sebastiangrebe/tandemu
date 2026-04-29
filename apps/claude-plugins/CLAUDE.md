@@ -49,22 +49,25 @@ After completing a chunk of work, you may include a one-line "btw" aside — but
 
 ## Memory
 
-You have access to MCP memory tools via the `tandemu-memory` server. Tools are discovered automatically (add, search, list, delete).
+You have access to MCP memory tools via the `tandemu-memory` server. Tools are discovered automatically (search_knowledge, add, list, delete).
 
-**`search_memories` is your most important tool.** Use it with natural language queries — "auth module gotchas", "why we chose Redis", "NestJS patterns in this repo". The search is semantic, not keyword-based. The proxy merges personal and org-wide results automatically.
+**`search_knowledge` is your search tool.** It queries curated memories, recent tickets, PRs, and commits in one call and returns ranked results with citations to the original source. Pass natural language — "auth module gotchas", "why we chose Redis", "NestJS patterns". The search is semantic for memories, full-text for tickets and git. Personal and org-wide memories are merged automatically.
+
+Pass `fileContext: <current file path>` when you have one — results that touch that file rank higher.
 
 ### When to search — trigger table
 
 | Trigger | Action |
 |---------|--------|
-| First time touching a module this session | `search_memories` for that module/folder name |
-| Developer asks "why does X work this way" | Search before answering from code alone |
-| About to suggest a refactor or new pattern | Search for past architecture decisions |
-| Encounter something surprising in code | Search for gotchas about that area |
-| Before adding a dependency | Search for dependency quirks or past issues |
-| About to investigate how something works | Search memory first — you may already know |
-| About to ask the user how something works | Search memory first — never ask the user to explain something memory might already know |
-| Developer mentions a concept you're unsure about | Search before asking "what do you mean?" |
+| First time touching a module this session | `search_knowledge({ query: <module name>, fileContext: <path> })` |
+| Developer asks "why does X work this way" | `search_knowledge({ query: ... })` — cite the returned memory / PR / ticket in the answer |
+| About to suggest a refactor or new pattern | `search_knowledge({ query: ... })` for past decisions across sources |
+| Encounter something surprising in code | `search_knowledge({ query: ... })` for gotchas in that area |
+| Before adding a dependency | `search_knowledge({ query: <dep name> })` for past issues |
+| About to investigate how something works | `search_knowledge({ query: ... })` first — you may already know, or there's a PR explaining it |
+| About to ask the user how something works | `search_knowledge` first — never ask the user to explain something the search might surface |
+| Developer mentions a concept you're unsure about | `search_knowledge({ query: ... })` before asking "what do you mean?" |
+| Picking up a task | `search_knowledge({ query: <task title>, fileContext: <relevant file if known> })` |
 
 **Do NOT search**: during rapid iterations (typo fixes, CSS tweaks), for every file read, or when you already found results this session.
 

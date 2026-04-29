@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { IntegrationsModule } from '../integrations/integrations.module.js';
 import { TelemetryModule } from '../telemetry/telemetry.module.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { SearchModule } from '../search/search.module.js';
 import { MemoryOpsProcessor } from '../queue/memory-ops.processor.js';
 import { MemoryCleanupListener } from './memory-cleanup.listener.js';
 
@@ -16,6 +17,7 @@ import { MemoryCleanupListener } from './memory-cleanup.listener.js';
     forwardRef(() => IntegrationsModule),
     forwardRef(() => TelemetryModule),
     OrganizationsModule,
+    forwardRef(() => SearchModule),
     BullModule.registerQueue({ name: 'memory-ops' }),
     BullModule.registerQueue({ name: 'telemetry' }),
   ],

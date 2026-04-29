@@ -54,12 +54,21 @@ export interface TaskProviderFetchSubtasksParams {
   config: Record<string, unknown>;
 }
 
+export interface TaskProviderSearchParams {
+  accessToken: string;
+  query: string;
+  externalProjectId?: string;
+  limit?: number;
+  config: Record<string, unknown>;
+}
+
 export interface TaskProvider {
   fetchTasks(params: TaskProviderFetchParams): Promise<Task[]>;
   fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]>;
   getTaskStatuses(params: { accessToken: string; taskId: string; config: Record<string, unknown> }): Promise<ProviderStatus[]>;
   updateTask(params: TaskProviderUpdateParams): Promise<void>;
   createTask(params: TaskProviderCreateParams): Promise<Task>;
+  searchTasks(params: TaskProviderSearchParams): Promise<Task[]>;
   /** Optional: fetch sub-projects within a project (e.g. Linear projects in a team, ClickUp lists in a folder) */
   fetchSubProjects?(accessToken: string, projectId: string, config?: Record<string, unknown>): Promise<ExternalProject[]>;
   /** Optional: fetch direct subtasks/children of a task */

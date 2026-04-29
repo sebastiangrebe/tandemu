@@ -1,7 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/nestjs';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import type { MemoryMetadata } from '@tandemu/types';
+import type { RequestUser } from '../auth/auth.decorator.js';
+import { TasksService } from '../integrations/tasks.service.js';
+import { IntegrationsService } from '../integrations/integrations.service.js';
+import { githubFetch } from '../integrations/providers/github.provider.js';
+import type { MemoryOpsJobData } from '../queue/queue.types.js';
 
 /**
  * Unified memory service that works with both Mem0 Cloud (SaaS) and mem0 OSS.
@@ -16,7 +23,19 @@ export class MemoryService {
   private readonly mem0OssHost: string;
   private readonly mem0OssPort: number;
 
-  constructor(private readonly configService: ConfigService) {
+  // Process-local cache. Multiple backend pods will each lazy-fill their own copy
+  // — that's fine: a miss just means an extra Linear/Jira call, not incorrect gating.
+  private readonly publishedTaskCache = new Map<string, boolean>();
+
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(forwardRef(() => TasksService))
+    private readonly tasksService?: TasksService,
+    @Optional() @Inject(forwardRef(() => IntegrationsService))
+    private readonly integrationsService?: IntegrationsService,
+    @Optional() @InjectQueue('memory-ops')
+    private readonly memoryOpsQueue?: Queue<MemoryOpsJobData>,
+  ) {
     this.mem0ApiKey = this.configService.get<string>('memory.mem0ApiKey', '');
     this.mem0OssHost = this.configService.get<string>('memory.openmemoryHost', 'localhost');
     this.mem0OssPort = this.configService.get<number>('memory.openmemoryPort', 8000);
@@ -357,6 +376,170 @@ export class MemoryService {
       }
     }
     return reassigned;
+  }
+
+  // ---- Draft gating + dual-scope search (single source of truth) ----
+
+  /**
+   * Search personal + org memories, apply draft-gating self-healing, dedupe.
+   * Used by both the dashboard REST endpoint (`/api/memory/search`) and the
+   * unified search service. Centralises the lazy promote/delete behaviour
+   * documented in CLAUDE.md.
+   */
+  async searchMemoriesGated(
+    user: RequestUser,
+    query: string,
+    limit = 20,
+  ): Promise<Array<Record<string, unknown>>> {
+    const [personalMemories, orgRaw] = await Promise.all([
+      this.searchMemories(user.userId, query, limit),
+      this.searchMemories(user.organizationId, query, limit),
+    ]);
+
+    const orgMemories = await this.filterOrgDrafts(orgRaw, user);
+
+    const seen = new Set<string>();
+    const merged: Array<Record<string, unknown>> = [];
+    for (const mem of [...personalMemories, ...orgMemories]) {
+      const id = mem.id as string;
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        merged.push(mem);
+      }
+    }
+    merged.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
+    return merged;
+  }
+
+  /**
+   * Filter org memories by draft gating rules.
+   * - Published or no status: included
+   * - Author's own drafts: included
+   * - Other users' drafts: lazy-promoted if task done, lazy-deleted if cancelled, hidden if pending
+   */
+  async filterOrgDrafts(
+    memories: Array<Record<string, unknown>>,
+    user: RequestUser,
+  ): Promise<Array<Record<string, unknown>>> {
+    const draftTaskIds = new Set<string>();
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      if (!metadata) continue;
+      const status = metadata.status as string | undefined;
+      if (status === 'draft' && metadata.author_id !== user.userId) {
+        const taskId = metadata.taskId as string | undefined;
+        if (taskId && !this.publishedTaskCache.has(taskId)) {
+          draftTaskIds.add(taskId);
+        }
+      }
+    }
+
+    if (draftTaskIds.size > 0 && this.tasksService) {
+      try {
+        const tasks = await this.tasksService.getTasks(user.organizationId, {});
+        const taskMap = new Map(tasks.map((t) => [t.id, t.status]));
+        for (const taskId of draftTaskIds) {
+          const s = taskMap.get(taskId);
+          if (s === 'done') this.publishedTaskCache.set(taskId, true);
+          else if (s === 'cancelled') this.publishedTaskCache.set(taskId, false);
+          else this.publishedTaskCache.set(taskId, false);
+        }
+      } catch {
+        // If task fetch fails, treat all as pending
+      }
+    }
+
+    const filtered: Array<Record<string, unknown>> = [];
+
+    for (const mem of memories) {
+      const metadata = mem.metadata as Record<string, unknown> | null;
+      if (!metadata) { filtered.push(mem); continue; }
+
+      const status = metadata.status as string | undefined;
+      if (status === 'published' || !status) { filtered.push(mem); continue; }
+
+      if (status === 'draft') {
+        if (metadata.author_id === user.userId) { filtered.push(mem); continue; }
+
+        const taskId = metadata.taskId as string | undefined;
+        if (taskId) {
+          const taskStatus = await this.getTaskFinalStatus(taskId, metadata, user);
+          if (taskStatus === 'done') {
+            metadata.status = 'published';
+            this.memoryOpsQueue?.add('mcp-tool-call', {
+              type: 'mcp-tool-call',
+              toolName: 'update_memory',
+              args: { memory_id: mem.id as string, metadata: { status: 'published' } },
+              userId: user.userId,
+            });
+            filtered.push(mem);
+          } else if (taskStatus === 'cancelled') {
+            this.memoryOpsQueue?.add('mcp-tool-call', {
+              type: 'mcp-tool-call',
+              toolName: 'delete_memory',
+              args: { memory_id: mem.id as string },
+              userId: user.userId,
+            });
+          }
+          // 'pending' — skip
+        }
+      }
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Check task status for draft promotion.
+   * Returns: 'done' (promote), 'cancelled' (delete), 'pending' (keep as draft)
+   */
+  async getTaskFinalStatus(
+    taskId: string,
+    metadata: Record<string, unknown>,
+    user: RequestUser,
+  ): Promise<'done' | 'cancelled' | 'pending'> {
+    const cacheKey = metadata.prUrl ? `${taskId}:${metadata.prNumber}` : taskId;
+    const cached = this.publishedTaskCache.get(cacheKey);
+    if (cached === true) return 'done';
+    if (cached === false) return 'pending';
+
+    // Prefer GitHub PR state when available
+    const repo = metadata.repo as string | undefined;
+    const prNumber = metadata.prNumber as number | undefined;
+    if (repo && prNumber && this.integrationsService) {
+      try {
+        const ghIntegration = await this.integrationsService.findOne(user.organizationId, 'github');
+        const pr = await githubFetch<{ merged: boolean; state: string }>(
+          `https://api.github.com/repos/${repo}/pulls/${prNumber}`,
+          ghIntegration.access_token,
+        );
+        if (pr.merged) {
+          this.publishedTaskCache.set(cacheKey, true);
+          return 'done';
+        }
+        if (pr.state === 'closed' && !pr.merged) return 'cancelled';
+        this.publishedTaskCache.set(cacheKey, false);
+        return 'pending';
+      } catch {
+        // Fall through to ticket-system check
+      }
+    }
+
+    if (!this.tasksService) return 'pending';
+
+    try {
+      const tasks = await this.tasksService.getTasks(user.organizationId, {});
+      const task = tasks.find((t) => t.id === taskId);
+      if (task?.status === 'done') {
+        this.publishedTaskCache.set(cacheKey, true);
+        return 'done';
+      }
+      if (task?.status === 'cancelled') return 'cancelled';
+      this.publishedTaskCache.set(cacheKey, false);
+      return 'pending';
+    } catch {
+      return 'pending';
+    }
   }
 
   // ---- Helpers ----

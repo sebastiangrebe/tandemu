@@ -10,6 +10,7 @@ import type {
   TaskProviderFetchProjectsParams,
   TaskProviderUpdateParams,
   TaskProviderCreateParams,
+  TaskProviderSearchParams,
   ExternalProject,
   ProviderStatus,
 } from './task-provider.interface.js';
@@ -191,6 +192,38 @@ export class GitHubProvider implements TaskProvider {
       externalProjectId,
       updatedAt: issue.updated_at,
     };
+  }
+
+  async searchTasks(params: TaskProviderSearchParams): Promise<Task[]> {
+    const { accessToken, query, externalProjectId, limit = 20 } = params;
+
+    const qParts = [query, 'type:issue'];
+    if (externalProjectId) qParts.push(`repo:${externalProjectId}`);
+    const url = `${GITHUB_API}/search/issues?q=${encodeURIComponent(qParts.join(' '))}&per_page=${limit}`;
+
+    try {
+      const data = await githubFetch<{ items: Array<GitHubIssue & { repository_url?: string }> }>(url, accessToken);
+      return data.items.map((issue): Task => {
+        const repoFromUrl = issue.repository_url?.replace(`${GITHUB_API}/repos/`, '') ?? externalProjectId ?? '';
+        return {
+          id: String(issue.number),
+          title: issue.title,
+          description: issue.body ?? undefined,
+          status: mapStatus(issue.state),
+          priority: mapPriority(issue.labels),
+          assigneeName: issue.assignee?.login,
+          assigneeEmail: issue.assignee?.email ?? undefined,
+          labels: issue.labels.map((l) => l.name),
+          sprint: issue.milestone?.title,
+          url: issue.html_url,
+          provider: 'github',
+          externalProjectId: repoFromUrl,
+          updatedAt: issue.updated_at,
+        };
+      });
+    } catch {
+      return [];
+    }
   }
 
   async fetchProjects(params: TaskProviderFetchProjectsParams): Promise<ExternalProject[]> {
