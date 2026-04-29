@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -75,6 +76,36 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/tandemu-mem0:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/tandemu-mem0:latest
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify opencode-plugin version matches release
+        run: |
+          PKG_VERSION=$(node -p "require('./apps/opencode-plugin/package.json').version")
+          if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Version mismatch: package.json=$PKG_VERSION, release=${{ steps.version.outputs.version }}"
+            echo "Run 'pnpm release' locally so bump-plugin-versions.mjs syncs all manifests, then push."
+            exit 1
+          fi
+
+      - name: Typecheck opencode-plugin
+        working-directory: apps/opencode-plugin
+        run: pnpm exec tsc --noEmit
+
+      - name: Publish @tandemu/opencode-plugin to npm
+        working-directory: apps/opencode-plugin
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

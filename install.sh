@@ -12,6 +12,7 @@ set -euo pipefail
 #  Flags:
 #    --url <url>       Set API URL (skip instance selection)
 #    --token <token>   Use provided JWT (non-interactive)
+#    --target <t>      claude | opencode | both (default: auto-detect)
 #    --uninstall       Remove all Tandemu files
 #    --check           Check for updates
 #    --skip-prereqs    Skip prerequisite checks
@@ -29,6 +30,13 @@ CLAUDE_DIR="$HOME/.claude"
 SKILLS_DIR="$CLAUDE_DIR/skills"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 VERSION_FILE="$CLAUDE_DIR/tandemu-version.txt"
+
+OPENCODE_DIR="$HOME/.config/opencode"
+TANDEMU_OPENCODE_DIR="$HOME/.config/tandemu"
+OPENCODE_VERSION_FILE="$TANDEMU_OPENCODE_DIR/version.txt"
+
+# TARGETS is set by detect_targets() or --target flag. Space-separated list.
+TARGETS=""
 
 # ─────────────────────────────────────────────────────────
 
@@ -229,6 +237,55 @@ PYEOF
     ok "Settings cleaned"
   fi
 
+  # Clean OpenCode side
+  if [ -f "$OPENCODE_DIR/opencode.json" ]; then
+    python3 << 'PYEOF'
+import json, os
+cfg_file = os.path.expanduser("~/.config/opencode/opencode.json")
+try:
+    with open(cfg_file) as f:
+        cfg = json.load(f)
+    plugins = cfg.get("plugin", [])
+    cfg["plugin"] = [p for p in plugins if "tandemu" not in (p if isinstance(p, str) else p[0])]
+    if not cfg["plugin"]:
+        del cfg["plugin"]
+    mcp = cfg.get("mcp", {})
+    mcp.pop("tandemu-memory", None)
+    if mcp:
+        cfg["mcp"] = mcp
+    elif "mcp" in cfg:
+        del cfg["mcp"]
+    with open(cfg_file, "w") as f:
+        json.dump(cfg, f, indent=2)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+    ok "OpenCode config cleaned"
+  fi
+
+  if [ -f "$OPENCODE_DIR/AGENTS.md" ]; then
+    if grep -q "Tandemu AI Teammate" "$OPENCODE_DIR/AGENTS.md" 2>/dev/null; then
+      rm -f "$OPENCODE_DIR/AGENTS.md"
+      ok "AGENTS.md removed"
+    elif grep -qF "<!-- tandemu:personality:start -->" "$OPENCODE_DIR/AGENTS.md" 2>/dev/null; then
+      python3 -c "
+import re
+f = '$OPENCODE_DIR/AGENTS.md'
+text = open(f).read()
+text = re.sub(r'<!-- tandemu:personality:start -->.*?<!-- tandemu:personality:end -->\n*', '', text, flags=re.DOTALL)
+open(f, 'w').write(text.strip() + '\n')
+"
+      ok "Personality section removed from AGENTS.md"
+    fi
+  fi
+
+  for skill in morning finish pause create standup setup; do
+    rm -rf "$OPENCODE_DIR/skills/$skill" 2>/dev/null || true
+    rm -f "$OPENCODE_DIR/commands/$skill.md" 2>/dev/null || true
+  done
+
+  rm -rf "$TANDEMU_OPENCODE_DIR"
+
   echo ""
   printf '%b\n' "  ${GREEN}Tandemu uninstalled.${NC}"
   echo ""
@@ -241,23 +298,33 @@ PYEOF
 
 do_check() {
   header
-  local installed="unknown"
-  if [ -f "$VERSION_FILE" ]; then
-    installed=$(cat "$VERSION_FILE")
-  fi
-
   local latest
   latest=$(get_plugin_version)
-
-  printf '%b\n' "  Installed: ${BOLD}${installed}${NC}"
   printf '%b\n' "  Available: ${BOLD}${latest}${NC}"
+  echo ""
 
-  if [ "$installed" = "$latest" ]; then
-    ok "You're up to date"
-  elif [ "$installed" = "unknown" ]; then
-    warn "Version not tracked. Run install.sh to update."
-  else
+  local any_stale=""
+
+  if [ -f "$VERSION_FILE" ]; then
+    local claude_v
+    claude_v=$(cat "$VERSION_FILE")
+    printf '%b\n' "  Claude Code: ${BOLD}${claude_v}${NC}"
+    if [ "$claude_v" != "$latest" ]; then any_stale="true"; fi
+  fi
+
+  if [ -f "$OPENCODE_VERSION_FILE" ]; then
+    local oc_v
+    oc_v=$(cat "$OPENCODE_VERSION_FILE")
+    printf '%b\n' "  OpenCode:    ${BOLD}${oc_v}${NC}"
+    if [ "$oc_v" != "$latest" ]; then any_stale="true"; fi
+  fi
+
+  if [ ! -f "$VERSION_FILE" ] && [ ! -f "$OPENCODE_VERSION_FILE" ]; then
+    warn "Tandemu not installed. Run install.sh to install."
+  elif [ -n "$any_stale" ]; then
     warn "Update available. Run install.sh to update."
+  else
+    ok "You're up to date"
   fi
   echo ""
   exit 0
@@ -270,8 +337,12 @@ do_check() {
 check_prerequisites() {
   step "Checking prerequisites..."
 
-  if ! command -v claude &>/dev/null; then
-    fail "Claude Code CLI not found. Install it first: https://code.claude.com"
+  local has_claude="" has_opencode=""
+  command -v claude &>/dev/null && has_claude="true"
+  command -v opencode &>/dev/null && has_opencode="true"
+
+  if [ -z "$has_claude" ] && [ -z "$has_opencode" ]; then
+    fail "Neither Claude Code nor OpenCode CLI found. Install one: https://code.claude.com or https://opencode.ai"
   fi
 
   if ! command -v python3 &>/dev/null; then
@@ -283,6 +354,45 @@ check_prerequisites() {
   fi
 
   ok "All prerequisites found"
+}
+
+# ─────────────────────────────────────────────────────────
+# Target detection / selection
+# ─────────────────────────────────────────────────────────
+
+detect_targets() {
+  # Honor explicit --target if set.
+  if [ -n "${TARGETS:-}" ]; then
+    return
+  fi
+
+  local has_claude="" has_opencode=""
+  command -v claude &>/dev/null && has_claude="true"
+  command -v opencode &>/dev/null && has_opencode="true"
+
+  if [ -n "$has_claude" ] && [ -n "$has_opencode" ]; then
+    echo ""
+    printf '%b\n' "  ${BOLD}Both Claude Code and OpenCode are installed. Where should Tandemu install?${NC}"
+    echo ""
+    printf '%b\n' "    ${BOLD}1.${NC} Claude Code"
+    printf '%b\n' "    ${BOLD}2.${NC} OpenCode"
+    printf '%b\n' "    ${BOLD}3.${NC} Both"
+    echo ""
+    read -rp "  Choose (1-3): " choice
+    case "$choice" in
+      2) TARGETS="opencode" ;;
+      3) TARGETS="claude opencode" ;;
+      *) TARGETS="claude" ;;
+    esac
+  elif [ -n "$has_opencode" ]; then
+    TARGETS="opencode"
+  else
+    TARGETS="claude"
+  fi
+}
+
+target_active() {
+  case " $TARGETS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
 }
 
 # ─────────────────────────────────────────────────────────
@@ -448,7 +558,7 @@ for i, org in enumerate(orgs, 1):
 # Write configuration files
 # ─────────────────────────────────────────────────────────
 
-write_configs() {
+configure_claude() {
   mkdir -p "$CLAUDE_DIR"
 
   # 1. tandemu.json
@@ -583,11 +693,108 @@ PYEOF
 }
 
 # ─────────────────────────────────────────────────────────
+# OpenCode target: write auth, deep-merge opencode.json, AGENTS.md
+# ─────────────────────────────────────────────────────────
+
+configure_opencode() {
+  mkdir -p "$TANDEMU_OPENCODE_DIR"
+  mkdir -p "$OPENCODE_DIR"
+
+  # 1. ~/.config/tandemu/auth.json — credentials read by the OpenCode plugin
+  step "Writing Tandemu config (OpenCode)..."
+  cat > "$TANDEMU_OPENCODE_DIR/auth.json" << EOF
+{
+  "auth": { "token": "${TOKEN}" },
+  "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
+  "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
+  "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
+  "teams": [{ "id": "${TEAM_ID}", "name": "${TEAM_NAME}" }],
+  "api": { "url": "${API_URL}" }
+}
+EOF
+  ok "Config: ~/.config/tandemu/auth.json"
+
+  # 2. Memory MCP URL from API
+  step "Configuring memory server (OpenCode)..."
+  local mem_type="" mem_url=""
+  local mem_config
+  mem_config=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null || true)
+  if [ -n "$mem_config" ]; then
+    mem_type=$(echo "$mem_config" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
+    mem_url=$(echo "$mem_config" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
+  fi
+
+  # 3. Deep-merge opencode.json: plugin entry + mcp.tandemu-memory + permissions
+  TANDEMU_TOKEN="$TOKEN" \
+  TANDEMU_MEM_TYPE="$mem_type" \
+  TANDEMU_MEM_URL="$mem_url" \
+  python3 << 'PYEOF'
+import json, os
+cfg_file = os.path.expanduser("~/.config/opencode/opencode.json")
+try:
+    with open(cfg_file) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+
+cfg.setdefault("$schema", "https://opencode.ai/config.json")
+
+plugins = cfg.get("plugin", [])
+if "@tandemu/opencode-plugin" not in plugins:
+    plugins.append("@tandemu/opencode-plugin")
+cfg["plugin"] = plugins
+
+mem_type = os.environ.get("TANDEMU_MEM_TYPE", "")
+mem_url = os.environ.get("TANDEMU_MEM_URL", "")
+if mem_type and mem_url:
+    mcp = cfg.get("mcp", {})
+    # OpenCode expects "local" (stdio) or "remote" (http). Tandemu memory is HTTP.
+    transport = "remote"
+    mcp["tandemu-memory"] = {
+        "type": transport,
+        "url": mem_url,
+        "headers": {
+            "Authorization": "Bearer {env:TANDEMU_TOKEN}"
+        },
+        "enabled": True,
+    }
+    cfg["mcp"] = mcp
+
+with open(cfg_file, "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
+  if [ -n "$mem_url" ]; then
+    ok "Memory: enabled (→ $mem_url)"
+  else
+    warn "Could not fetch memory config — memory MCP not configured"
+  fi
+  ok "OpenCode config merged: ~/.config/opencode/opencode.json"
+
+  # 4. AGENTS.md — write personality file with markers (plugin updates it on session start)
+  step "Installing personality file..."
+  local agents_md="$OPENCODE_DIR/AGENTS.md"
+  local repo_agents="${SCRIPT_DIR}/apps/skills/AGENTS.md"
+  if [ -f "$repo_agents" ]; then
+    if [ -f "$agents_md" ] && ! grep -qF "Tandemu AI Teammate" "$agents_md" 2>/dev/null; then
+      # User already has a custom AGENTS.md — only add personality markers if missing
+      if ! grep -qF "<!-- tandemu:personality:start -->" "$agents_md" 2>/dev/null; then
+        printf '\n<!-- tandemu:personality:start -->\n<!-- tandemu:personality:end -->\n' >> "$agents_md"
+      fi
+    else
+      cp "$repo_agents" "$agents_md"
+    fi
+    ok "AGENTS.md installed"
+  else
+    warn "Source AGENTS.md not found at $repo_agents — skipping"
+  fi
+}
+
+# ─────────────────────────────────────────────────────────
 # Install skills + shared lib
 # ─────────────────────────────────────────────────────────
 
-install_assets() {
-  step "Installing shared config loader..."
+install_assets_claude() {
+  step "Installing shared config loader (Claude Code)..."
 
   local skills_src=""
 
@@ -612,6 +819,54 @@ install_assets() {
     python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$plugin_manifest" \
       > "$VERSION_FILE" 2>/dev/null || true
   fi
+}
+
+install_assets_opencode() {
+  step "Installing skills and commands (OpenCode)..."
+
+  local skills_src="${SCRIPT_DIR}/apps/skills"
+  local plugin_src="${SCRIPT_DIR}/apps/opencode-plugin"
+  if [ ! -d "$skills_src" ] || [ ! -d "$plugin_src" ]; then
+    fail "Run install.sh from the Tandemu repo directory."
+  fi
+
+  # Install skills into ~/.config/opencode/skills/
+  mkdir -p "$OPENCODE_DIR/skills"
+  for skill in morning finish pause create standup setup; do
+    if [ -d "$skills_src/$skill" ]; then
+      mkdir -p "$OPENCODE_DIR/skills/$skill"
+      cp "$skills_src/$skill/SKILL.md" "$OPENCODE_DIR/skills/$skill/SKILL.md"
+    fi
+  done
+  ok "Skills installed → $OPENCODE_DIR/skills/"
+
+  # Install command shims into ~/.config/opencode/commands/
+  mkdir -p "$OPENCODE_DIR/commands"
+  if [ -d "$plugin_src/files/commands" ]; then
+    cp "$plugin_src/files/commands"/*.md "$OPENCODE_DIR/commands/" 2>/dev/null || true
+    ok "Commands installed → $OPENCODE_DIR/commands/"
+  fi
+
+  # Track installed version
+  local plugin_manifest="${SCRIPT_DIR}/apps/opencode-plugin/package.json"
+  if [ -f "$plugin_manifest" ]; then
+    python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$plugin_manifest" \
+      > "$OPENCODE_VERSION_FILE" 2>/dev/null || true
+  fi
+}
+
+# ─────────────────────────────────────────────────────────
+# Per-target dispatchers
+# ─────────────────────────────────────────────────────────
+
+write_configs() {
+  if target_active claude; then configure_claude; fi
+  if target_active opencode; then configure_opencode; fi
+}
+
+install_assets() {
+  if target_active claude; then install_assets_claude; fi
+  if target_active opencode; then install_assets_opencode; fi
 }
 
 # ─────────────────────────────────────────────────────────
@@ -670,6 +925,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --url) API_URL="$2"; shift 2 ;;
     --token) TOKEN="$2"; NONINTERACTIVE="true"; shift 2 ;;
+    --target)
+      case "$2" in
+        claude|opencode) TARGETS="$2" ;;
+        both) TARGETS="claude opencode" ;;
+        *) fail "Invalid --target: $2 (expected: claude|opencode|both)" ;;
+      esac
+      shift 2 ;;
     --skip-prereqs) SKIP_PREREQS="true"; shift ;;
     --uninstall) DO_UNINSTALL="true"; shift ;;
     --check) DO_CHECK="true"; shift ;;
@@ -696,6 +958,9 @@ main() {
   if [ "${SKIP_PREREQS:-}" != "true" ]; then
     check_prerequisites
   fi
+
+  detect_targets
+  step "Installing for: ${TARGETS}"
 
   if [ -z "${API_URL:-}" ]; then
     choose_instance

@@ -1,0 +1,1 @@
+../../skills/AGENTS.md

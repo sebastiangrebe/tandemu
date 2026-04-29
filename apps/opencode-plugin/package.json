@@ -1,0 +1,44 @@
+{
+  "name": "@tandemu/opencode-plugin",
+  "version": "1.9.8",
+  "description": "Tandemu AI Teammate plugin for OpenCode — task lifecycle, telemetry, memory, personality.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "files",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "tandemu",
+    "ai-teammate",
+    "telemetry",
+    "memory"
+  ],
+  "author": "Tandemu <hello@tandemu.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sebastiangrebe/tandemu",
+    "directory": "apps/opencode-plugin"
+  },
+  "homepage": "https://tandemu.dev",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "*",
+    "@opencode-ai/sdk": "*",
+    "typescript": "^5.7.0"
+  },
+  "scripts": {
+    "build": "echo 'no build step — Bun loads TS directly'",
+    "dev": "echo 'no dev step'"
+  }
+}
