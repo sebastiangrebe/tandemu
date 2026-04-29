@@ -64,7 +64,11 @@ cd tandemu
 docker compose up -d
 ```
 
-### 2. Connect Claude Code
+### 2. Connect your AI editor
+
+Tandemu installs into either **Claude Code** or **OpenCode** (or both, side by side).
+
+**Claude Code:**
 
 ```bash
 # In Claude Code:
@@ -73,13 +77,23 @@ docker compose up -d
 /tandemu:setup
 ```
 
-Exit and reopen Claude Code to activate memory, then start working:
+**OpenCode:**
+
+```bash
+git clone https://github.com/sebastiangrebe/tandemu.git
+cd tandemu
+./install.sh --target=opencode
+```
+
+The installer authenticates you, registers `@tandemu/opencode-plugin` in `opencode.json`, and copies skills, commands, and `AGENTS.md` into `~/.config/opencode/`. The plugin itself is auto-installed by Bun on the next `opencode` launch.
+
+Exit and reopen your editor to activate memory, then start working:
 
 ```bash
 /morning
 ```
 
-> Alternatively, run `./install.sh` for scripted onboarding. See the [setup docs](https://tandemu.dev/docs/setup) for details.
+> The Claude Code path also has `./install.sh --target=claude` as a scripted alternative. With both editors installed, `./install.sh` auto-detects, or pass `--target=both`. See the [setup docs](https://tandemu.dev/docs/setup) for details.
 
 ### 3. Development mode
 
@@ -97,7 +111,9 @@ pnpm build     # Build all packages
 apps/
   backend/        — NestJS API (PostgreSQL + ClickHouse)
   frontend/       — Next.js dashboard (shadcn/ui + Recharts)
-  claude-plugins/ — Skills, personality, hooks
+  skills/         — Shared skills + AGENTS.md (used by both editor plugins)
+  claude-plugins/ — Claude Code packaging (marketplace plugin)
+  opencode-plugin/— OpenCode packaging (npm plugin: @tandemu/opencode-plugin)
   e2e/            — Playwright E2E tests
 packages/
   types/          — Shared TypeScript types
@@ -156,25 +172,35 @@ Full documentation is available at **[tandemu.dev/docs](https://tandemu.dev/docs
 
 ## Updating
 
-### Plugin users
+### Claude Code (plugin marketplace)
 
 ```bash
-# In Claude Code:
 /plugin marketplace update        # refresh the catalog (does NOT upgrade the plugin)
 /plugin update tandemu@tandemu    # upgrade the installed plugin
 ```
 
-Then restart Claude Code so skills reload.
+Then restart Claude Code so skills reload. Updates only propagate when `plugin.json`'s `version` field changes.
 
-### install.sh users
+### OpenCode (npm)
+
+OpenCode resolves the plugin from npm via Bun. Update by re-resolving:
+
+```bash
+bun update @tandemu/opencode-plugin
+```
+
+Or restart `opencode` if you're tracking a floating semver range.
+
+### install.sh users (either editor)
 
 ```bash
 cd tandemu && git pull
-./install.sh --check              # see installed vs latest
-./install.sh                      # re-run to update in place (config preserved)
+./install.sh --check              # see installed vs latest for each target
+./install.sh                      # auto-detect targets and update in place
+./install.sh --target=both        # explicitly update both
 ```
 
-Updates only propagate when `plugin.json`'s `version` field changes. `pnpm release` bumps it automatically — if you're testing a fork, bump it by hand before pushing.
+`pnpm release` bumps the version across `apps/claude-plugins/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `apps/opencode-plugin/package.json` simultaneously.
 
 ## Uninstalling
 

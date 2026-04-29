@@ -26,4 +26,9 @@ if (Array.isArray(marketplace.plugins)) {
 }
 writeFileSync(marketplacePath, JSON.stringify(marketplace, null, 2) + '\n');
 
+const opencodePluginPath = resolve(repoRoot, 'apps/opencode-plugin/package.json');
+const opencodePlugin = JSON.parse(readFileSync(opencodePluginPath, 'utf8'));
+opencodePlugin.version = version;
+writeFileSync(opencodePluginPath, JSON.stringify(opencodePlugin, null, 2) + '\n');
+
 console.log(`Bumped plugin manifests to ${version}`);
