@@ -28,10 +28,13 @@ export function InstallBanner() {
           </div>
           <div className="flex flex-col items-center gap-2">
             <p className="text-xs uppercase tracking-wider text-background/50">OpenCode</p>
-            <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
-              <span className="text-background/50">$</span>
-              <span>./install.sh --target=opencode</span>
-            </div>
+            <a
+              href="https://tandemu.dev/docs/installation#option-b-opencode"
+              className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 text-sm hover:bg-background/15 transition-colors"
+            >
+              <span>See OpenCode setup</span>
+              <span aria-hidden="true">&rarr;</span>
+            </a>
           </div>
         </div>
         <div className="mt-6 flex items-center gap-4">
