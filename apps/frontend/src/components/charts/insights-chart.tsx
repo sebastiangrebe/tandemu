@@ -109,7 +109,7 @@ export function CostEfficiencyChart({ data, startDate, endDate }: CostEfficiency
           <CardDescription>Daily AI cost and cost per line trend</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-12">
-          <p className="text-sm text-muted-foreground">No cost data yet — enable OTEL in Claude Code</p>
+          <p className="text-sm text-muted-foreground">No cost data yet — enable OTEL in your AI editor</p>
         </CardContent>
       </Card>
     );

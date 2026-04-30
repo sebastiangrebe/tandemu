@@ -98,7 +98,7 @@ export default function ActivityPage() {
               <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium text-muted-foreground">No session data recorded yet</p>
               <p className="text-sm text-muted-foreground/70 mt-1">
-                Session tracking data will appear as developers use Claude Code.
+                Session tracking data will appear as developers use Tandemu.
               </p>
             </CardContent>
           </Card>

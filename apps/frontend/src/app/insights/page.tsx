@@ -106,7 +106,7 @@ export default function InsightsPage() {
             <h3 className="text-lg font-medium mb-1">No insights data yet</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
               Complete tasks using the /morning and /finish workflow to generate throughput, cost, and impact metrics.
-              Enable OTEL in Claude Code for cost tracking.
+              Enable OTEL in your AI editor for cost tracking.
             </p>
           </CardContent>
         </Card>

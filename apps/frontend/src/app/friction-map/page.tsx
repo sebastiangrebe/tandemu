@@ -268,8 +268,8 @@ export default function FrictionMapPage() {
               <Flame className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <h3 className="text-lg font-medium mb-1">No friction events detected yet</h3>
               <p className="text-sm text-muted-foreground text-center max-w-lg">
-                Friction is detected automatically from Claude Code tool failures.
-                As developers use Claude Code with Tandemu connected, files where tools repeatedly fail will appear here.
+                Friction is detected automatically from AI tool failures.
+                As developers use their AI editor with Tandemu connected, files where tools repeatedly fail will appear here.
               </p>
             </CardContent>
           </Card>

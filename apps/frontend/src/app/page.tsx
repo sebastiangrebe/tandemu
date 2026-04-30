@@ -183,7 +183,7 @@ export default function DashboardPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium text-muted-foreground">No data yet</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">Start using Claude Code with Tandemu to see metrics here.</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">Start using Tandemu in Claude Code or OpenCode to see metrics here.</p>
             </CardContent>
           </Card>
 

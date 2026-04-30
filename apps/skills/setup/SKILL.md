@@ -397,7 +397,7 @@ Telemetry: enabled
 Memory: enabled
 
 ⚠️  Please start a new session to activate the memory server.
-   Type /exit, then run `claude` again (don't resume — start fresh).
+   Type /exit, then start your editor again (don't resume — start fresh).
    Resuming this session won't activate memory or load the knowledge index.
 
 Available skills:

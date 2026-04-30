@@ -2,6 +2,8 @@
 
 Claude Code plugin for the Tandemu AI Teammate platform. Provides skills, hooks, configuration templates, and a shared library that extend Claude Code with Tandemu-specific workflows.
 
+> Using OpenCode instead? See [`apps/opencode-plugin/README.md`](../opencode-plugin/README.md).
+
 ## Overview
 
 The plugin system consists of five parts:

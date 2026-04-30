@@ -23,10 +23,10 @@ export function CostChart({ data }: CostChartProps) {
       <Card>
         <CardHeader>
           <CardTitle>AI Cost</CardTitle>
-          <CardDescription>Daily Claude Code usage cost</CardDescription>
+          <CardDescription>Daily AI usage cost</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-12">
-          <p className="text-sm text-muted-foreground">No cost data yet — enable OTEL in Claude Code</p>
+          <p className="text-sm text-muted-foreground">No cost data yet — enable OTEL in your AI editor</p>
         </CardContent>
       </Card>
     );

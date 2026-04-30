@@ -375,7 +375,7 @@ export function MemoryBrowser() {
                 </div>
               </div>
               <h3 className="text-lg font-semibold mb-1">Your AI teammate builds knowledge as you code</h3>
-              <p className="text-sm text-muted-foreground max-w-md text-center mb-6">Memories are created automatically when you work with Claude Code — from coding patterns, architecture decisions, gotchas, and more.</p>
+              <p className="text-sm text-muted-foreground max-w-md text-center mb-6">Memories are created automatically as you code — from patterns, architecture decisions, gotchas, and more.</p>
               <div className="grid grid-cols-3 gap-6 text-center max-w-lg">
                 <div className="space-y-2"><div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50 mx-auto"><Code2 className="h-5 w-5 text-muted-foreground" /></div><p className="text-xs text-muted-foreground">Learns your coding style</p></div>
                 <div className="space-y-2"><div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50 mx-auto"><GitBranch className="h-5 w-5 text-muted-foreground" /></div><p className="text-xs text-muted-foreground">Captures decisions at /finish</p></div>

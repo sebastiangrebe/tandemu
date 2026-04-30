@@ -922,7 +922,12 @@ print_done() {
   printf '%b\n' "  ${BOLD}Get started:${NC}"
   echo ""
   printf '%b\n' "    ${GREEN}\$ cd your-project${NC}"
-  printf '%b\n' "    ${GREEN}\$ claude${NC}"
+  if target_active claude; then
+    printf '%b\n' "    ${GREEN}\$ claude${NC}"
+  fi
+  if target_active opencode; then
+    printf '%b\n' "    ${GREEN}\$ opencode${NC}"
+  fi
   printf '%b\n' "    ${GREEN}> /morning${NC}"
   echo ""
   printf '%b\n' "  ${BOLD}Available skills:${NC}"
