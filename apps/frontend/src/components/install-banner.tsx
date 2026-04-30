@@ -10,7 +10,7 @@ export function InstallBanner() {
         </p>
         <div className="mt-6 flex flex-col items-center gap-4">
           <div className="flex flex-col items-center gap-2">
-            <p className="text-xs uppercase tracking-wider text-background/50">Claude Code (recommended)</p>
+            <p className="text-xs uppercase tracking-wider text-background/50">Claude Code</p>
             <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
                 <span className="text-background/50">&gt;</span>
