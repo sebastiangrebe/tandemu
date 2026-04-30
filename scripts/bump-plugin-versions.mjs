@@ -31,4 +31,7 @@ const opencodePlugin = JSON.parse(readFileSync(opencodePluginPath, 'utf8'));
 opencodePlugin.version = version;
 writeFileSync(opencodePluginPath, JSON.stringify(opencodePlugin, null, 2) + '\n');
 
-console.log(`Bumped plugin manifests to ${version}`);
+const versionTsPath = resolve(repoRoot, 'packages/types/src/version.ts');
+writeFileSync(versionTsPath, `export const VERSION = '${version}';\n`);
+
+console.log(`Bumped plugin manifests + VERSION.ts to ${version}`);

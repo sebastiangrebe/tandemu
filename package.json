@@ -33,12 +33,6 @@
     "plugins": {
       "@release-it/bumper": {
         "out": [
-          {
-            "path": "packages/types/src/version.ts",
-            "type": "text/plain",
-            "consumeWholeFile": true,
-            "data": "export const VERSION = '${version}';\n"
-          },
           "apps/backend/package.json",
           "apps/frontend/package.json"
         ]
