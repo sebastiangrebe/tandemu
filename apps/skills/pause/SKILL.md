@@ -11,6 +11,12 @@ Pause the current task so the developer can switch to something else.
 
 **Execution style:** Minimize tool call noise. Combine pure-read infrastructure commands (config loads, active task reads, OTEL setup, timestamp calculations) into as few Bash calls as possible with brief descriptions like "Setup". Keep user-facing operations (git stats, summaries) as separate calls.
 
+**IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
+
+```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+```
+
 ## Steps
 
 ### 1. Setup — load config, active task, and OTEL endpoint
@@ -78,6 +84,8 @@ Sum additions, deletions, and commits across all repos.
 Convert timestamps and send a `task_session` span with `status=paused` (use the OTEL endpoint from setup):
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+OTEL_ENDPOINT=$(python3 -c "import json; s=json.load(open('$HOME/.claude/settings.json')); print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))" 2>/dev/null)
 START_NS=$(python3 -c "from datetime import datetime; print(int(datetime.fromisoformat('<startedAt>'.replace('Z','+00:00')).timestamp()*1e9))")
 END_NS=$(python3 -c "from datetime import datetime; print(int(datetime.utcnow().timestamp()*1e9))")
 TRACE_ID=$(python3 -c "import secrets; print(secrets.token_hex(16))")
@@ -119,12 +127,14 @@ curl -sf -X POST "$OTEL_ENDPOINT/v1/traces" \
 Set the task back to a paused/backlog state on the provider. First fetch available statuses, then pick the one that best represents "paused", "on hold", "todo", or "backlog":
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<taskId>/statuses?provider=<provider>"
 ```
 
 Pick the status that best represents "todo", "backlog", "on hold", or "paused" from the returned list, then:
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<taskId>" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
