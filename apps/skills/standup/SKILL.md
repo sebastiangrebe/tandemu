@@ -12,6 +12,12 @@ Generate a team standup report. Options: $ARGUMENTS
 
 **Execution style:** Minimize tool call noise. Load config and fetch standup data in a single Bash call ("Fetch standup data"). Keep the formatted report output as a separate step.
 
+**IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
+
+```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+```
+
 ## Steps
 
 ### 1. Fetch standup data

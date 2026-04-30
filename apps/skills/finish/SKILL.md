@@ -15,6 +15,12 @@ Help the developer wrap up their current task cleanly, measure the work done, an
 
 **Execution style:** Minimize tool call noise. Combine pure-read infrastructure commands (config loads, active task reads, OTEL setup, timestamp calculations) into as few Bash calls as possible with brief descriptions like "Prepare telemetry". Keep context-dependent operations (git diff, git stash) and user-facing operations (task selection, PR checks, summaries) as separate calls.
 
+**IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
+
+```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+```
+
 ## Steps
 
 ### 1. Check for uncommitted work
@@ -137,6 +143,7 @@ Build the request body from the collected data — do NOT calculate AI lines you
 **IMPORTANT: This call MUST succeed for /finish to complete. If it fails, tell the developer and STOP.**
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 RESULT=$(curl -sf -X POST "$TANDEMU_API/api/telemetry/tasks/<taskId>/finish" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
@@ -170,12 +177,14 @@ If the curl fails or returns an error, tell the developer and **STOP**.
 If the developer marked the task as "Done", update the status on the provider. First fetch the available statuses, then pick the one that best represents "done" or "completed":
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<taskId>/statuses?provider=<provider>"
 ```
 
 Pick the status that best represents "done", "completed", or "closed" from the returned list, then:
 
 ```bash
+. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<taskId>" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
