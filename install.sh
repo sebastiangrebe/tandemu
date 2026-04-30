@@ -56,6 +56,24 @@ warn() { printf '%b\n' "  ${YELLOW}!${NC} $1"; }
 fail() { printf '%b\n' "  ${RED}✗${NC} $1"; exit 1; }
 dim()  { printf '%b\n' "  ${DIM}$1${NC}"; }
 
+# Canonicalize API response: wrap flat payloads as {success:true, data:<payload>}
+# so downstream parsers can always access ['data'][...] regardless of whether
+# the backend's TransformInterceptor was applied.
+ensure_wrapped() {
+  python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('{\"success\": false, \"data\": null}')
+    sys.exit(0)
+if isinstance(d, dict) and d.get('success') is True and 'data' in d:
+    print(json.dumps(d))
+else:
+    print(json.dumps({'success': True, 'data': d}))
+" 2>/dev/null || echo '{"success": false, "data": null}'
+}
+
 # ─────────────────────────────────────────────────────────
 # Get plugin version from plugin.json
 # ─────────────────────────────────────────────────────────
@@ -440,12 +458,13 @@ choose_instance() {
 do_oauth() {
   step "Starting authentication..."
 
-  RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json" 2>/dev/null) || {
+  RAW_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/cli/initiate" -H "Content-Type: application/json" 2>/dev/null) || {
     fail "Could not reach Tandemu API at ${API_URL}."
   }
+  RESPONSE=$(echo "$RAW_RESPONSE" | ensure_wrapped)
 
-  CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])" 2>/dev/null)
-  AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['url'])" 2>/dev/null)
+  CODE=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['code'])" 2>/dev/null) || CODE=""
+  AUTH_URL=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['url'])" 2>/dev/null) || AUTH_URL=""
 
   if [ -z "$CODE" ] || [ -z "$AUTH_URL" ]; then
     fail "Could not parse auth response."
@@ -468,11 +487,12 @@ do_oauth() {
   local retries=150
   TOKEN=""
   while [ $retries -gt 0 ]; do
-    POLL_RESPONSE=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null) || true
+    POLL_RAW=$(curl -sf "${API_URL}/api/auth/cli/status?code=${CODE}" 2>/dev/null) || POLL_RAW=""
+    POLL_RESPONSE=$(echo "$POLL_RAW" | ensure_wrapped)
     STATUS=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null || echo "pending")
 
     if [ "$STATUS" = "authorized" ]; then
-      TOKEN=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['accessToken'])" 2>/dev/null)
+      TOKEN=$(echo "$POLL_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['accessToken'])" 2>/dev/null) || TOKEN=""
       break
     elif [ "$STATUS" = "expired" ]; then
       fail "Authorization expired. Please run the installer again."
@@ -494,12 +514,14 @@ do_oauth() {
 # ─────────────────────────────────────────────────────────
 
 fetch_user_info() {
-  ME_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null)
-  USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null)
-  USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null)
-  USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null)
+  ME_RAW=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/auth/me" 2>/dev/null) || ME_RAW=""
+  ME_RESPONSE=$(echo "$ME_RAW" | ensure_wrapped)
+  USER_ID=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['id'])" 2>/dev/null) || USER_ID=""
+  USER_EMAIL=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['email'])" 2>/dev/null) || USER_EMAIL=""
+  USER_NAME=$(echo "$ME_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']['user']; print(d['name'])" 2>/dev/null) || USER_NAME=""
 
-  ORGS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null)
+  ORGS_RAW=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations" 2>/dev/null) || ORGS_RAW=""
+  ORGS_RESPONSE=$(echo "$ORGS_RAW" | ensure_wrapped)
   ORG_COUNT=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
 
   ORG_ID=""
@@ -508,8 +530,8 @@ fetch_user_info() {
   TEAM_NAME=""
 
   if [ "$ORG_COUNT" -eq 1 ]; then
-    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null) || ORG_ID=""
+    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null) || ORG_NAME=""
   elif [ "$ORG_COUNT" -gt 1 ]; then
     echo ""
     printf '%b\n' "  ${BOLD}You belong to multiple organizations:${NC}"
@@ -526,15 +548,16 @@ for i, org in enumerate(orgs, 1):
     if [ "$idx" -lt 0 ] || [ "$idx" -ge "$ORG_COUNT" ]; then
       idx=0
     fi
-    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['id'])" 2>/dev/null)
-    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['name'])" 2>/dev/null)
+    ORG_ID=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['id'])" 2>/dev/null) || ORG_ID=""
+    ORG_NAME=$(echo "$ORGS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][$idx]['name'])" 2>/dev/null) || ORG_NAME=""
 
     # Switch token to the chosen org
-    SWITCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
+    SWITCH_RAW=$(curl -sf -X POST "${API_URL}/api/auth/switch-org" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"organizationId": "'"$ORG_ID"'"}' 2>/dev/null)
-    NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])" 2>/dev/null)
+      -d '{"organizationId": "'"$ORG_ID"'"}' 2>/dev/null) || SWITCH_RAW=""
+    SWITCH_RESPONSE=$(echo "$SWITCH_RAW" | ensure_wrapped)
+    NEW_TOKEN=$(echo "$SWITCH_RESPONSE" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('data',{}).get('accessToken') or d.get('accessToken',''))" 2>/dev/null) || NEW_TOKEN=""
     if [ -n "$NEW_TOKEN" ]; then
       TOKEN="$NEW_TOKEN"
       ok "Switched to ${ORG_NAME}"
@@ -544,12 +567,13 @@ for i, org in enumerate(orgs, 1):
   fi
 
   if [ -n "$ORG_ID" ]; then
-    TEAMS_RESPONSE=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null)
+    TEAMS_RAW=$(curl -sf -H "Authorization: Bearer $TOKEN" "${API_URL}/api/organizations/${ORG_ID}/teams" 2>/dev/null) || TEAMS_RAW=""
+    TEAMS_RESPONSE=$(echo "$TEAMS_RAW" | ensure_wrapped)
     TEAM_COUNT=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo "0")
 
     if [ "$TEAM_COUNT" -gt 0 ]; then
-      TEAM_ID=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
-      TEAM_NAME=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null)
+      TEAM_ID=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null) || TEAM_ID=""
+      TEAM_NAME=$(echo "$TEAMS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['name'])" 2>/dev/null) || TEAM_NAME=""
     fi
   fi
 }
@@ -644,10 +668,10 @@ PYEOF
   step "Configuring memory server..."
   MEM0_URL="http://${OTEL_HOST}:8765"
 
-  MEM_CONFIG=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null)
+  MEM_CONFIG=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null) || MEM_CONFIG=""
   if [ -n "$MEM_CONFIG" ]; then
-    MEM_TYPE=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
-    MEM_URL=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
+    MEM_TYPE=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d; print(d.get('type',''))" 2>/dev/null) || MEM_TYPE=""
+    MEM_URL=$(echo "$MEM_CONFIG" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d; print(d.get('url',''))" 2>/dev/null) || MEM_URL=""
 
     python3 << PYEOF
 import json, os
@@ -720,8 +744,8 @@ EOF
   local mem_config
   mem_config=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null || true)
   if [ -n "$mem_config" ]; then
-    mem_type=$(echo "$mem_config" | python3 -c "import json,sys; print(json.load(sys.stdin)['type'])" 2>/dev/null)
-    mem_url=$(echo "$mem_config" | python3 -c "import json,sys; print(json.load(sys.stdin)['url'])" 2>/dev/null)
+    mem_type=$(echo "$mem_config" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d; print(d.get('type',''))" 2>/dev/null) || mem_type=""
+    mem_url=$(echo "$mem_config" | python3 -c "import json,sys; d=json.load(sys.stdin); d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d; print(d.get('url',''))" 2>/dev/null) || mem_url=""
   fi
 
   # 3. Deep-merge opencode.json: plugin entry + mcp.tandemu-memory + permissions
@@ -924,14 +948,21 @@ DO_CHECK=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --url) API_URL="$2"; shift 2 ;;
+    --url=*) API_URL="${1#*=}"; shift ;;
     --token) TOKEN="$2"; NONINTERACTIVE="true"; shift 2 ;;
-    --target)
-      case "$2" in
-        claude|opencode) TARGETS="$2" ;;
+    --token=*) TOKEN="${1#*=}"; NONINTERACTIVE="true"; shift ;;
+    --target|--target=*)
+      if [ "$1" = "--target" ]; then
+        target_val="$2"; shift 2
+      else
+        target_val="${1#*=}"; shift
+      fi
+      case "$target_val" in
+        claude|opencode) TARGETS="$target_val" ;;
         both) TARGETS="claude opencode" ;;
-        *) fail "Invalid --target: $2 (expected: claude|opencode|both)" ;;
+        *) fail "Invalid --target: $target_val (expected: claude|opencode|both)" ;;
       esac
-      shift 2 ;;
+      ;;
     --skip-prereqs) SKIP_PREREQS="true"; shift ;;
     --uninstall) DO_UNINSTALL="true"; shift ;;
     --check) DO_CHECK="true"; shift ;;
