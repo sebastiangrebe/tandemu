@@ -10,7 +10,7 @@
 
 <p align="center">
   The management layer for AI-assisted development.<br/>
-  Persistent memory and telemetry for Claude Code — built for developers and engineering leads.
+  Persistent memory and telemetry for Claude Code and OpenCode — built for developers and engineering leads.
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 
 ## What is Tandemu?
 
-Tandemu is an AI teammate platform that sits on top of [Claude Code](https://claude.ai/code). It serves two audiences:
+Tandemu is an AI teammate platform that sits on top of [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai). It serves two audiences:
 
 - **For developers** — a persistent AI companion that remembers your coding style, architectural decisions, and debugging history across sessions. Daily workflow is driven by slash commands (`/morning`, `/finish`, `/standup`).
 - **For engineering leads** — non-invasive observability into AI-native development. Real metrics (AI ratio, cycle time, friction, DORA) replace estimation ceremonies like story points and manual timesheets.

@@ -3,23 +3,38 @@ export function InstallBanner() {
     <div className="relative overflow-hidden rounded-xl bg-foreground text-background px-6 py-10 sm:px-10 sm:py-12">
       <div className="relative z-10 flex flex-col items-center text-center">
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-          Connect Claude Code to your dashboard.
+          Connect Claude Code or OpenCode to your dashboard.
         </h2>
         <p className="mt-3 text-sm sm:text-base text-background/70 max-w-md">
           One install. An AI that remembers. Metrics that matter.
         </p>
-        <div className="mt-6 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
-            <span className="text-background/50">&gt;</span>
-            <span>/plugin marketplace add <strong>sebastiangrebe/tandemu</strong></span>
+        <div className="mt-6 flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs uppercase tracking-wider text-background/50">Claude Code</p>
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+                <span className="text-background/50">&gt;</span>
+                <span>/plugin marketplace add <strong>sebastiangrebe/tandemu</strong></span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+                <span className="text-background/50">&gt;</span>
+                <span>/plugin install tandemu</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
+                <span className="text-background/50">&gt;</span>
+                <span>/tandemu:setup</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
-            <span className="text-background/50">&gt;</span>
-            <span>/plugin install tandemu</span>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 font-mono text-sm">
-            <span className="text-background/50">&gt;</span>
-            <span>/tandemu:setup</span>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs uppercase tracking-wider text-background/50">OpenCode</p>
+            <a
+              href="https://tandemu.dev/docs/installation#option-b-opencode"
+              className="flex items-center gap-2 rounded-lg border border-background/20 bg-background/10 px-4 py-2.5 text-sm hover:bg-background/15 transition-colors"
+            >
+              <span>See OpenCode setup</span>
+              <span aria-hidden="true">&rarr;</span>
+            </a>
           </div>
         </div>
         <div className="mt-6 flex items-center gap-4">
