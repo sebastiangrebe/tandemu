@@ -101,7 +101,7 @@ jobs:
         working-directory: apps/opencode-plugin
         run: pnpm exec tsc --noEmit
 
-      - name: Publish @tandemu/opencode-plugin to npm
+      - name: Publish @sebastiangrebe/opencode-plugin to npm
         working-directory: apps/opencode-plugin
         run: npm publish --access public --provenance
         env:

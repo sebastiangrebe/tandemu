@@ -74,7 +74,7 @@ function buildOtlpPayload(batch: Counter[], config: TandemuConfig) {
         },
         scopeMetrics: [
           {
-            scope: { name: "@tandemu/opencode-plugin", version: "1.9.8" },
+            scope: { name: "@sebastiangrebe/opencode-plugin", version: "0.4.0" },
             metrics: [...byMetric.entries()].map(([metric, points]) => ({
               name: metric,
               sum: {

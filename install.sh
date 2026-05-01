@@ -764,8 +764,8 @@ except (FileNotFoundError, json.JSONDecodeError):
 cfg.setdefault("$schema", "https://opencode.ai/config.json")
 
 plugins = cfg.get("plugin", [])
-if "@tandemu/opencode-plugin" not in plugins:
-    plugins.append("@tandemu/opencode-plugin")
+if "@sebastiangrebe/opencode-plugin" not in plugins:
+    plugins.append("@sebastiangrebe/opencode-plugin")
 cfg["plugin"] = plugins
 
 mem_type = os.environ.get("TANDEMU_MEM_TYPE", "")
