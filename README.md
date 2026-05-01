@@ -85,7 +85,7 @@ cd tandemu
 ./install.sh --target=opencode
 ```
 
-The installer authenticates you, registers `@tandemu/opencode-plugin` in `opencode.json`, and copies skills, commands, and `AGENTS.md` into `~/.config/opencode/`. The plugin itself is auto-installed by Bun on the next `opencode` launch.
+The installer authenticates you, registers `@sebastiangrebe/opencode-plugin` in `opencode.json`, and copies skills, commands, and `AGENTS.md` into `~/.config/opencode/`. The plugin itself is auto-installed by Bun on the next `opencode` launch.
 
 Exit and reopen your editor to activate memory, then start working:
 
@@ -113,7 +113,7 @@ apps/
   frontend/       — Next.js dashboard (shadcn/ui + Recharts)
   skills/         — Shared skills + AGENTS.md (used by both editor plugins)
   claude-plugins/ — Claude Code packaging (marketplace plugin)
-  opencode-plugin/— OpenCode packaging (npm plugin: @tandemu/opencode-plugin)
+  opencode-plugin/— OpenCode packaging (npm plugin: @sebastiangrebe/opencode-plugin)
   e2e/            — Playwright E2E tests
 packages/
   types/          — Shared TypeScript types
@@ -186,7 +186,7 @@ Then restart Claude Code so skills reload. Updates only propagate when `plugin.j
 OpenCode resolves the plugin from npm via Bun. Update by re-resolving:
 
 ```bash
-bun update @tandemu/opencode-plugin
+bun update @sebastiangrebe/opencode-plugin
 ```
 
 Or restart `opencode` if you're tracking a floating semver range.

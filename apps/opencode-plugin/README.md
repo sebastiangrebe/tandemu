@@ -1,4 +1,4 @@
-# @tandemu/opencode-plugin
+# @sebastiangrebe/opencode-plugin
 
 Tandemu AI Teammate plugin for [OpenCode](https://opencode.ai). Adds the same task lifecycle, telemetry, persistent memory, and personality system that Tandemu provides to Claude Code, but native to OpenCode.
 
@@ -11,7 +11,7 @@ Tandemu AI Teammate plugin for [OpenCode](https://opencode.ai). Adds the same ta
 # 2. Add the plugin to opencode.json (install.sh does this automatically):
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@tandemu/opencode-plugin"]
+  "plugin": ["@sebastiangrebe/opencode-plugin"]
 }
 ```
 
