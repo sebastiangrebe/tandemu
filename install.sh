@@ -764,6 +764,8 @@ except (FileNotFoundError, json.JSONDecodeError):
 cfg.setdefault("$schema", "https://opencode.ai/config.json")
 
 plugins = cfg.get("plugin", [])
+# Drop legacy plugin name (renamed in 0.4.1)
+plugins = [p for p in plugins if p != "@tandemu/opencode-plugin"]
 if "@sebastiangrebe/opencode-plugin" not in plugins:
     plugins.append("@sebastiangrebe/opencode-plugin")
 cfg["plugin"] = plugins

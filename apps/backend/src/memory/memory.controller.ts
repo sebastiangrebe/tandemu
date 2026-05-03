@@ -78,6 +78,16 @@ export class MemoryController {
     };
   }
 
+  @Get('mcp')
+  getMcp(@Res() res: Response): void {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Method Not Allowed: server does not support GET on this endpoint' },
+      id: null,
+    });
+  }
+
   @Post('mcp')
   async proxyMcp(
     @CurrentUser() user: RequestUser,
