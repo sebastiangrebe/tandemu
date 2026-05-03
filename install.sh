@@ -772,17 +772,23 @@ cfg["plugin"] = plugins
 
 mem_type = os.environ.get("TANDEMU_MEM_TYPE", "")
 mem_url = os.environ.get("TANDEMU_MEM_URL", "")
-if mem_type and mem_url:
+token = os.environ.get("TANDEMU_TOKEN", "")
+if mem_type and mem_url and token:
     mcp = cfg.get("mcp", {})
     # OpenCode expects "local" (stdio) or "remote" (http). Tandemu memory is HTTP.
-    transport = "remote"
+    # Bake token into headers — opencode's MCP HTTP client doesn't read shell-env
+    # hook output, and `{env:...}` interpolation needs the var set in opencode's
+    # process env (not reliable across launchers). Token is no more sensitive
+    # than ~/.config/tandemu/auth.json, which already lives next to this file.
+    # Disable OAuth probing — server uses static bearer auth, not OAuth.
     mcp["tandemu-memory"] = {
-        "type": transport,
+        "type": "remote",
         "url": mem_url,
         "headers": {
-            "Authorization": "Bearer {env:TANDEMU_TOKEN}"
+            "Authorization": f"Bearer {token}"
         },
         "enabled": True,
+        "oauth": False,
     }
     cfg["mcp"] = mcp
 
