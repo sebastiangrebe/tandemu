@@ -79,12 +79,24 @@ export class MemoryController {
   }
 
   @Get('mcp')
-  getMcp(@Res() res: Response): void {
-    res.setHeader('Allow', 'POST');
-    res.status(405).json({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: 'Method Not Allowed: server does not support GET on this endpoint' },
-      id: null,
+  getMcp(@Req() req: Request, @Res() res: Response): void {
+    // MCP Streamable HTTP: optional GET opens an SSE stream for
+    // server-initiated notifications. Older client SDKs (incl. opencode's)
+    // throw on non-200 here, so return 200 + an empty event-stream and
+    // keep it alive until the client disconnects.
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const keepalive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* socket closed */ }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(keepalive);
+      try { res.end(); } catch { /* already ended */ }
     });
   }
 
