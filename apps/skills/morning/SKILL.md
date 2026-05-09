@@ -19,7 +19,7 @@ Help the developer start their work session by picking a task.
 **IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, `$TANDEMU_TEAM_ID`, etc. MUST source the env loader first:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 ```
 
 ## Steps
@@ -48,7 +48,7 @@ Run all setup reads in a **single Bash call**:
 
 ```bash
 # Load Tandemu config
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
@@ -162,7 +162,7 @@ Set `SELECTED_TEAM_ID` from the choice. If "All teams" is selected, set `SELECTE
 Fetch tasks assigned to the current developer in a single call. The API handles multi-team dedup and unassigned fallback server-side:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&mine=true&fallbackUnassigned=true&sort=priority&order=desc"
 ```
 
@@ -193,7 +193,7 @@ If there are more than 4 tasks, show the top 4 and mention how many more exist.
 After the developer picks a task, check if `hasSubtasks` is `true` on the selected task. If so, fetch the subtasks:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/subtasks?provider=<task.provider>"
 ```
 
@@ -292,7 +292,7 @@ EOF
 - Update the task on the ticket system — set status to "in progress" AND assign it to the current developer. First fetch the available statuses, then pick the one that best represents "in progress":
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 # Fetch available statuses for this task
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/statuses?provider=<task.provider>"
 ```
@@ -302,7 +302,7 @@ This returns an array of `{ id, name, type }` objects — the actual statuses av
 Then send a single PATCH to update both status and assignee:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<task.id>" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
@@ -321,7 +321,7 @@ If you can't determine which status to use, still send the assignee update witho
 After setting up the task, silently check for knowledge gaps:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 GAPS=$(curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/gaps" 2>/dev/null)
 ```
 

@@ -15,7 +15,7 @@ Generate a team standup report. Options: $ARGUMENTS
 **IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 ```
 
 ## Steps
@@ -26,7 +26,7 @@ Load config and fetch all pre-computed standup data in a **single Bash call** ("
 
 ```bash
 # Load Tandemu config
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 
 # Multi-team support: resolve --team argument or prompt if multiple teams
 ACTIVE_TEAM_ID="$TANDEMU_TEAM_ID"
