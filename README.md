@@ -66,9 +66,17 @@ docker compose up -d
 
 ### 2. Connect your AI editor
 
-Tandemu installs into either **Claude Code** or **OpenCode** (or both, side by side).
+Tandemu installs into any of: **Claude Code**, **OpenCode**, **Cursor**, **GitHub Copilot CLI**, **Codex CLI** — pick one or run them side by side.
 
-**Claude Code:**
+| Agent | How it integrates | Slash commands | Install |
+|-------|-------------------|----------------|---------|
+| Claude Code | Plugin marketplace + skills + hooks | ✅ `/morning`, `/finish`, `/pause`, `/standup` | `/plugin install tandemu` (in Claude) or `./install.sh --target=claude` |
+| OpenCode | npm plugin (`@sebastiangrebe/opencode-plugin`) + skills + hooks | ✅ same as Claude | `./install.sh --target=opencode` |
+| Cursor | MCP server + `.cursor/rules/tandemu.mdc` | ❌ — ask via chat ("list my tasks") | `./install.sh --target=cursor` |
+| Copilot CLI | MCP server + `~/.copilot/AGENTS.md` | ❌ — ask via `gh copilot` | `./install.sh --target=copilot` |
+| Codex CLI | MCP server + `~/.codex/AGENTS.md` | ❌ — ask in REPL | `./install.sh --target=codex` |
+
+**Claude Code (recommended):**
 
 ```bash
 # In Claude Code:
@@ -77,23 +85,33 @@ Tandemu installs into either **Claude Code** or **OpenCode** (or both, side by s
 /tandemu:setup
 ```
 
-**OpenCode:**
+**Any other agent — or multiple:**
 
 ```bash
 git clone https://github.com/sebastiangrebe/tandemu.git
 cd tandemu
-./install.sh --target=opencode
+./install.sh                           # auto-detects installed agents
+./install.sh --target=cursor,codex     # explicit, comma-separated
+./install.sh --target=all              # everything detected
 ```
 
-The installer authenticates you, registers `@sebastiangrebe/opencode-plugin` in `opencode.json`, and copies skills, commands, and `AGENTS.md` into `~/.config/opencode/`. The plugin itself is auto-installed by Bun on the next `opencode` launch.
+The installer authenticates you (browser-based OAuth), registers the Tandemu MCP server in each agent's config, and drops the canonical `AGENTS.md` (or Cursor `.mdc` rule) so the agent picks up your personality + memory bootstrap.
 
-Exit and reopen your editor to activate memory, then start working:
+Exit and reopen your editor to activate the new MCP server, then start working:
 
 ```bash
-/morning
+/morning              # Claude Code / OpenCode
+"list my tasks"       # Cursor / Copilot CLI / Codex CLI
 ```
 
-> The Claude Code path also has `./install.sh --target=claude` as a scripted alternative. With both editors installed, `./install.sh` auto-detects, or pass `--target=both`. See the [setup docs](https://tandemu.dev/docs/setup) for details.
+#### How the MCP-first model works
+
+For Cursor / Copilot / Codex, Tandemu does not ship a per-editor plugin. Instead it registers a single MCP server (the same backend that already serves memory) which exposes:
+
+- `list_tasks`, `get_task_statuses`, `update_task`, `create_task` — task lifecycle against your ticket system (Linear / Jira / ClickUp / GitHub)
+- `add_memory`, `search_memories`, `get_memories`, `update_memory`, `delete_memory` — personal + org memory
+
+Slash commands (`/morning`, `/finish`, `/standup`) require lifecycle hooks and are kept exclusive to Claude Code + OpenCode where they're polished. On the lightweight agents you ask in plain English — the agent picks the right MCP tool. Telemetry from Cursor / Copilot / Codex comes from server-side MCP-call counting plus git commit attribution; tool-use telemetry is Claude-Code-only.
 
 ### 3. Development mode
 
@@ -191,16 +209,17 @@ bun update @sebastiangrebe/opencode-plugin
 
 Or restart `opencode` if you're tracking a floating semver range.
 
-### install.sh users (either editor)
+### install.sh users (any editor)
 
 ```bash
 cd tandemu && git pull
 ./install.sh --check              # see installed vs latest for each target
 ./install.sh                      # auto-detect targets and update in place
-./install.sh --target=both        # explicitly update both
+./install.sh --target=all         # update every detected agent
+./install.sh --target=cursor      # single-agent update
 ```
 
-`pnpm release` bumps the version across `apps/claude-plugins/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `apps/opencode-plugin/package.json` simultaneously.
+`pnpm release` bumps the version across `apps/claude-plugins/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `apps/opencode-plugin/package.json` simultaneously. The MCP-first targets (Cursor, Copilot, Codex) track the same plugin version for `--check` reporting.
 
 ## Uninstalling
 

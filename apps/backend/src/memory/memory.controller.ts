@@ -23,7 +23,7 @@ import { CurrentUser, Roles } from '../auth/auth.decorator.js';
 import type { RequestUser } from '../auth/auth.decorator.js';
 import { MembershipRole } from '@tandemu/types';
 import { MemoryScope } from '@tandemu/types';
-import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse, FileTreeNode, GapEntry } from '@tandemu/types';
+import type { MemoryEntry, MemoryListResponse, MemoryStatsResponse, FileTreeNode, GapEntry, TaskStatus, IntegrationProvider } from '@tandemu/types';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { MemoryService } from './memory.service.js';
@@ -33,6 +33,27 @@ import { githubFetch } from '../integrations/providers/github.provider.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { MemoryOpsJobData, TelemetryJobData } from '../queue/queue.types.js';
+
+// MCP tools advertised at /api/memory/mcp. Memory tools are handled by Mem0
+// (SaaS) or routed through MemoryService (OSS). Task tools are always
+// handled locally via TasksService.
+const MEMORY_TOOL_DEFS = [
+  { name: 'add_memory', description: 'Store a new memory', inputSchema: { type: 'object', properties: { text: { type: 'string' }, user_id: { type: 'string' }, metadata: { type: 'object' } }, required: ['text'] } },
+  { name: 'search_memories', description: 'Search memories', inputSchema: { type: 'object', properties: { query: { type: 'string' }, user_id: { type: 'string' }, limit: { type: 'number' } }, required: ['query'] } },
+  { name: 'get_memories', description: 'List all memories', inputSchema: { type: 'object', properties: { user_id: { type: 'string' } } } },
+  { name: 'delete_memory', description: 'Delete a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' } }, required: ['memory_id'] } },
+  { name: 'update_memory', description: 'Update a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' }, text: { type: 'string' } }, required: ['memory_id'] } },
+];
+
+const TASK_TOOL_DEFS = [
+  { name: 'list_tasks', description: 'List tasks from the connected ticket system. Filter by team, status, or assignment to current user.', inputSchema: { type: 'object', properties: { teamId: { type: 'string', description: 'Team ID. Use "all" for every team you belong to. Omit to use the default team.' }, mine: { type: 'boolean', description: 'Only return tasks assigned to the current user' }, status: { type: 'string', enum: ['todo', 'in_progress', 'in_review', 'done', 'cancelled'] }, excludeDone: { type: 'boolean', description: 'Filter out done/cancelled tasks' } } } },
+  { name: 'get_task_statuses', description: 'Get the available status names for a task in its ticket system. Call this before update_task to learn the valid statusName values.', inputSchema: { type: 'object', properties: { taskId: { type: 'string' }, provider: { type: 'string', enum: ['linear', 'jira', 'clickup', 'github'] } }, required: ['taskId', 'provider'] } },
+  { name: 'update_task', description: 'Update a task. Use get_task_statuses first to find valid statusName. Set statusName to mark as in-progress, in-review, done, etc.', inputSchema: { type: 'object', properties: { taskId: { type: 'string' }, provider: { type: 'string', enum: ['linear', 'jira', 'clickup', 'github'] }, statusName: { type: 'string' }, assigneeEmail: { type: 'string' }, priority: { type: 'string' }, description: { type: 'string' } }, required: ['taskId', 'provider'] } },
+  { name: 'create_task', description: 'Create a new task in the team\'s ticket system.', inputSchema: { type: 'object', properties: { teamId: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'medium', 'low'] }, assigneeEmail: { type: 'string' }, labels: { type: 'array', items: { type: 'string' } }, provider: { type: 'string', enum: ['linear', 'jira', 'clickup', 'github'] } }, required: ['teamId', 'title'] } },
+];
+
+const TANDEMU_TOOLS = [...MEMORY_TOOL_DEFS, ...TASK_TOOL_DEFS];
+const TASK_TOOL_NAMES = new Set(TASK_TOOL_DEFS.map((t) => t.name));
 
 @Controller('memory')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -108,34 +129,44 @@ export class MemoryController {
     @Body() body: unknown,
   ): Promise<void> {
     const rpc = body as Record<string, unknown> | null;
+    const method = rpc?.method as string | undefined;
 
-    // OSS: translate MCP tool calls → REST API calls
+    // ── Common branches (handled the same in OSS and SaaS modes) ──
+
+    if (method === 'initialize') {
+      res.json({
+        jsonrpc: '2.0', id: rpc!.id,
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: 'tandemu', version: '1.0.0' },
+        },
+      });
+      return;
+    }
+
+    if (method === 'tools/list') {
+      res.json({
+        jsonrpc: '2.0', id: rpc!.id,
+        result: { tools: TANDEMU_TOOLS },
+      });
+      return;
+    }
+
+    // Task tools always handled locally via TasksService — never proxied to Mem0
+    if (method === 'tools/call' && this.isTaskTool(rpc!)) {
+      const result = await this.handleTaskToolCall(rpc!, user);
+      res.json({ jsonrpc: '2.0', id: rpc!.id, result });
+      return;
+    }
+
+    // ── Memory-only paths below ──
+
+    // OSS: translate memory MCP tool calls → REST API calls
     if (!this.memoryService.isMem0Cloud) {
-      if (rpc?.method === 'tools/call') {
-        const result = await this.handleMcpToolCallViaRest(rpc, user);
-        res.json({ jsonrpc: '2.0', id: rpc.id, result });
-      } else if (rpc?.method === 'initialize') {
-        res.json({
-          jsonrpc: '2.0', id: rpc.id,
-          result: {
-            protocolVersion: '2024-11-05',
-            capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: 'tandemu-memory', version: '1.0.0' },
-          },
-        });
-      } else if (rpc?.method === 'tools/list') {
-        res.json({
-          jsonrpc: '2.0', id: rpc.id,
-          result: {
-            tools: [
-              { name: 'add_memory', description: 'Store a new memory', inputSchema: { type: 'object', properties: { text: { type: 'string' }, user_id: { type: 'string' }, metadata: { type: 'object' } }, required: ['text'] } },
-              { name: 'search_memories', description: 'Search memories', inputSchema: { type: 'object', properties: { query: { type: 'string' }, user_id: { type: 'string' }, limit: { type: 'number' } }, required: ['query'] } },
-              { name: 'get_memories', description: 'List all memories', inputSchema: { type: 'object', properties: { user_id: { type: 'string' } } } },
-              { name: 'delete_memory', description: 'Delete a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' } }, required: ['memory_id'] } },
-              { name: 'update_memory', description: 'Update a memory', inputSchema: { type: 'object', properties: { memory_id: { type: 'string' }, text: { type: 'string' } }, required: ['memory_id'] } },
-            ],
-          },
-        });
+      if (method === 'tools/call') {
+        const result = await this.handleMcpToolCallViaRest(rpc!, user);
+        res.json({ jsonrpc: '2.0', id: rpc!.id, result });
       } else {
         // notifications/initialized, etc. — acknowledge
         res.json({ jsonrpc: '2.0', id: rpc?.id ?? null, result: {} });
@@ -277,6 +308,103 @@ export class MemoryController {
     const params = rpc.params as Record<string, unknown> | undefined;
     const toolName = params?.name as string | undefined;
     return toolName === 'search_memories' || toolName === 'get_memories';
+  }
+
+  /**
+   * Check if a tool call targets a task tool (vs a memory tool).
+   */
+  private isTaskTool(rpc: Record<string, unknown>): boolean {
+    const params = rpc.params as Record<string, unknown> | undefined;
+    const toolName = params?.name as string | undefined;
+    return !!toolName && TASK_TOOL_NAMES.has(toolName);
+  }
+
+  /**
+   * Handle task MCP tool calls by delegating to TasksService. Used by external
+   * agents (Cursor, Codex, Copilot CLI) that connect to /api/memory/mcp and
+   * issue tool calls that match TASK_TOOL_DEFS.
+   */
+  private async handleTaskToolCall(
+    rpc: Record<string, unknown>,
+    user: RequestUser,
+  ): Promise<Record<string, unknown>> {
+    const params = rpc.params as Record<string, unknown>;
+    const toolName = params.name as string;
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
+
+    try {
+      switch (toolName) {
+        case 'list_tasks': {
+          const teamId = args.teamId as string | undefined;
+          const mine = args.mine === true;
+          const status = args.status as TaskStatus | undefined;
+          const excludeDone = args.excludeDone === true;
+
+          let assigneeEmails: string[] | undefined;
+          if (mine) {
+            assigneeEmails = await this.authService.getAllEmailAddresses(user.userId);
+          }
+
+          const tasks = await this.tasksService.getTasks(user.organizationId, {
+            teamId,
+            assigneeEmail: mine ? user.email : undefined,
+            assigneeEmails,
+            sprint: 'current',
+            excludeDone,
+          });
+
+          const filtered = status ? tasks.filter((t) => t.status === status) : tasks;
+          return { content: [{ type: 'text', text: JSON.stringify(filtered) }] };
+        }
+
+        case 'get_task_statuses': {
+          const taskId = args.taskId as string;
+          const provider = args.provider as IntegrationProvider;
+          const statuses = await this.tasksService.getTaskStatuses(
+            user.organizationId,
+            taskId,
+            provider,
+          );
+          return { content: [{ type: 'text', text: JSON.stringify(statuses) }] };
+        }
+
+        case 'update_task': {
+          const taskId = args.taskId as string;
+          const provider = args.provider as IntegrationProvider;
+          await this.tasksService.updateTask(user.organizationId, taskId, provider, {
+            statusName: args.statusName as string | undefined,
+            assigneeEmail: args.assigneeEmail as string | undefined,
+            priority: args.priority as string | undefined,
+            description: args.description as string | undefined,
+          });
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }] };
+        }
+
+        case 'create_task': {
+          const task = await this.tasksService.createTask(user.organizationId, {
+            teamId: args.teamId as string,
+            title: args.title as string,
+            description: args.description as string | undefined,
+            assigneeEmail: args.assigneeEmail as string | undefined,
+            priority: args.priority as string | undefined,
+            labels: args.labels as string[] | undefined,
+            provider: args.provider as IntegrationProvider | undefined,
+          });
+          return { content: [{ type: 'text', text: JSON.stringify(task) }] };
+        }
+
+        default:
+          return {
+            content: [{ type: 'text', text: `Unknown task tool: ${toolName}` }],
+            isError: true,
+          };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`MCP task tool ${toolName} failed: ${message}`);
+      Sentry.captureException(err, { tags: { operation: 'mcp-task-tool', toolName } });
+      return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+    }
   }
 
   /**
