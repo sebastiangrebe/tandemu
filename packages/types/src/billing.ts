@@ -2,6 +2,9 @@ export enum PlanTier {
   FREE = "FREE",
   PRO = "PRO",
   ENTERPRISE = "ENTERPRISE",
+  LTD_TIER_1 = "LTD_TIER_1",
+  LTD_TIER_2 = "LTD_TIER_2",
+  LTD_TIER_3 = "LTD_TIER_3",
 }
 
 export enum SubscriptionStatus {
@@ -31,6 +34,11 @@ export interface CheckoutSessionRequest {
   readonly planTier: PlanTier;
   readonly successUrl: string;
   readonly cancelUrl: string;
+  /**
+   * Set for one-time Lifetime Deal checkouts. When present the Platform
+   * creates a `mode: 'payment'` session instead of a recurring subscription.
+   */
+  readonly ltdTier?: PlanTier;
 }
 
 export interface CheckoutSessionResponse {

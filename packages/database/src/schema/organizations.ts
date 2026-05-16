@@ -4,12 +4,16 @@ import {
   uuid,
   varchar,
   timestamp,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const planTierEnum = pgEnum("plan_tier", [
   "free",
   "pro",
   "enterprise",
+  "ltd_tier_1",
+  "ltd_tier_2",
+  "ltd_tier_3",
 ]);
 
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
@@ -29,6 +33,11 @@ export const organizations = pgTable("organizations", {
   subscriptionStatus: subscriptionStatusEnum("subscription_status")
     .default("active")
     .notNull(),
+  // Generic resource caps. NULL = unlimited (OSS standalone-correct).
+  // Written only by the Platform Stripe webhook for LTD workspaces.
+  maxSeats: integer("max_seats"),
+  maxRepos: integer("max_repos"),
+  retentionDays: integer("retention_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

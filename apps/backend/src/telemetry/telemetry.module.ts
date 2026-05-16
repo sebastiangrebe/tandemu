@@ -11,6 +11,7 @@ import { IntegrationsModule } from '../integrations/integrations.module.js';
 import { TelemetryProcessor } from '../queue/telemetry.processor.js';
 import { GitHubSyncProcessor } from '../queue/github-sync.processor.js';
 import { GitHubSyncScheduler } from './github-sync.scheduler.js';
+import { RetentionPruneScheduler } from './retention-prune.scheduler.js';
 import { IncidentSyncProcessor } from '../queue/incident-sync.processor.js';
 import { IncidentSyncScheduler } from './incident-sync.scheduler.js';
 import { PagerDutyProviderService } from '../integrations/providers/pagerduty.service.js';
@@ -32,6 +33,7 @@ import { OpsgenieProviderService } from '../integrations/providers/opsgenie.serv
     TelemetryProcessor,
     GitHubSyncProcessor,
     GitHubSyncScheduler,
+    RetentionPruneScheduler,
     IncidentSyncProcessor,
     IncidentSyncScheduler,
     PagerDutyProviderService,

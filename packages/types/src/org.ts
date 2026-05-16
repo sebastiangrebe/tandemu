@@ -15,6 +15,10 @@ export interface Organization {
   readonly planTier: PlanTier;
   readonly subscriptionStatus: SubscriptionStatus;
   readonly settings?: OrgSettings;
+  /** Generic resource caps. Undefined = unlimited. Set by Platform billing. */
+  readonly maxSeats?: number;
+  readonly maxRepos?: number;
+  readonly retentionDays?: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -50,6 +54,9 @@ export interface UpdateOrganizationDto {
   readonly stripeSubscriptionId?: string;
   readonly subscriptionStatus?: SubscriptionStatus;
   readonly settings?: Partial<OrgSettings>;
+  readonly maxSeats?: number;
+  readonly maxRepos?: number;
+  readonly retentionDays?: number;
 }
 
 export interface InviteMemberDto {

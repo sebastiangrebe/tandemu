@@ -120,6 +120,33 @@ export class InvitesService {
       throw new ForbiddenException('This invite is not for your email address');
     }
 
+    // Canonical seat cap. OSS reads generic numeric caps only (no billing
+    // knowledge): max_seats NULL = unlimited. The FREE recurring plan is a
+    // hard 1 seat even though its max_seats stays NULL. Defense-in-depth:
+    // covers acceptance, not just invite creation.
+    const capResult = await this.db.query<{
+      max_seats: number | null;
+      plan_tier: string;
+    }>(
+      'SELECT max_seats, plan_tier FROM organizations WHERE id = $1',
+      [invite.organization_id],
+    );
+    const planTier = capResult.rows[0]?.plan_tier ?? 'free';
+    let maxSeats: number | null = capResult.rows[0]?.max_seats ?? null;
+    if (planTier === 'free') maxSeats = 1;
+    if (maxSeats !== null) {
+      const seatResult = await this.db.query<{ count: string }>(
+        'SELECT COUNT(*) AS count FROM memberships WHERE organization_id = $1',
+        [invite.organization_id],
+      );
+      const currentSeats = parseInt(seatResult.rows[0]!.count, 10);
+      if (currentSeats >= maxSeats) {
+        throw new ForbiddenException(
+          `Seat limit reached (${maxSeats}). Upgrade to the $25/seat/month plan to add more team members.`,
+        );
+      }
+    }
+
     // Use a transaction to accept the invite, create membership, and assign team
     const result = await this.db.withTransaction(async (client) => {
       // Update invite status
