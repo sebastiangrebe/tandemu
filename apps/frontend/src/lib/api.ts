@@ -610,6 +610,17 @@ export async function createBillingPortal(data: {
   });
 }
 
+// Marketplace LTD (only functional when the platform marketplace module is present)
+
+export async function redeemMarketplaceLicense(
+  licenseKey: string,
+): Promise<{ planTier: string }> {
+  return fetchApi<{ planTier: string }>("/api/marketplace/redeem", {
+    method: "POST",
+    body: JSON.stringify({ licenseKey }),
+  });
+}
+
 export interface Invoice {
   id: string;
   amountPaid: number;
