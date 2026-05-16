@@ -38,6 +38,9 @@ export class TelemetryProcessor extends SentryProcessor {
           job.data.input,
         );
         break;
+      case 'retention-prune':
+        await this.telemetryService.pruneExpiredTelemetry();
+        break;
     }
   }
 

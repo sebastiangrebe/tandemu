@@ -1,6 +1,7 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger, Inject, forwardRef } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import * as Sentry from '@sentry/nestjs';
 import { SentryProcessor } from './sentry-processor.js';
 import { TelemetryService } from '../telemetry/telemetry.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
@@ -36,6 +37,27 @@ export class GitHubSyncProcessor extends SentryProcessor {
     if (!owner || !repoName) {
       this.logger.warn(`Invalid repo format: ${repo}`);
       return;
+    }
+
+    // Generic repo cap. NULL = uncapped (OSS standalone-correct). Only *new*
+    // repos beyond the cap are blocked; already-tracked repos keep syncing.
+    const maxRepos = await this.telemetryService.maxReposFor(organizationId);
+    if (maxRepos !== null) {
+      const tracked = await this.telemetryService.repoAlreadyTracked(organizationId, repo);
+      if (!tracked) {
+        const distinct = await this.telemetryService.countDistinctRepos(organizationId);
+        if (distinct >= maxRepos) {
+          this.logger.warn(
+            `Repo cap reached for org ${organizationId} (${distinct}/${maxRepos}); skipping new repo ${repo}`,
+          );
+          Sentry.captureMessage('github-sync repo cap reached', {
+            level: 'warning',
+            tags: { organizationId },
+            extra: { repo, distinct, maxRepos },
+          });
+          return;
+        }
+      }
     }
 
     this.logger.log(`Syncing PRs for ${repo} (org: ${organizationId})`);

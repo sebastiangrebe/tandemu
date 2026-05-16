@@ -68,11 +68,16 @@ export interface GitSelfHealJob {
   readonly input: FinishTaskInput;
 }
 
+export interface RetentionPruneJob {
+  readonly type: 'retention-prune';
+}
+
 export type TelemetryJobData =
   | MemoryAccessLogJob
   | OtlpTraceJob
   | OtlpMetricsJob
-  | GitSelfHealJob;
+  | GitSelfHealJob
+  | RetentionPruneJob;
 
 // ── github-sync queue ──
 

@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 import * as Sentry from '@sentry/nestjs';
 import type { AIvsManualRatio, FrictionEvent, DeveloperStat, TaskVelocityEntry, InsightsMetrics, InsightsDaily, OrgSettings, DeveloperCostEntry } from '@tandemu/types';
 import { MemoryService } from '../memory/memory.service.js';
+import { DatabaseService } from '../database/database.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
 import type { TelemetryJobData } from '../queue/queue.types.js';
@@ -76,6 +77,7 @@ export class TelemetryService implements OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly db: DatabaseService,
     @Inject(forwardRef(() => MemoryService)) private readonly memoryService: MemoryService,
     @Inject(forwardRef(() => GitHubGitService)) private readonly gitHubGitService: GitHubGitService,
     @Inject(forwardRef(() => IntegrationsService)) private readonly integrationsService: IntegrationsService,
@@ -227,6 +229,141 @@ export class TelemetryService implements OnModuleDestroy {
   private static dtEnd(iso: string): string {
     const trimmed = iso.endsWith('Z') ? iso.slice(0, -1) : iso;
     return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed} 23:59:59.999` : trimmed;
+  }
+
+  /**
+   * Resolve the retention floor for an org from the generic `retention_days`
+   * cap (NULL = unlimited, OSS standalone-correct). Returns an ISO timestamp
+   * `now - retention_days`, or null when uncapped / on any error.
+   */
+  private async retentionFloorIso(organizationId: string): Promise<string | null> {
+    try {
+      const { rows } = await this.db.query<{ retention_days: number | null }>(
+        'SELECT retention_days FROM organizations WHERE id = $1',
+        [organizationId],
+      );
+      const days = rows[0]?.retention_days ?? null;
+      return days == null ? null : new Date(Date.now() - days * 86_400_000).toISOString();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Clamp a query's start date to the org's retention window. With no floor,
+   * behaviour is unchanged. With a floor and no start, the floor becomes the
+   * start. Otherwise the later of the two wins.
+   */
+  private async clampStartToRetention(
+    organizationId: string,
+    startDate?: string,
+  ): Promise<string | undefined> {
+    const floor = await this.retentionFloorIso(organizationId);
+    if (!floor) return startDate;
+    if (!startDate) return floor;
+    return new Date(startDate).getTime() < new Date(floor).getTime() ? floor : startDate;
+  }
+
+  /** Generic max-repos cap for an org (NULL/error = uncapped). */
+  async maxReposFor(organizationId: string): Promise<number | null> {
+    try {
+      const { rows } = await this.db.query<{ max_repos: number | null }>(
+        'SELECT max_repos FROM organizations WHERE id = $1',
+        [organizationId],
+      );
+      return rows[0]?.max_repos ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Whether this org already has telemetry for the given repo. */
+  async repoAlreadyTracked(organizationId: string, repo: string): Promise<boolean> {
+    try {
+      const rs = await this.client.query({
+        query: `SELECT 1 FROM github_pull_requests
+                WHERE organization_id = {organizationId:String}
+                  AND repo = {repo:String} LIMIT 1`,
+        query_params: { organizationId, repo },
+        format: 'JSONEachRow',
+      });
+      const rows = await rs.json<unknown>();
+      return rows.length > 0;
+    } catch {
+      // On any ClickHouse error fail open (don't block sync on telemetry hiccup)
+      return true;
+    }
+  }
+
+  /** Count of distinct repos this org has telemetry for (repo-cap unit). */
+  async countDistinctRepos(organizationId: string): Promise<number> {
+    try {
+      const rs = await this.client.query({
+        query: `SELECT uniqExact(repo) AS c FROM github_pull_requests
+                WHERE organization_id = {organizationId:String}`,
+        query_params: { organizationId },
+        format: 'JSONEachRow',
+      });
+      const rows = await rs.json<{ c: string | number }>();
+      return Number(rows[0]?.c ?? 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Hard-prune telemetry past each capped org's retention window. Storage-cost
+   * enforcement for LTD workspaces (Step 3.2). OTEL tables carry a global 90d
+   * collector TTL, so the shorter LTD window (60d) must be deleted explicitly.
+   * Orgs with retention_days = NULL are uncapped and untouched.
+   */
+  async pruneExpiredTelemetry(): Promise<void> {
+    let orgs: Array<{ id: string; retention_days: number }>;
+    try {
+      const res = await this.db.query<{ id: string; retention_days: number }>(
+        'SELECT id, retention_days FROM organizations WHERE retention_days IS NOT NULL',
+      );
+      orgs = res.rows;
+    } catch (err) {
+      this.logger.warn(`Retention prune: failed to load capped orgs: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'retention-prune-query-orgs' } });
+      return;
+    }
+    if (orgs.length === 0) return;
+
+    // [table, timestamp column, org-id expression]
+    const targets: Array<[string, string, string]> = [
+      ['otel_traces', 'Timestamp', "ResourceAttributes['organization_id']"],
+      ['otel_logs', 'Timestamp', "ResourceAttributes['organization_id']"],
+      ['otel_metrics_sum', 'TimeUnix', "ResourceAttributes['organization_id']"],
+      ['github_pull_requests', 'merged_at', 'organization_id'],
+      ['github_pr_reviews', 'submitted_at', 'organization_id'],
+      ['github_deployments', 'created_at', 'organization_id'],
+      ['incidents', 'created_at', 'organization_id'],
+      ['memory_access_log', 'timestamp', 'organization_id'],
+    ];
+
+    for (const { id, retention_days } of orgs) {
+      for (const [table, tsCol, orgExpr] of targets) {
+        try {
+          // Sequential awaits + async mutation (mutations_sync default 0) keep
+          // ClickHouse mutation pressure low.
+          const rs = await this.client.query({
+            query: `ALTER TABLE ${table}
+                    DELETE WHERE ${orgExpr} = {orgId:String}
+                      AND ${tsCol} < now() - INTERVAL {days:UInt32} DAY`,
+            query_params: { orgId: id, days: retention_days },
+          });
+          await rs.text();
+        } catch (err) {
+          // Table may not exist yet (fresh boot before collector runs) — skip.
+          this.logger.warn(
+            `Retention prune: ${table} for org ${id} failed: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+    }
+    this.logger.log(`Retention prune ran for ${orgs.length} capped org(s)`);
   }
 
   private async ensureSkipIndexes(): Promise<void> {
@@ -660,6 +797,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<AIvsManualRatio[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -726,6 +864,7 @@ export class TelemetryService implements OnModuleDestroy {
   }
 
   async getFrictionHeatmap(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<FrictionEvent[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -810,6 +949,12 @@ export class TelemetryService implements OnModuleDestroy {
   }
 
   async getTimesheets(query: TimesheetQuery): Promise<TimesheetEntry[]> {
+    query = {
+      ...query,
+      startDate:
+        (await this.clampStartToRetention(query.organizationId, query.startDate)) ??
+        query.startDate,
+    };
     try {
       // Query task_session spans for timesheet data
       // Use duration_seconds attribute instead of ClickHouse Duration to avoid
@@ -877,6 +1022,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<DeveloperStat[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -940,6 +1086,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<TaskVelocityEntry[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -997,6 +1144,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ filePath: string; changeCount: number; taskCount: number; developerCount: number }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1048,6 +1196,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ category: string; taskCount: number; totalHours: number }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1093,6 +1242,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ filePath: string; aiTouchCount: number }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1140,6 +1290,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ date: string; totalCost: number }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1183,6 +1334,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ userId: string; userName: string; totalCost: number; taskCount: number; aiLines: number; costPerLine: number | null }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1265,6 +1417,7 @@ export class TelemetryService implements OnModuleDestroy {
     endDate?: string,
     teamId?: string,
   ): Promise<Array<{ tokenType: string; model: string; totalTokens: number }>> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1308,6 +1461,7 @@ export class TelemetryService implements OnModuleDestroy {
    * Shows which tools the team uses, success rates, and avg duration.
    */
   async getToolUsageStats(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<ToolUsageStat[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1376,6 +1530,7 @@ export class TelemetryService implements OnModuleDestroy {
    * Failed tool calls grouped by file path — augments custom friction logs.
    */
   async getNativeFriction(organizationId: string, startDate?: string, endDate?: string, teamId?: string): Promise<FrictionEvent[]> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     try {
       const params: Record<string, string> = { organizationId };
       let dateFilter = '';
@@ -1559,6 +1714,7 @@ export class TelemetryService implements OnModuleDestroy {
     settings?: OrgSettings,
     teamId?: string,
   ): Promise<InsightsMetrics> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     const hourlyRate = settings?.developerHourlyRate ?? 75;
     const secsPerLine = settings?.aiLineTimeEstimateSeconds ?? 120;
     const currency = settings?.currency ?? 'USD';
@@ -2035,6 +2191,7 @@ export class TelemetryService implements OnModuleDestroy {
     } | null;
     dataSource: 'deployments' | 'pull_requests';
   }> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     const nullResult = {
       deploymentFrequency: null,
       leadTimeForChanges: null,
@@ -2488,6 +2645,7 @@ export class TelemetryService implements OnModuleDestroy {
     } | null;
     reviewerLoad: Array<{ reviewer: string; prsReviewed: number; medianTurnaroundHours: number }>;
   }> {
+    startDate = await this.clampStartToRetention(organizationId, startDate);
     const nullResult = {
       timeToFirstReview: null,
       timeToMerge: null,

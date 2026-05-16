@@ -41,6 +41,9 @@ export class OrganizationsService {
           plan_tier: string;
           subscription_status: string;
           settings: Record<string, unknown>;
+          max_seats: number | null;
+          max_repos: number | null;
+          retention_days: number | null;
           created_at: Date;
           updated_at: Date;
         }>(
@@ -87,6 +90,9 @@ export class OrganizationsService {
       plan_tier: string;
       subscription_status: string;
       settings: Record<string, unknown>;
+      max_seats: number | null;
+      max_repos: number | null;
+      retention_days: number | null;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -109,6 +115,9 @@ export class OrganizationsService {
       plan_tier: string;
       subscription_status: string;
       settings: Record<string, unknown>;
+      max_seats: number | null;
+      max_repos: number | null;
+      retention_days: number | null;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -152,6 +161,18 @@ export class OrganizationsService {
       fields.push(`stripe_subscription_id = $${paramIndex++}`);
       values.push(dto.stripeSubscriptionId);
     }
+    if (dto.maxSeats !== undefined) {
+      fields.push(`max_seats = $${paramIndex++}`);
+      values.push(dto.maxSeats);
+    }
+    if (dto.maxRepos !== undefined) {
+      fields.push(`max_repos = $${paramIndex++}`);
+      values.push(dto.maxRepos);
+    }
+    if (dto.retentionDays !== undefined) {
+      fields.push(`retention_days = $${paramIndex++}`);
+      values.push(dto.retentionDays);
+    }
     if (dto.settings !== undefined) {
       fields.push(`settings = settings || $${paramIndex++}::jsonb`);
       values.push(JSON.stringify(dto.settings));
@@ -173,6 +194,9 @@ export class OrganizationsService {
       plan_tier: string;
       subscription_status: string;
       settings: Record<string, unknown>;
+      max_seats: number | null;
+      max_repos: number | null;
+      retention_days: number | null;
       created_at: Date;
       updated_at: Date;
     }>(
@@ -312,6 +336,9 @@ export class OrganizationsService {
     plan_tier: string;
     subscription_status: string;
     settings?: Record<string, unknown>;
+    max_seats?: number | null;
+    max_repos?: number | null;
+    retention_days?: number | null;
     created_at: Date;
     updated_at: Date;
   }): Organization {
@@ -326,6 +353,9 @@ export class OrganizationsService {
       settings: row.settings && Object.keys(row.settings).length > 0
         ? row.settings as Organization['settings']
         : undefined,
+      maxSeats: row.max_seats ?? undefined,
+      maxRepos: row.max_repos ?? undefined,
+      retentionDays: row.retention_days ?? undefined,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
