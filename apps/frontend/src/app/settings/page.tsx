@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain, Trash2, Server, RefreshCw } from 'lucide-react';
+import { Building2, Users, Save, Plus, CreditCard, Lightbulb, Brain, Trash2, Server, RefreshCw, Ticket } from 'lucide-react';
 import { SettingsSkeleton } from '@/components/ui/skeleton-helpers';
 import { InviteDialog } from '@/components/invite-dialog';
 import { RemoveMemberDialog } from '@/components/remove-member-dialog';
@@ -22,6 +22,7 @@ import {
   getTeams,
   createCheckout,
   createBillingPortal,
+  redeemMarketplaceLicense,
   getInvoices,
   checkForUpdate,
   type VersionCheckResult,
@@ -66,6 +67,8 @@ function SettingsPageContent() {
   const router = useRouter();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  const [licenseKey, setLicenseKey] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
 
   // Org editing
   const [editOrgName, setEditOrgName] = useState('');
@@ -123,6 +126,23 @@ function SettingsPageContent() {
       toast.error(err instanceof Error ? err.message : 'Failed to load settings');
     }
   }, []);
+
+  const handleRedeem = async () => {
+    const key = licenseKey.trim();
+    if (!key || redeeming) return;
+    setRedeeming(true);
+    try {
+      await redeemMarketplaceLicense(key);
+      setLicenseKey('');
+      toast.success('License activated.');
+      // Plan tier + caps changed server-side; reload to re-pull org state.
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to redeem license');
+    } finally {
+      setRedeeming(false);
+    }
+  };
 
   useEffect(() => {
     if (authOrg) {
@@ -450,6 +470,53 @@ function SettingsPageContent() {
                 Manage Billing
               </Button>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Redeem an AppSumo / marketplace license code */}
+      {org && process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Ticket className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <CardTitle>Redeem License Code</CardTitle>
+                <CardDescription>
+                  Bought a Lifetime Deal on AppSumo? Enter your license code to activate it.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={licenseKey}
+                onChange={(e) => setLicenseKey(e.target.value)}
+                placeholder="AppSumo license code"
+                disabled={redeeming}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleRedeem();
+                  }
+                }}
+              />
+              <Button
+                onClick={() => void handleRedeem()}
+                disabled={redeeming || !licenseKey.trim()}
+                className="shrink-0"
+              >
+                {redeeming ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                    Redeeming...
+                  </>
+                ) : (
+                  'Redeem'
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
