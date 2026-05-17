@@ -474,8 +474,13 @@ function SettingsPageContent() {
         </Card>
       )}
 
-      {/* Redeem an AppSumo / marketplace license code */}
-      {org && process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' && (
+      {/* Redeem an AppSumo / marketplace license code.
+          Gated by a second flag so the code can ship before the AppSumo
+          listing is live; flip NEXT_PUBLIC_APPSUMO_REDEEM_ENABLED to 'true'
+          to surface it. */}
+      {org &&
+        process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true' &&
+        process.env.NEXT_PUBLIC_APPSUMO_REDEEM_ENABLED === 'true' && (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">

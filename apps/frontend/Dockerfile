@@ -19,6 +19,9 @@ COPY apps/frontend/ apps/frontend/
 # Build
 ARG APP_VERSION=0.0.0-dev
 ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+# AppSumo redeem UI flag — off unless explicitly built with 'true'.
+ARG NEXT_PUBLIC_APPSUMO_REDEEM_ENABLED=false
+ENV NEXT_PUBLIC_APPSUMO_REDEEM_ENABLED=$NEXT_PUBLIC_APPSUMO_REDEEM_ENABLED
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @tandemu/types build && \
     pnpm --filter @tandemu/frontend build
