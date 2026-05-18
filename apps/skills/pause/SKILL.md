@@ -88,7 +88,13 @@ Convert timestamps and send a `task_session` span with `status=paused` (use the 
 
 ```bash
 . "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
-OTEL_ENDPOINT="${TANDEMU_OTEL_ENDPOINT:-$(python3 -c "import json; s=json.load(open('$HOME/.claude/settings.json')); print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))" 2>/dev/null)}"
+OTEL_ENDPOINT="${TANDEMU_OTEL_ENDPOINT:-$(python3 -c "
+import json
+try:
+    s = json.load(open('$HOME/.claude/settings.json'))
+    print(s.get('env',{}).get('OTEL_EXPORTER_OTLP_ENDPOINT','http://localhost:4318'))
+except: print('http://localhost:4318')
+" 2>/dev/null)}"
 START_NS=$(python3 -c "from datetime import datetime; print(int(datetime.fromisoformat('<startedAt>'.replace('Z','+00:00')).timestamp()*1e9))")
 END_NS=$(python3 -c "from datetime import datetime; print(int(datetime.utcnow().timestamp()*1e9))")
 TRACE_ID=$(python3 -c "import secrets; print(secrets.token_hex(16))")

@@ -1202,7 +1202,7 @@ install_assets_cursor() {
 
   # Slash commands. Cursor reads custom commands from ~/.cursor/commands/.
   install_skills_to "$CURSOR_DIR/commands"
-  ok "Skills installed → ~/.cursor/commands/ (/morning, /finish, /pause, /create, /standup, /setup)"
+  ok "Skills installed → ~/.cursor/commands/ (/morning, /finish, /pause, /create, /standup)"
 
   local v
   v=$(get_plugin_version)
@@ -1278,7 +1278,7 @@ install_assets_codex() {
 
   # Slash commands. Codex CLI reads custom prompts from ~/.codex/prompts/.
   install_skills_to "$CODEX_DIR/prompts"
-  ok "Skills installed → ~/.codex/prompts/ (/morning, /finish, /pause, /create, /standup, /setup)"
+  ok "Skills installed → ~/.codex/prompts/ (/morning, /finish, /pause, /create, /standup)"
 
   local v
   v=$(get_plugin_version)
