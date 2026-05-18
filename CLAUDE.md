@@ -36,8 +36,8 @@ Each task gets its own git worktree inside `.worktrees/<task-id>/`. Task files a
 ### Task status sync is dynamic
 No hardcoded status mappings. Skills fetch available statuses from the ticket system (`GET /api/tasks/:id/statuses?provider=linear`), then Claude picks the best match and sends `PATCH /api/tasks/:id` with `{ statusName, assigneeEmail, provider }`. Any combination of fields is accepted in a single call.
 
-### Telemetry via OTLP from `/finish`
-The `/finish` skill sends a `task_session` span and `tandemu.lines_of_code` metrics to the OTEL collector via curl. This is real OTLP — standard protocol, custom metric names. No fake data.
+### Telemetry from `/finish`
+The `/finish` skill POSTs a REST payload to `${TANDEMU_API}/api/telemetry/tasks/:id/finish`; the backend emits the `task_session` span and `tandemu.lines_of_code` metrics via OTLP server-side. Works on every agent (only needs `$TANDEMU_API`/`$TANDEMU_TOKEN` from the env loader). The `/pause` skill still sends an OTLP `task_session` span (`status=paused`) directly to the collector via curl, using `$TANDEMU_OTEL_ENDPOINT` (env-loader-derived from the API host; falls back to `~/.claude/settings.json` on Claude Code, then localhost). Real OTLP — standard protocol, custom metric names. No fake data.
 
 AI vs manual attribution: commits with `Co-Authored-By: Claude` = AI lines, rest = manual.
 

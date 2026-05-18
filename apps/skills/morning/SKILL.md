@@ -35,7 +35,7 @@ Use the `LOCAL_NOW` from the Step 1 output to determine the time-of-day greeting
 - Hour 12–17 → "Afternoon"
 - Hour > 17 → "Evening"
 
-If you know their name (from `~/.claude/tandemu.json` under `user.name`): "<greeting>, {{DEV_NAME}}. Let me pull up your tasks."
+If you know their name (`$TANDEMU_USER_NAME` from the env loader, populated on every agent): "<greeting>, {{DEV_NAME}}. Let me pull up your tasks."
 If you don't know their name yet: "Good <greeting>! Let me get your tasks."
 
 If you remember what they worked on recently, mention it: "Last time you were working on the invoice module — want to continue or pick something new?"

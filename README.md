@@ -102,7 +102,7 @@ Exit and reopen your editor, then start working:
 /morning
 ```
 
-Slash command UX (`/morning`, `/finish`, `/pause`, `/create`, `/standup`) is identical across all four agents. Cursor and Codex run skills via their custom-commands / prompts directories; Claude Code and OpenCode run them via their plugin marketplaces. Telemetry from `/finish` (lines, AI ratio, session duration) flows to the dashboard from every agent.
+The same five skills (`/morning`, `/finish`, `/pause`, `/create`, `/standup`) are available on all four agents, and `/finish` telemetry (lines, AI ratio, session duration) flows to the dashboard from every one. Invocation differs slightly per agent: Claude Code and OpenCode load them via their plugin marketplaces; Cursor runs them as custom commands (Agent mode, per-step shell approval — the SKILL.md `allowed-tools` frontmatter is a no-op there); Codex exposes them under its namespaced `/prompts:` mechanism. Functionally equivalent, not pixel-identical.
 
 ### 3. Development mode
 

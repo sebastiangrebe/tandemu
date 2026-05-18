@@ -1084,15 +1084,27 @@ else:
 export TANDEMU_TASKS_DIR="${TANDEMU_TASKS_DIR:-$HOME/.config/tandemu/active-tasks}"
 mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 
+# OTEL collector endpoint. Derived from the API host (collector runs alongside
+# the backend on :4318). Skills must use this instead of reading
+# ~/.claude/settings.json, which only exists on Claude Code installs.
+_TANDEMU_OTEL_HOST=$(echo "$TANDEMU_API" | sed 's|https\{0,1\}://||; s|/.*||; s|:.*||')
+if [ -n "$_TANDEMU_OTEL_HOST" ]; then
+  export TANDEMU_OTEL_ENDPOINT="http://${_TANDEMU_OTEL_HOST}:4318"
+fi
+unset _TANDEMU_OTEL_HOST
+
 unset _TANDEMU_CONFIG
 LOADER_EOF
   chmod 644 "$TANDEMU_LIB_DIR/tandemu-env.sh"
   ok "Loader installed: ~/.config/tandemu/lib/tandemu-env.sh"
 }
 
-# Copy all 6 SKILL.md files into <commands_dir>/<name>.md verbatim. Used by
-# Cursor + Codex install paths so /morning, /finish etc. fire as native slash
-# commands the same way they do on Claude Code + OpenCode.
+# Copy the daily-use SKILL.md files into <commands_dir>/<name>.md verbatim.
+# Used by Cursor + Codex install paths so /morning, /finish etc. fire as
+# native slash commands the same way they do on Claude Code + OpenCode.
+# `setup` is deliberately excluded — it writes Claude-only state
+# (~/.claude/settings.json, CLAUDE.md, SessionStart hooks, ~/.mcp.json
+# migration) and would corrupt a real Claude install if run elsewhere.
 install_skills_to() {
   local dest_dir="$1"
   local skills_src="${SCRIPT_DIR}/apps/skills"
@@ -1101,7 +1113,7 @@ install_skills_to() {
     return 1
   fi
   mkdir -p "$dest_dir"
-  for skill in morning finish pause create standup setup; do
+  for skill in morning finish pause create standup; do
     if [ -f "$skills_src/$skill/SKILL.md" ]; then
       cp "$skills_src/$skill/SKILL.md" "$dest_dir/$skill.md"
     fi
