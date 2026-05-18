@@ -1084,6 +1084,16 @@ else:
 export TANDEMU_TASKS_DIR="${TANDEMU_TASKS_DIR:-$HOME/.config/tandemu/active-tasks}"
 mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 
+# One-time migration: relocate legacy branch-keyed task files from the old
+# Claude-only location into the universal dir. Same filename scheme, so this
+# is a plain move. Skipped if a file with that name already exists there.
+for _t in "$HOME"/.claude/tandemu-active-task-*.json; do
+  [ -e "$_t" ] || continue
+  _dest="$TANDEMU_TASKS_DIR/$(basename "$_t")"
+  [ -e "$_dest" ] || mv "$_t" "$_dest" 2>/dev/null || true
+done
+unset _t _dest
+
 # OTEL collector endpoint. Derived from the API host (collector runs alongside
 # the backend on :4318). Skills must use this instead of reading
 # ~/.claude/settings.json, which only exists on Claude Code installs.

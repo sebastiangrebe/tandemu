@@ -60,14 +60,19 @@ echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 echo "NAME=$TANDEMU_USER_NAME"
 
-# Check for active task (branch-keyed)
+# Check for active task (branch-keyed). TANDEMU_TASKS_DIR is exported by the
+# env loader and is universal across agents; default it defensively in case
+# the loader was unavailable.
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
+mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
-TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+TASK_FILE="$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
 echo "TASK_FILE=$TASK_FILE"
 echo "BRANCH_SLUG=$BRANCH_SLUG"
 
-# Legacy migration: move old single file to branch-keyed
+# Legacy migration: move pre-branch-keyed single file (older than the env
+# loader's bulk migration, which only handles tandemu-active-task-*.json).
 OLD_FILE="$HOME/.claude/tandemu-active-task.json"
 if [ -f "$OLD_FILE" ] && [ ! -f "$TASK_FILE" ] && [ "$BRANCH_SLUG" != "main" ] && [ "$BRANCH_SLUG" != "unknown" ]; then
   mv "$OLD_FILE" "$TASK_FILE"
@@ -79,7 +84,7 @@ cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Collect task IDs from ALL active task files (other sessions/worktrees)
 echo "---OTHER_ACTIVE_TASKS---"
-find "$HOME/.claude" -maxdepth 1 -name 'tandemu-active-task-*.json' 2>/dev/null | while read -r f; do
+find "$TANDEMU_TASKS_DIR" -maxdepth 1 -name 'tandemu-active-task-*.json' 2>/dev/null | while read -r f; do
   [ "$f" = "$TASK_FILE" ] && continue
   TASK_ID=$(python3 -c "import json; print(json.load(open('$f')).get('taskId',''))" 2>/dev/null)
   [ -n "$TASK_ID" ] && echo "$TASK_ID"
@@ -269,10 +274,12 @@ cd "$WORKTREE_DIR"
 - Write the branch-keyed active task file. Use the `category` field from the API response (the backend infers it from labels).
 
 ```bash
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
+mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
 REPO_PATH=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
+cat > "$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
 {
   "taskId": "<task.id>",
   "teamId": "<SELECTED_TEAM_ID or the team the task was fetched from>",
@@ -368,6 +375,6 @@ If they choose **Manual**: say "All yours — let me know what you need." and st
 - The developer may have multiple repos and sessions open — this skill only manages the current repo
 - Always let the developer choose — never auto-assign
 - If they select "Other", ask what they want to work on and create a branch for it
-- Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can be active concurrently in separate worktrees.
+- Task files are branch-keyed: `$TANDEMU_TASKS_DIR/tandemu-active-task-{branch-slug}.json` (default `~/.config/tandemu/active-tasks/`, universal across agents). Multiple tasks can be active concurrently in separate worktrees.
 - Each task gets its own git worktree inside `.worktrees/<task.id>/`. The main checkout stays on the default branch.
 - **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write task files — do NOT use the Edit or Write tools for these files

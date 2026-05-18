@@ -98,9 +98,10 @@ echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
 
-# Active task metadata (branch-keyed)
+# Active task metadata (branch-keyed). TANDEMU_TASKS_DIR from env loader.
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
-TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+TASK_FILE="$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
 echo "TASK_FILE=$TASK_FILE"
 cat "$TASK_FILE" 2>/dev/null || echo "NONE"
