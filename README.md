@@ -186,9 +186,10 @@ Full documentation is available at **[tandemu.dev/docs](https://tandemu.dev/docs
 ```bash
 /plugin marketplace update        # refresh the catalog (does NOT upgrade the plugin)
 /plugin update tandemu@tandemu    # upgrade the installed plugin
+/tandemu:setup                    # re-run to refresh ~/.claude/lib + ~/.config/tandemu/lib
 ```
 
-Then restart Claude Code so skills reload. Updates only propagate when `plugin.json`'s `version` field changes.
+Restart Claude Code after the update so skills + hooks reload. The `/tandemu:setup` re-run is what propagates new loader logic into `~/.claude/lib/tandemu-env.sh` and `~/.config/tandemu/lib/tandemu-env.sh`; skipping it leaves the old loader in place and any in-flight task files won't migrate. Updates only propagate when `plugin.json`'s `version` field changes.
 
 ### OpenCode (npm)
 
