@@ -154,23 +154,25 @@ For org memories, also pass `app_id: "org"`. The `repo` and `files` fields help 
 
 ## Worktree-Based Task Management
 
-Each task runs in its own git worktree inside `.worktrees/<task-id>/`. The main checkout stays on the default branch. Multiple tasks can be active concurrently in separate worktrees and separate Claude Code sessions.
+Each task runs in its own git worktree inside `.worktrees/<task-id>/`. The main checkout stays on the default branch. Multiple tasks can be active concurrently in separate worktrees and separate sessions.
 
-Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json` (branch slug = branch name with `/` replaced by `-`). To read the current task:
+Task files are branch-keyed and live in `$TANDEMU_TASKS_DIR` (exported by the env loader; universal across agents, default `~/.config/tandemu/active-tasks/`). Filename: `tandemu-active-task-{branch-slug}.json` (branch slug = branch name with `/` replaced by `-`). To read the current task:
 
 ```bash
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g')
-TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+TASK_FILE="$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json"
 cat "$TASK_FILE" 2>/dev/null
 ```
 
 When you edit files in a repo that is **not** already listed in the task file's `repos` array, add it immediately. This ensures `/finish` measures work across all repos touched during a task.
 
 ```bash
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
 python3 -c "
-import json
+import json, os
 BRANCH_SLUG='$(git branch --show-current 2>/dev/null | sed "s/\//-/g")'
-TASK_FILE=f'$HOME/.claude/tandemu-active-task-{BRANCH_SLUG}.json'
+TASK_FILE=os.path.join('$TANDEMU_TASKS_DIR', f'tandemu-active-task-{BRANCH_SLUG}.json')
 with open(TASK_FILE) as f:
     task = json.load(f)
 repo = '$(git rev-parse --show-toplevel 2>/dev/null || pwd)'

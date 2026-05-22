@@ -66,9 +66,16 @@ docker compose up -d
 
 ### 2. Connect your AI editor
 
-Tandemu installs into either **Claude Code** or **OpenCode** (or both, side by side).
+Tandemu installs into any of: **Claude Code**, **OpenCode**, **Cursor**, **Codex CLI** — pick one or run them side by side. All four get the same skills (`/morning`, `/finish`, `/pause`, `/create`, `/standup`).
 
-**Claude Code:**
+| Agent | Skill location | Memory MCP | Install |
+|-------|----------------|------------|---------|
+| Claude Code | Plugin marketplace + `~/.claude/skills/` | `~/.mcp.json` | `/plugin install tandemu` (in Claude) or `./install.sh --target=claude` |
+| OpenCode | npm plugin + `~/.config/opencode/skills/` | `opencode.json` `mcp.tandemu-memory` | `./install.sh --target=opencode` |
+| Cursor | `~/.cursor/commands/<name>.md` + `.cursor/rules/tandemu.mdc` | `~/.cursor/mcp.json` | `./install.sh --target=cursor` |
+| Codex CLI | `~/.codex/prompts/<name>.md` + `~/.codex/AGENTS.md` | `~/.codex/config.toml` | `./install.sh --target=codex` |
+
+**Claude Code (recommended):**
 
 ```bash
 # In Claude Code:
@@ -77,23 +84,25 @@ Tandemu installs into either **Claude Code** or **OpenCode** (or both, side by s
 /tandemu:setup
 ```
 
-**OpenCode:**
+**Any other agent — or multiple:**
 
 ```bash
 git clone https://github.com/sebastiangrebe/tandemu.git
 cd tandemu
-./install.sh --target=opencode
+./install.sh                           # auto-detects installed agents
+./install.sh --target=cursor,codex     # explicit, comma-separated
+./install.sh --target=all              # everything detected
 ```
 
-The installer authenticates you, registers `@sebastiangrebe/opencode-plugin` in `opencode.json`, and copies skills, commands, and `AGENTS.md` into `~/.config/opencode/`. The plugin itself is auto-installed by Bun on the next `opencode` launch.
+The installer authenticates you (browser-based OAuth), drops the canonical `AGENTS.md` (or Cursor `.mdc` rule), copies the 6 skills as native slash commands into each agent's command directory, and registers the Tandemu memory MCP server. Skills source a universal env loader at `~/.config/tandemu/lib/tandemu-env.sh` so they run identically regardless of which agent invokes them.
 
-Exit and reopen your editor to activate memory, then start working:
+Exit and reopen your editor, then start working:
 
 ```bash
 /morning
 ```
 
-> The Claude Code path also has `./install.sh --target=claude` as a scripted alternative. With both editors installed, `./install.sh` auto-detects, or pass `--target=both`. See the [setup docs](https://tandemu.dev/docs/setup) for details.
+The same five skills (`/morning`, `/finish`, `/pause`, `/create`, `/standup`) are available on all four agents, and `/finish` telemetry (lines, AI ratio, session duration) flows to the dashboard from every one. Invocation differs slightly per agent: Claude Code and OpenCode load them via their plugin marketplaces; Cursor runs them as custom commands (Agent mode, per-step shell approval — the SKILL.md `allowed-tools` frontmatter is a no-op there); Codex exposes them under its namespaced `/prompts:` mechanism. Functionally equivalent, not pixel-identical.
 
 ### 3. Development mode
 
@@ -177,9 +186,10 @@ Full documentation is available at **[tandemu.dev/docs](https://tandemu.dev/docs
 ```bash
 /plugin marketplace update        # refresh the catalog (does NOT upgrade the plugin)
 /plugin update tandemu@tandemu    # upgrade the installed plugin
+/tandemu:setup                    # re-run to refresh ~/.claude/lib + ~/.config/tandemu/lib
 ```
 
-Then restart Claude Code so skills reload. Updates only propagate when `plugin.json`'s `version` field changes.
+Restart Claude Code after the update so skills + hooks reload. The `/tandemu:setup` re-run is what propagates new loader logic into `~/.claude/lib/tandemu-env.sh` and `~/.config/tandemu/lib/tandemu-env.sh`; skipping it leaves the old loader in place and any in-flight task files won't migrate. Updates only propagate when `plugin.json`'s `version` field changes.
 
 ### OpenCode (npm)
 
@@ -191,16 +201,17 @@ bun update @sebastiangrebe/opencode-plugin
 
 Or restart `opencode` if you're tracking a floating semver range.
 
-### install.sh users (either editor)
+### install.sh users (any editor)
 
 ```bash
 cd tandemu && git pull
 ./install.sh --check              # see installed vs latest for each target
 ./install.sh                      # auto-detect targets and update in place
-./install.sh --target=both        # explicitly update both
+./install.sh --target=all         # update every detected agent
+./install.sh --target=cursor      # single-agent update
 ```
 
-`pnpm release` bumps the version across `apps/claude-plugins/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `apps/opencode-plugin/package.json` simultaneously.
+`pnpm release` bumps the version across `apps/claude-plugins/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `apps/opencode-plugin/package.json` simultaneously. The MCP-first targets (Cursor, Copilot, Codex) track the same plugin version for `--check` reporting.
 
 ## Uninstalling
 

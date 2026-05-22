@@ -12,7 +12,8 @@ set -euo pipefail
 #  Flags:
 #    --url <url>       Set API URL (skip instance selection)
 #    --token <token>   Use provided JWT (non-interactive)
-#    --target <t>      claude | opencode | both (default: auto-detect)
+#    --target <t>      claude | opencode | cursor | codex | all
+#                      (comma-separated for multiple; "both" = claude+opencode)
 #    --uninstall       Remove all Tandemu files
 #    --check           Check for updates
 #    --skip-prereqs    Skip prerequisite checks
@@ -34,6 +35,17 @@ VERSION_FILE="$CLAUDE_DIR/tandemu-version.txt"
 OPENCODE_DIR="$HOME/.config/opencode"
 TANDEMU_OPENCODE_DIR="$HOME/.config/tandemu"
 OPENCODE_VERSION_FILE="$TANDEMU_OPENCODE_DIR/version.txt"
+
+# Lightweight targets (skill-based, no plugin packaging)
+CURSOR_DIR="$HOME/.cursor"
+CURSOR_VERSION_FILE="$HOME/.config/tandemu/cursor-version.txt"
+CODEX_DIR="$HOME/.codex"
+CODEX_VERSION_FILE="$HOME/.config/tandemu/codex-version.txt"
+
+# Universal Tandemu config dir (shared across all agents)
+TANDEMU_CONFIG_DIR="$HOME/.config/tandemu"
+TANDEMU_LIB_DIR="$TANDEMU_CONFIG_DIR/lib"
+TANDEMU_TASKS_DIR="$TANDEMU_CONFIG_DIR/active-tasks"
 
 # TARGETS is set by detect_targets() or --target flag. Space-separated list.
 TARGETS=""
@@ -304,6 +316,74 @@ open(f, 'w').write(text.strip() + '\n')
 
   rm -rf "$TANDEMU_OPENCODE_DIR"
 
+  # ── Cursor ──
+  if [ -f "$CURSOR_DIR/mcp.json" ]; then
+    python3 << 'PYEOF'
+import json, os
+f = os.path.expanduser("~/.cursor/mcp.json")
+try:
+    cfg = json.load(open(f))
+    s = cfg.get("mcpServers", {})
+    s.pop("tandemu", None)
+    s.pop("tandemu-memory", None)
+    if s:
+        cfg["mcpServers"] = s
+    elif "mcpServers" in cfg:
+        del cfg["mcpServers"]
+    if cfg:
+        json.dump(cfg, open(f, "w"), indent=2)
+    else:
+        os.remove(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+PYEOF
+    ok "Cursor MCP cleaned"
+  fi
+  rm -f "$CURSOR_DIR/rules/tandemu.mdc" 2>/dev/null || true
+  for skill in morning finish pause create standup setup; do
+    rm -f "$CURSOR_DIR/commands/$skill.md" 2>/dev/null || true
+    rm -f "$CODEX_DIR/prompts/$skill.md" 2>/dev/null || true
+  done
+
+  # ── Codex CLI ──
+  if [ -f "$CODEX_DIR/config.toml" ]; then
+    python3 << 'PYEOF'
+import os, re
+f = os.path.expanduser("~/.codex/config.toml")
+try:
+    text = open(f).read()
+    text = re.sub(
+        r"\n?\[mcp_servers\.tandemu(\.[^\]]+)?\][^\[]*",
+        "",
+        text,
+        flags=re.DOTALL,
+    ).rstrip()
+    if text:
+        open(f, "w").write(text + "\n")
+    else:
+        os.remove(f)
+except FileNotFoundError:
+    pass
+PYEOF
+    ok "Codex MCP cleaned"
+  fi
+  if [ -f "$CODEX_DIR/AGENTS.md" ]; then
+    if grep -q "Tandemu AI Teammate" "$CODEX_DIR/AGENTS.md" 2>/dev/null; then
+      rm -f "$CODEX_DIR/AGENTS.md"
+    elif grep -qF "<!-- tandemu:personality:start -->" "$CODEX_DIR/AGENTS.md" 2>/dev/null; then
+      python3 -c "
+import re
+f = '$CODEX_DIR/AGENTS.md'
+text = open(f).read()
+text = re.sub(r'<!-- tandemu:personality:start -->.*?<!-- tandemu:personality:end -->\n*', '', text, flags=re.DOTALL)
+open(f, 'w').write(text.strip() + '\n')
+"
+    fi
+  fi
+
+  rm -f "$CURSOR_VERSION_FILE" "$CODEX_VERSION_FILE" 2>/dev/null || true
+  rm -rf "$TANDEMU_LIB_DIR" "$TANDEMU_TASKS_DIR" 2>/dev/null || true
+
   echo ""
   printf '%b\n' "  ${GREEN}Tandemu uninstalled.${NC}"
   echo ""
@@ -322,22 +402,25 @@ do_check() {
   echo ""
 
   local any_stale=""
+  local any_installed=""
 
-  if [ -f "$VERSION_FILE" ]; then
-    local claude_v
-    claude_v=$(cat "$VERSION_FILE")
-    printf '%b\n' "  Claude Code: ${BOLD}${claude_v}${NC}"
-    if [ "$claude_v" != "$latest" ]; then any_stale="true"; fi
-  fi
+  _check_one() {
+    local label="$1" file="$2"
+    if [ -f "$file" ]; then
+      local v
+      v=$(cat "$file")
+      printf '%b\n' "  ${label}: ${BOLD}${v}${NC}"
+      any_installed="true"
+      if [ "$v" != "$latest" ]; then any_stale="true"; fi
+    fi
+  }
 
-  if [ -f "$OPENCODE_VERSION_FILE" ]; then
-    local oc_v
-    oc_v=$(cat "$OPENCODE_VERSION_FILE")
-    printf '%b\n' "  OpenCode:    ${BOLD}${oc_v}${NC}"
-    if [ "$oc_v" != "$latest" ]; then any_stale="true"; fi
-  fi
+  _check_one "Claude Code" "$VERSION_FILE"
+  _check_one "OpenCode   " "$OPENCODE_VERSION_FILE"
+  _check_one "Cursor     " "$CURSOR_VERSION_FILE"
+  _check_one "Codex      " "$CODEX_VERSION_FILE"
 
-  if [ ! -f "$VERSION_FILE" ] && [ ! -f "$OPENCODE_VERSION_FILE" ]; then
+  if [ -z "$any_installed" ]; then
     warn "Tandemu not installed. Run install.sh to install."
   elif [ -n "$any_stale" ]; then
     warn "Update available. Run install.sh to update."
@@ -355,12 +438,13 @@ do_check() {
 check_prerequisites() {
   step "Checking prerequisites..."
 
-  local has_claude="" has_opencode=""
-  command -v claude &>/dev/null && has_claude="true"
-  command -v opencode &>/dev/null && has_opencode="true"
+  local has_any=""
+  for cli in claude opencode cursor codex; do
+    command -v "$cli" &>/dev/null && has_any="true"
+  done
 
-  if [ -z "$has_claude" ] && [ -z "$has_opencode" ]; then
-    fail "Neither Claude Code nor OpenCode CLI found. Install one: https://code.claude.com or https://opencode.ai"
+  if [ -z "$has_any" ]; then
+    fail "No supported AI agent CLI found (claude, opencode, cursor, codex). Install at least one and re-run."
   fi
 
   if ! command -v python3 &>/dev/null; then
@@ -384,28 +468,56 @@ detect_targets() {
     return
   fi
 
-  local has_claude="" has_opencode=""
-  command -v claude &>/dev/null && has_claude="true"
-  command -v opencode &>/dev/null && has_opencode="true"
+  # Probe each supported agent.
+  local found=()
+  command -v claude &>/dev/null && found+=("claude")
+  command -v opencode &>/dev/null && found+=("opencode")
+  command -v cursor &>/dev/null && found+=("cursor")
+  command -v codex &>/dev/null && found+=("codex")
 
-  if [ -n "$has_claude" ] && [ -n "$has_opencode" ]; then
-    echo ""
-    printf '%b\n' "  ${BOLD}Both Claude Code and OpenCode are installed. Where should Tandemu install?${NC}"
-    echo ""
-    printf '%b\n' "    ${BOLD}1.${NC} Claude Code"
-    printf '%b\n' "    ${BOLD}2.${NC} OpenCode"
-    printf '%b\n' "    ${BOLD}3.${NC} Both"
-    echo ""
-    read -rp "  Choose (1-3): " choice
-    case "$choice" in
-      2) TARGETS="opencode" ;;
-      3) TARGETS="claude opencode" ;;
-      *) TARGETS="claude" ;;
+  if [ ${#found[@]} -eq 0 ]; then
+    fail "No supported AI agent CLI found. Install one of: claude, opencode, cursor, codex."
+  fi
+
+  if [ ${#found[@]} -eq 1 ]; then
+    TARGETS="${found[0]}"
+    return
+  fi
+
+  echo ""
+  printf '%b\n' "  ${BOLD}Detected AI agents:${NC}"
+  echo ""
+  local i=1
+  for t in "${found[@]}"; do
+    case "$t" in
+      claude)   printf '%b\n' "    ${BOLD}${i}.${NC} Claude Code" ;;
+      opencode) printf '%b\n' "    ${BOLD}${i}.${NC} OpenCode" ;;
+      cursor)   printf '%b\n' "    ${BOLD}${i}.${NC} Cursor" ;;
+      codex)    printf '%b\n' "    ${BOLD}${i}.${NC} Codex CLI" ;;
     esac
-  elif [ -n "$has_opencode" ]; then
-    TARGETS="opencode"
-  else
-    TARGETS="claude"
+    i=$((i + 1))
+  done
+  printf '%b\n' "    ${BOLD}a.${NC} All of the above"
+  echo ""
+  read -rp "  Choose (numbers, comma-separated, or 'a' for all): " choice
+
+  if [ "$choice" = "a" ] || [ "$choice" = "A" ]; then
+    TARGETS="${found[*]}"
+    return
+  fi
+
+  TARGETS=""
+  IFS=',' read -ra _idxs <<< "$choice"
+  for raw in "${_idxs[@]}"; do
+    raw="${raw// /}"
+    if [[ "$raw" =~ ^[0-9]+$ ]] && [ "$raw" -ge 1 ] && [ "$raw" -le ${#found[@]} ]; then
+      TARGETS="${TARGETS:+$TARGETS }${found[$((raw - 1))]}"
+    fi
+  done
+
+  # Default to first detected if user typed nothing valid.
+  if [ -z "$TARGETS" ]; then
+    TARGETS="${found[0]}"
   fi
 }
 
@@ -888,17 +1000,246 @@ install_assets_opencode() {
 }
 
 # ─────────────────────────────────────────────────────────
+# Shared helpers for lightweight (MCP-first) targets
+# ─────────────────────────────────────────────────────────
+
+# Drop the canonical AGENTS.md template at the given path. If the destination
+# already has user content, only ensure that the personality markers exist so
+# session-start hooks can update the section in-place. Idempotent.
+write_agents_md() {
+  local dest="$1"
+  local repo_agents="${SCRIPT_DIR}/apps/skills/AGENTS.md"
+  if [ ! -f "$repo_agents" ]; then
+    warn "Source AGENTS.md not found at $repo_agents — skipping"
+    return 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  if [ -f "$dest" ] && ! grep -qF "Tandemu AI Teammate" "$dest" 2>/dev/null; then
+    if ! grep -qF "<!-- tandemu:personality:start -->" "$dest" 2>/dev/null; then
+      printf '\n<!-- tandemu:personality:start -->\n<!-- tandemu:personality:end -->\n' >> "$dest"
+    fi
+  else
+    cp "$repo_agents" "$dest"
+  fi
+}
+
+# Install universal env loader + tasks dir at ~/.config/tandemu/. Skills source
+# this loader to read auth from whichever per-agent config file exists. Active
+# task files also live here so skills work identically across agents.
+install_universal_lib() {
+  step "Installing universal config loader..."
+  mkdir -p "$TANDEMU_LIB_DIR" "$TANDEMU_TASKS_DIR"
+  # Skills still write task files at ~/.claude/tandemu-active-task-*.json for
+  # back-compat with existing installs. Ensure the dir exists on all targets.
+  mkdir -p "$HOME/.claude" 2>/dev/null || true
+
+  # Single source of truth: the canonical loader lives in the Claude plugin
+  # tree because /tandemu:setup needs to ship it via the plugin marketplace.
+  # install.sh copies the same file so both install paths deliver identical
+  # logic. Do not duplicate the loader content here.
+  local canonical_loader="${SCRIPT_DIR}/apps/claude-plugins/lib/tandemu-env.sh"
+  if [ ! -f "$canonical_loader" ]; then
+    fail "Canonical loader not found at $canonical_loader — repo layout broken."
+  fi
+  cp "$canonical_loader" "$TANDEMU_LIB_DIR/tandemu-env.sh"
+  chmod 644 "$TANDEMU_LIB_DIR/tandemu-env.sh"
+  ok "Loader installed: ~/.config/tandemu/lib/tandemu-env.sh"
+}
+
+# Copy the daily-use SKILL.md files into <commands_dir>/<name>.md verbatim.
+# Used by Cursor + Codex install paths so /morning, /finish etc. fire as
+# native slash commands the same way they do on Claude Code + OpenCode.
+# `setup` is deliberately excluded — it writes Claude-only state
+# (~/.claude/settings.json, CLAUDE.md, SessionStart hooks, ~/.mcp.json
+# migration) and would corrupt a real Claude install if run elsewhere.
+install_skills_to() {
+  local dest_dir="$1"
+  local skills_src="${SCRIPT_DIR}/apps/skills"
+  if [ ! -d "$skills_src" ]; then
+    warn "Source skills dir not found at $skills_src — skipping"
+    return 1
+  fi
+  mkdir -p "$dest_dir"
+  for skill in morning finish pause create standup; do
+    if [ -f "$skills_src/$skill/SKILL.md" ]; then
+      cp "$skills_src/$skill/SKILL.md" "$dest_dir/$skill.md"
+    fi
+  done
+}
+
+# Resolve the combined Tandemu MCP URL from the backend (handles SaaS/self-host).
+# Sets $TANDEMU_MCP_URL. Falls back to ${API_URL}/api/memory/mcp on error.
+fetch_mcp_url() {
+  local cfg
+  cfg=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/memory/config" 2>/dev/null || true)
+  TANDEMU_MCP_URL=""
+  if [ -n "$cfg" ]; then
+    TANDEMU_MCP_URL=$(echo "$cfg" | python3 -c "import json,sys
+d=json.load(sys.stdin)
+d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d
+print(d.get('url',''))" 2>/dev/null) || TANDEMU_MCP_URL=""
+  fi
+  if [ -z "$TANDEMU_MCP_URL" ]; then
+    TANDEMU_MCP_URL="${API_URL}/api/memory/mcp"
+  fi
+}
+
+# ─────────────────────────────────────────────────────────
+# Cursor target: register MCP server + drop AGENTS.md / rules
+# ─────────────────────────────────────────────────────────
+
+configure_cursor() {
+  mkdir -p "$CURSOR_DIR" "$HOME/.config/tandemu"
+
+  step "Writing Tandemu config (Cursor)..."
+  cat > "$HOME/.config/tandemu/cursor-auth.json" << EOF
+{
+  "auth": { "token": "${TOKEN}" },
+  "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
+  "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
+  "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
+  "api": { "url": "${API_URL}" }
+}
+EOF
+  ok "Config: ~/.config/tandemu/cursor-auth.json"
+
+  step "Configuring Tandemu MCP (Cursor)..."
+  fetch_mcp_url
+
+  TANDEMU_TOKEN="$TOKEN" \
+  TANDEMU_MCP_URL="$TANDEMU_MCP_URL" \
+  python3 << 'PYEOF'
+import json, os
+cfg_file = os.path.expanduser("~/.cursor/mcp.json")
+try:
+    with open(cfg_file) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+servers = cfg.get("mcpServers", {})
+servers["tandemu"] = {
+    "url": os.environ["TANDEMU_MCP_URL"],
+    "headers": {"Authorization": f"Bearer {os.environ['TANDEMU_TOKEN']}"},
+}
+cfg["mcpServers"] = servers
+with open(cfg_file, "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
+  ok "MCP: enabled (→ ${TANDEMU_MCP_URL})"
+}
+
+install_assets_cursor() {
+  step "Installing personality + rules + skills (Cursor)..."
+
+  # Global rule mirrors AGENTS.md content. Cursor reads .mdc rules from
+  # ~/.cursor/rules/ globally and from <project>/.cursor/rules/ per-project.
+  mkdir -p "$CURSOR_DIR/rules"
+  write_agents_md "$CURSOR_DIR/rules/tandemu.mdc" || true
+  ok "Rule installed: ~/.cursor/rules/tandemu.mdc"
+
+  # Slash commands. Cursor reads custom commands from ~/.cursor/commands/.
+  install_skills_to "$CURSOR_DIR/commands"
+  ok "Skills installed → ~/.cursor/commands/ (/morning, /finish, /pause, /create, /standup)"
+
+  local v
+  v=$(get_plugin_version)
+  mkdir -p "$(dirname "$CURSOR_VERSION_FILE")"
+  echo "$v" > "$CURSOR_VERSION_FILE"
+}
+
+# ─────────────────────────────────────────────────────────
+# Codex CLI target: skills + AGENTS.md + universal lib
+# ─────────────────────────────────────────────────────────
+
+configure_codex() {
+  mkdir -p "$CODEX_DIR" "$HOME/.config/tandemu"
+
+  step "Writing Tandemu config (Codex CLI)..."
+  cat > "$HOME/.config/tandemu/codex-auth.json" << EOF
+{
+  "auth": { "token": "${TOKEN}" },
+  "user": { "id": "${USER_ID}", "email": "${USER_EMAIL}", "name": "${USER_NAME}" },
+  "organization": { "id": "${ORG_ID}", "name": "${ORG_NAME}" },
+  "team": { "id": "${TEAM_ID}", "name": "${TEAM_NAME}" },
+  "api": { "url": "${API_URL}" }
+}
+EOF
+  ok "Config: ~/.config/tandemu/codex-auth.json"
+
+  step "Configuring Tandemu MCP (Codex CLI)..."
+  fetch_mcp_url
+
+  # Codex reads ~/.codex/config.toml. Merge a [mcp_servers.tandemu] entry,
+  # preserving any other servers and unrelated config the user has set.
+  TANDEMU_TOKEN="$TOKEN" \
+  TANDEMU_MCP_URL="$TANDEMU_MCP_URL" \
+  python3 << 'PYEOF'
+import os, re
+
+cfg_file = os.path.expanduser("~/.codex/config.toml")
+url = os.environ["TANDEMU_MCP_URL"]
+token = os.environ["TANDEMU_TOKEN"]
+
+block = (
+    "\n[mcp_servers.tandemu]\n"
+    f'url = "{url}"\n'
+    "[mcp_servers.tandemu.headers]\n"
+    f'Authorization = "Bearer {token}"\n'
+)
+
+text = ""
+if os.path.exists(cfg_file):
+    with open(cfg_file) as f:
+        text = f.read()
+
+# Strip existing tandemu sections so re-running stays idempotent.
+text = re.sub(
+    r"\n?\[mcp_servers\.tandemu(\.[^\]]+)?\][^\[]*",
+    "",
+    text,
+    flags=re.DOTALL,
+).rstrip()
+
+text = (text + "\n" + block) if text else block.lstrip()
+
+with open(cfg_file, "w") as f:
+    f.write(text)
+PYEOF
+  ok "MCP: enabled (→ ${TANDEMU_MCP_URL})"
+}
+
+install_assets_codex() {
+  step "Installing personality + skills (Codex CLI)..."
+  write_agents_md "$CODEX_DIR/AGENTS.md" || true
+  ok "AGENTS.md installed: ~/.codex/AGENTS.md"
+
+  # Slash commands. Codex CLI reads custom prompts from ~/.codex/prompts/.
+  install_skills_to "$CODEX_DIR/prompts"
+  ok "Skills installed → ~/.codex/prompts/ (/morning, /finish, /pause, /create, /standup)"
+
+  local v
+  v=$(get_plugin_version)
+  mkdir -p "$(dirname "$CODEX_VERSION_FILE")"
+  echo "$v" > "$CODEX_VERSION_FILE"
+}
+
+# ─────────────────────────────────────────────────────────
 # Per-target dispatchers
 # ─────────────────────────────────────────────────────────
 
 write_configs() {
   if target_active claude; then configure_claude; fi
   if target_active opencode; then configure_opencode; fi
+  if target_active cursor; then configure_cursor; fi
+  if target_active codex; then configure_codex; fi
 }
 
 install_assets() {
+  install_universal_lib
   if target_active claude; then install_assets_claude; fi
   if target_active opencode; then install_assets_opencode; fi
+  if target_active cursor; then install_assets_cursor; fi
+  if target_active codex; then install_assets_codex; fi
 }
 
 # ─────────────────────────────────────────────────────────
@@ -931,12 +1272,17 @@ print_done() {
   echo ""
   printf '%b\n' "    ${GREEN}\$ cd your-project${NC}"
   if target_active claude; then
-    printf '%b\n' "    ${GREEN}\$ claude${NC}"
+    printf '%b\n' "    ${GREEN}\$ claude${NC}        ${DIM}# slash commands: /morning /finish /pause /standup${NC}"
   fi
   if target_active opencode; then
-    printf '%b\n' "    ${GREEN}\$ opencode${NC}"
+    printf '%b\n' "    ${GREEN}\$ opencode${NC}      ${DIM}# slash commands: /morning /finish /pause /standup${NC}"
   fi
-  printf '%b\n' "    ${GREEN}> /morning${NC}"
+  if target_active cursor; then
+    printf '%b\n' "    ${GREEN}\$ cursor .${NC}      ${DIM}# slash commands: /morning /finish /pause /standup${NC}"
+  fi
+  if target_active codex; then
+    printf '%b\n' "    ${GREEN}\$ codex${NC}         ${DIM}# slash commands: /morning /finish /pause /standup${NC}"
+  fi
   echo ""
   printf '%b\n' "  ${BOLD}Available skills:${NC}"
   printf '%b\n' "    ${GREEN}/morning${NC}   — Pick a task and start working"
@@ -970,10 +1316,26 @@ while [ $# -gt 0 ]; do
       else
         target_val="${1#*=}"; shift
       fi
+      # Accept comma-separated list ("cursor,codex") or single value.
+      # Special tokens: "both" (legacy alias for claude+opencode), "all".
       case "$target_val" in
-        claude|opencode) TARGETS="$target_val" ;;
+        all) TARGETS="claude opencode cursor codex" ;;
         both) TARGETS="claude opencode" ;;
-        *) fail "Invalid --target: $target_val (expected: claude|opencode|both)" ;;
+        *)
+          IFS=',' read -ra _t_arr <<< "$target_val"
+          TARGETS=""
+          for t in "${_t_arr[@]}"; do
+            t="${t// /}"
+            case "$t" in
+              claude|opencode|cursor|codex)
+                TARGETS="${TARGETS:+$TARGETS }$t"
+                ;;
+              *)
+                fail "Invalid --target: $t (expected: claude|opencode|cursor|codex|all|both)"
+                ;;
+            esac
+          done
+          ;;
       esac
       ;;
     --skip-prereqs) SKIP_PREREQS="true"; shift ;;

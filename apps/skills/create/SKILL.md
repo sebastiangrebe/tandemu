@@ -12,7 +12,7 @@ Create a new task in the team's ticket system. Use when you discover work that n
 **IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 ```
 
 ## Steps
@@ -20,7 +20,7 @@ Create a new task in the team's ticket system. Use when you discover work that n
 ### 1. Setup
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
@@ -31,8 +31,9 @@ echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 
 echo "---ACTIVE_TASK---"
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
-cat "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" 2>/dev/null || echo "NONE"
+cat "$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json" 2>/dev/null || echo "NONE"
 ```
 
 ### 2. Get task details
@@ -68,7 +69,7 @@ Set `SELECTED_TEAM_ID` from the choice. If single team, use `$TANDEMU_TEAM_ID` d
 **Determine the provider**: If there's an active task (from step 1), use its `provider` field. Otherwise omit — the backend prefers dedicated trackers (Linear, Jira, etc.) over GitHub by default.
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 RESULT=$(curl -sf -X POST "$TANDEMU_API/api/tasks" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \

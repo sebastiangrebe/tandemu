@@ -353,8 +353,17 @@ if [ -z "$PLUGIN_ROOT" ]; then
 fi
 
 if [ -n "$PLUGIN_ROOT" ] && [ -d "$PLUGIN_ROOT/lib" ]; then
-  mkdir -p "$HOME/.claude"/lib
+  # Write the loader to BOTH locations:
+  #   ~/.claude/lib/tandemu-env.sh   — historical path, kept for back-compat
+  #                                    with any skills that still source it
+  #   ~/.config/tandemu/lib/...      — universal path (preferred). Skills
+  #                                    source this first; matches install.sh
+  mkdir -p "$HOME/.claude"/lib "$HOME/.config/tandemu/lib"
   cp -r "$PLUGIN_ROOT/lib"/* "$HOME/.claude/lib/"
+  cp -r "$PLUGIN_ROOT/lib"/* "$HOME/.config/tandemu/lib/"
+  # Pre-create the universal active-task dir so skills can write task files
+  # before the loader has been sourced (the loader also creates it).
+  mkdir -p "$HOME/.config/tandemu/active-tasks"
   echo "OK"
 fi
 

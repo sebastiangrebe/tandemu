@@ -18,7 +18,7 @@ Help the developer wrap up their current task cleanly, measure the work done, an
 **IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, etc. MUST source the env loader first:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 ```
 
 ## Steps
@@ -93,14 +93,15 @@ Load config and active task in a **single Bash call** ("Prepare telemetry"):
 
 ```bash
 # Load Tandemu config
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
 
-# Active task metadata (branch-keyed)
+# Active task metadata (branch-keyed). TANDEMU_TASKS_DIR from env loader.
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
-TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+TASK_FILE="$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
 echo "TASK_FILE=$TASK_FILE"
 cat "$TASK_FILE" 2>/dev/null || echo "NONE"
@@ -143,7 +144,7 @@ Build the request body from the collected data — do NOT calculate AI lines you
 **IMPORTANT: This call MUST succeed for /finish to complete. If it fails, tell the developer and STOP.**
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 RESULT=$(curl -sf -X POST "$TANDEMU_API/api/telemetry/tasks/<taskId>/finish" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
@@ -177,14 +178,14 @@ If the curl fails or returns an error, tell the developer and **STOP**.
 If the developer marked the task as "Done", update the status on the provider. First fetch the available statuses, then pick the one that best represents "done" or "completed":
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<taskId>/statuses?provider=<provider>"
 ```
 
 Pick the status that best represents "done", "completed", or "closed" from the returned list, then:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<taskId>" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \

@@ -19,7 +19,7 @@ Help the developer start their work session by picking a task.
 **IMPORTANT — env vars don't persist across Bash calls.** Each Bash invocation is a fresh shell. Every Bash call that uses `$TANDEMU_TOKEN`, `$TANDEMU_API`, `$TANDEMU_TEAM_ID`, etc. MUST source the env loader first:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 ```
 
 ## Steps
@@ -35,7 +35,7 @@ Use the `LOCAL_NOW` from the Step 1 output to determine the time-of-day greeting
 - Hour 12–17 → "Afternoon"
 - Hour > 17 → "Evening"
 
-If you know their name (from `~/.claude/tandemu.json` under `user.name`): "<greeting>, {{DEV_NAME}}. Let me pull up your tasks."
+If you know their name (`$TANDEMU_USER_NAME` from the env loader, populated on every agent): "<greeting>, {{DEV_NAME}}. Let me pull up your tasks."
 If you don't know their name yet: "Good <greeting>! Let me get your tasks."
 
 If you remember what they worked on recently, mention it: "Last time you were working on the invoice module — want to continue or pick something new?"
@@ -48,7 +48,7 @@ Run all setup reads in a **single Bash call**:
 
 ```bash
 # Load Tandemu config
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null || . "$(git rev-parse --show-toplevel 2>/dev/null)/apps/claude-plugins/lib/tandemu-env.sh"
 echo "---CONFIG---"
 echo "TOKEN=$TANDEMU_TOKEN"
 echo "API=$TANDEMU_API"
@@ -60,14 +60,19 @@ echo "TEAM_COUNT=$TANDEMU_TEAM_COUNT"
 echo "EMAIL=$TANDEMU_USER_EMAIL"
 echo "NAME=$TANDEMU_USER_NAME"
 
-# Check for active task (branch-keyed)
+# Check for active task (branch-keyed). TANDEMU_TASKS_DIR is exported by the
+# env loader and is universal across agents; default it defensively in case
+# the loader was unavailable.
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
+mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 BRANCH_SLUG=$(git branch --show-current 2>/dev/null | sed 's/\//-/g' || echo "unknown")
-TASK_FILE="$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json"
+TASK_FILE="$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json"
 echo "---ACTIVE_TASK---"
 echo "TASK_FILE=$TASK_FILE"
 echo "BRANCH_SLUG=$BRANCH_SLUG"
 
-# Legacy migration: move old single file to branch-keyed
+# Legacy migration: move pre-branch-keyed single file (older than the env
+# loader's bulk migration, which only handles tandemu-active-task-*.json).
 OLD_FILE="$HOME/.claude/tandemu-active-task.json"
 if [ -f "$OLD_FILE" ] && [ ! -f "$TASK_FILE" ] && [ "$BRANCH_SLUG" != "main" ] && [ "$BRANCH_SLUG" != "unknown" ]; then
   mv "$OLD_FILE" "$TASK_FILE"
@@ -79,7 +84,7 @@ cat "$TASK_FILE" 2>/dev/null || echo "NONE"
 
 # Collect task IDs from ALL active task files (other sessions/worktrees)
 echo "---OTHER_ACTIVE_TASKS---"
-find "$HOME/.claude" -maxdepth 1 -name 'tandemu-active-task-*.json' 2>/dev/null | while read -r f; do
+find "$TANDEMU_TASKS_DIR" -maxdepth 1 -name 'tandemu-active-task-*.json' 2>/dev/null | while read -r f; do
   [ "$f" = "$TASK_FILE" ] && continue
   TASK_ID=$(python3 -c "import json; print(json.load(open('$f')).get('taskId',''))" 2>/dev/null)
   [ -n "$TASK_ID" ] && echo "$TASK_ID"
@@ -162,7 +167,7 @@ Set `SELECTED_TEAM_ID` from the choice. If "All teams" is selected, set `SELECTE
 Fetch tasks assigned to the current developer in a single call. The API handles multi-team dedup and unassigned fallback server-side:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks?teamId=$SELECTED_TEAM_ID&mine=true&fallbackUnassigned=true&sort=priority&order=desc"
 ```
 
@@ -193,7 +198,7 @@ If there are more than 4 tasks, show the top 4 and mention how many more exist.
 After the developer picks a task, check if `hasSubtasks` is `true` on the selected task. If so, fetch the subtasks:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/subtasks?provider=<task.provider>"
 ```
 
@@ -269,10 +274,12 @@ cd "$WORKTREE_DIR"
 - Write the branch-keyed active task file. Use the `category` field from the API response (the backend infers it from labels).
 
 ```bash
+: "${TANDEMU_TASKS_DIR:=$HOME/.config/tandemu/active-tasks}"
+mkdir -p "$TANDEMU_TASKS_DIR" 2>/dev/null || true
 BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
 REPO_PATH=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > "$HOME/.claude/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
+cat > "$TANDEMU_TASKS_DIR/tandemu-active-task-${BRANCH_SLUG}.json" << EOF
 {
   "taskId": "<task.id>",
   "teamId": "<SELECTED_TEAM_ID or the team the task was fetched from>",
@@ -292,7 +299,7 @@ EOF
 - Update the task on the ticket system — set status to "in progress" AND assign it to the current developer. First fetch the available statuses, then pick the one that best represents "in progress":
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 # Fetch available statuses for this task
 curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/tasks/<task.id>/statuses?provider=<task.provider>"
 ```
@@ -302,7 +309,7 @@ This returns an array of `{ id, name, type }` objects — the actual statuses av
 Then send a single PATCH to update both status and assignee:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 curl -sf -X PATCH "$TANDEMU_API/api/tasks/<task.id>" \
   -H "Authorization: Bearer $TANDEMU_TOKEN" \
   -H "Content-Type: application/json" \
@@ -321,7 +328,7 @@ If you can't determine which status to use, still send the assignee update witho
 After setting up the task, silently check for knowledge gaps:
 
 ```bash
-. "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
+. "$HOME/.config/tandemu/lib/tandemu-env.sh" 2>/dev/null || . "$HOME/.claude/lib/tandemu-env.sh" 2>/dev/null
 GAPS=$(curl -sf -H "Authorization: Bearer $TANDEMU_TOKEN" "$TANDEMU_API/api/memory/gaps" 2>/dev/null)
 ```
 
@@ -368,6 +375,6 @@ If they choose **Manual**: say "All yours — let me know what you need." and st
 - The developer may have multiple repos and sessions open — this skill only manages the current repo
 - Always let the developer choose — never auto-assign
 - If they select "Other", ask what they want to work on and create a branch for it
-- Task files are branch-keyed: `~/.claude/tandemu-active-task-{branch-slug}.json`. Multiple tasks can be active concurrently in separate worktrees.
+- Task files are branch-keyed: `$TANDEMU_TASKS_DIR/tandemu-active-task-{branch-slug}.json` (default `~/.config/tandemu/active-tasks/`, universal across agents). Multiple tasks can be active concurrently in separate worktrees.
 - Each task gets its own git worktree inside `.worktrees/<task.id>/`. The main checkout stays on the default branch.
 - **IMPORTANT**: Always use `Bash` (cat, python3, etc.) to read and write task files — do NOT use the Edit or Write tools for these files
