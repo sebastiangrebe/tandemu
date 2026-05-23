@@ -12,6 +12,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { GitHubGitService } from '../integrations/providers/github-git.service.js';
 import { IntegrationsService } from '../integrations/integrations.service.js';
 import type { TelemetryJobData } from '../queue/queue.types.js';
+import { PricingService } from '../pricing/pricing.service.js';
 import { COST_METRICS, TOKEN_METRICS, LINES_METRICS, sqlIn } from './metric-names.js';
 
 export interface TimesheetEntry {
@@ -81,6 +82,7 @@ export class TelemetryService implements OnModuleDestroy {
     @Inject(forwardRef(() => MemoryService)) private readonly memoryService: MemoryService,
     @Inject(forwardRef(() => GitHubGitService)) private readonly gitHubGitService: GitHubGitService,
     @Inject(forwardRef(() => IntegrationsService)) private readonly integrationsService: IntegrationsService,
+    private readonly pricingService: PricingService,
     @InjectQueue('telemetry') private readonly telemetryQueue: Queue<TelemetryJobData>,
   ) {
     const clickhouseUrl = this.configService.get<string>('clickhouse.url', 'http://localhost:8123');
@@ -532,8 +534,18 @@ export class TelemetryService implements OnModuleDestroy {
         }),
       ]);
       const costRows = await costResult.json<{ total_cost: number }>();
-      taskCost = Math.round(Number(costRows[0]?.total_cost ?? 0) * 100) / 100;
       const tokenRows = await tokenResult.json<{ total_tokens: number }>();
+      const baseCost = Number(costRows[0]?.total_cost ?? 0);
+
+      // Codex-derived cost in the same window. Returns 0 if no Codex sessions
+      // touched this task, so the Claude/OpenCode path is unchanged for them.
+      const codexCost = await this.getCodexCostInWindow(
+        organizationId,
+        input.startedAt,
+        now.toISOString(),
+      );
+
+      taskCost = Math.round((baseCost + codexCost) * 100) / 100;
       taskTokens = Number(tokenRows[0]?.total_tokens ?? 0);
     } catch (err) {
       this.logger.warn('Failed to query task cost/token data', err);
@@ -1284,6 +1296,99 @@ export class TelemetryService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Pull aggregated Codex token counts from `otel_logs` (`codex.sse_event`)
+   * grouped by `(date, user_id, model)` and convert each row to USD via the
+   * `PricingService`. Returned as a single flat array so callers can
+   * aggregate by date OR user OR both.
+   *
+   * Codex emits per-turn token counts only — no native USD field — so this
+   * helper is the only path that produces Codex cost rows. The same backend
+   * call returns the rows used by `getCostMetrics`, `getDeveloperCostBreakdown`,
+   * and `finishTask` (window variant below) so the price-lookup happens once.
+   */
+  private async getCodexCostRows(
+    organizationId: string,
+    startDate?: string,
+    endDate?: string,
+    teamId?: string,
+  ): Promise<Array<{ date: string; userId: string; cost: number }>> {
+    try {
+      const params: Record<string, string> = { organizationId };
+      let dateFilter = '';
+      if (startDate) { dateFilter += ` AND Timestamp >= {startDate: DateTime64(3)}`; params.startDate = TelemetryService.dt(startDate); }
+      if (endDate) { dateFilter += ` AND Timestamp <= {endDate: DateTime64(3)}`; params.endDate = TelemetryService.dtEnd(endDate); }
+      const teamFilter = teamId ? ` AND LogAttributes['team_id'] = {teamId: String}` : '';
+      if (teamId) params.teamId = teamId;
+
+      const resultSet = await this.client.query({
+        query: `
+          SELECT
+            toString(toDate(Timestamp)) AS date,
+            LogAttributes['user.account_uuid'] AS user_id,
+            LogAttributes['model'] AS model,
+            sum(toFloat64OrZero(LogAttributes['input_token_count'])) AS input_tokens,
+            sum(toFloat64OrZero(LogAttributes['output_token_count'])) AS output_tokens,
+            sum(toFloat64OrZero(LogAttributes['cached_token_count'])) AS cached_tokens,
+            sum(toFloat64OrZero(LogAttributes['reasoning_token_count'])) AS reasoning_tokens
+          FROM otel_logs
+          WHERE ResourceAttributes['organization_id'] = {organizationId: String}
+            AND LogAttributes['event.name'] = 'codex.sse_event'
+            ${dateFilter}
+            ${teamFilter}
+          GROUP BY date, user_id, model
+        `,
+        query_params: params,
+        format: 'JSONEachRow',
+      });
+
+      const rows = await resultSet.json<{
+        date: string;
+        user_id: string;
+        model: string;
+        input_tokens: number;
+        output_tokens: number;
+        cached_tokens: number;
+        reasoning_tokens: number;
+      }>();
+
+      const out: Array<{ date: string; userId: string; cost: number }> = [];
+      for (const r of rows) {
+        const cost = await this.pricingService.computeCost(
+          {
+            input: Number(r.input_tokens) || 0,
+            output: Number(r.output_tokens) || 0,
+            cached: Number(r.cached_tokens) || 0,
+            reasoning: Number(r.reasoning_tokens) || 0,
+          },
+          r.model,
+          organizationId,
+        );
+        if (cost > 0) {
+          out.push({ date: r.date, userId: r.user_id ?? '', cost });
+        }
+      }
+      return out;
+    } catch (err) {
+      this.logger.warn(`Failed to get Codex cost rows: ${err}`);
+      Sentry.captureException(err, { tags: { operation: 'telemetry-codex-cost-rows' } });
+      return [];
+    }
+  }
+
+  /**
+   * Sum of Codex-derived USD cost within a task time window. Used by
+   * `finishTask` to roll the Codex contribution into `taskCost`.
+   */
+  private async getCodexCostInWindow(
+    organizationId: string,
+    start: string,
+    end: string,
+  ): Promise<number> {
+    const rows = await this.getCodexCostRows(organizationId, start, end);
+    return rows.reduce((sum, r) => sum + r.cost, 0);
+  }
+
   async getCostMetrics(
     organizationId: string,
     startDate?: string,
@@ -1317,10 +1422,25 @@ export class TelemetryService implements OnModuleDestroy {
       });
 
       const rows = await resultSet.json<{ date: string; total_cost: number }>();
-      return rows.map((r) => ({
-        date: r.date,
-        totalCost: Math.round(Number(r.total_cost) * 100) / 100,
-      }));
+
+      // Merge in Codex-derived cost (tokens × pricing table). Empty when no
+      // Codex sessions are present, so no-op for existing Claude/OpenCode-only
+      // installs.
+      const codexRows = await this.getCodexCostRows(organizationId, startDate, endDate, teamId);
+      const byDate = new Map<string, number>();
+      for (const r of rows) {
+        byDate.set(r.date, Number(r.total_cost) || 0);
+      }
+      for (const r of codexRows) {
+        byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.cost);
+      }
+
+      return [...byDate.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, totalCost]) => ({
+          date,
+          totalCost: Math.round(totalCost * 100) / 100,
+        }));
     } catch (err) {
       this.logger.warn(`Failed to get cost metrics: ${err}`);
       Sentry.captureException(err, { tags: { operation: 'telemetry-cost-metrics' } });
@@ -1385,15 +1505,31 @@ export class TelemetryService implements OnModuleDestroy {
       const costRows = await costResult.json<{ user_id: string; total_cost: number }>();
       const devRows = await devStatsResult.json<{ user_id: string; task_count: number; ai_lines: number }>();
 
+      // Codex-derived cost (tokens × pricing) per user, merged with native cost
+      // metrics so Codex users show up alongside Claude/OpenCode users without
+      // a separate code path.
+      const codexRows = await this.getCodexCostRows(organizationId, startDate, endDate, teamId);
+      const codexByUser = new Map<string, number>();
+      for (const r of codexRows) {
+        if (!r.userId) continue;
+        codexByUser.set(r.userId, (codexByUser.get(r.userId) ?? 0) + r.cost);
+      }
+
       // Build dev stats lookup
       const devMap = new Map(devRows.map((r) => [r.user_id, { taskCount: Number(r.task_count), aiLines: Number(r.ai_lines) }]));
 
-      // Merge: cost rows are the primary source, enrich with dev stats
-      const allUserIds = new Set([...costRows.map((r) => r.user_id), ...devRows.map((r) => r.user_id)]);
+      // Merge: cost rows are the primary source, enrich with dev stats + Codex
+      const allUserIds = new Set([
+        ...costRows.map((r) => r.user_id),
+        ...devRows.map((r) => r.user_id),
+        ...codexByUser.keys(),
+      ]);
       return [...allUserIds].map((userId) => {
         const cost = costRows.find((r) => r.user_id === userId);
         const dev = devMap.get(userId);
-        const totalCost = Math.round(Number(cost?.total_cost ?? 0) * 100) / 100;
+        const totalCost = Math.round(
+          (Number(cost?.total_cost ?? 0) + (codexByUser.get(userId) ?? 0)) * 100,
+        ) / 100;
         const aiLines = dev?.aiLines ?? 0;
         return {
           userId,

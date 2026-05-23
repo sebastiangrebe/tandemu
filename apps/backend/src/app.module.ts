@@ -16,6 +16,7 @@ import { MemoryModule } from './memory/memory.module.js';
 import { SetupModule } from './setup/setup.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { EmailModule } from './email/email.module.js';
+import { PricingModule } from './pricing/pricing.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { EmailModule } from './email/email.module.js';
     SetupModule,
     QueueModule,
     EmailModule,
+    PricingModule,
   ],
 })
 export class AppModule implements NestModule {

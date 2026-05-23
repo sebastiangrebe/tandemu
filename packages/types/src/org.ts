@@ -65,6 +65,17 @@ export interface InviteMemberDto {
   readonly role: MembershipRole;
 }
 
+export interface ModelPriceOverride {
+  /** USD per 1M input tokens. Overrides the global model_prices row. */
+  readonly inputPer1M?: number;
+  /** USD per 1M output tokens. */
+  readonly outputPer1M?: number;
+  /** USD per 1M cache-hit tokens. Optional — not all models have a cache discount. */
+  readonly cachedPer1M?: number;
+  /** USD per 1M reasoning tokens. Optional — only emitted by reasoning models. */
+  readonly reasoningPer1M?: number;
+}
+
 export interface OrgSettings {
   /** Fully-loaded hourly cost of one developer in USD. Default: 75 */
   readonly developerHourlyRate?: number;
@@ -76,6 +87,13 @@ export interface OrgSettings {
   readonly draftRetentionDays?: number;
   /** Optional monthly AI cost budget in the org's currency. Null = no budget. */
   readonly monthlyAICostBudget?: number;
+  /**
+   * Per-model price overrides for agents that emit raw token counts (e.g. Codex
+   * CLI). Keyed by model name. Falls back to the global `model_prices` table
+   * when not set. Each field is optional so admins can override one rate
+   * (e.g. just the input rate) without re-specifying the rest.
+   */
+  readonly modelPriceOverrides?: Record<string, ModelPriceOverride>;
 }
 
 export interface TeamSettings {

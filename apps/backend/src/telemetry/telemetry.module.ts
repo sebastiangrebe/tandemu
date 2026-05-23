@@ -16,6 +16,7 @@ import { IncidentSyncProcessor } from '../queue/incident-sync.processor.js';
 import { IncidentSyncScheduler } from './incident-sync.scheduler.js';
 import { PagerDutyProviderService } from '../integrations/providers/pagerduty.service.js';
 import { OpsgenieProviderService } from '../integrations/providers/opsgenie.service.js';
+import { PricingModule } from '../pricing/pricing.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { OpsgenieProviderService } from '../integrations/providers/opsgenie.serv
     DatabaseModule,
     forwardRef(() => MemoryModule),
     forwardRef(() => IntegrationsModule),
+    PricingModule,
     BullModule.registerQueue({ name: 'telemetry' }),
     BullModule.registerQueue({ name: 'github-sync' }),
     BullModule.registerQueue({ name: 'incident-sync' }),
