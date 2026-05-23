@@ -352,8 +352,15 @@ import os, re
 f = os.path.expanduser("~/.codex/config.toml")
 try:
     text = open(f).read()
+    # Strip tandemu MCP block + the [otel] block we installed for telemetry.
     text = re.sub(
         r"\n?\[mcp_servers\.tandemu(\.[^\]]+)?\][^\[]*",
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+    text = re.sub(
+        r"\n?\[otel\][^\[]*",
         "",
         text,
         flags=re.DOTALL,
@@ -365,7 +372,7 @@ try:
 except FileNotFoundError:
     pass
 PYEOF
-    ok "Codex MCP cleaned"
+    ok "Codex MCP + OTLP cleaned"
   fi
   if [ -f "$CODEX_DIR/AGENTS.md" ]; then
     if grep -q "Tandemu AI Teammate" "$CODEX_DIR/AGENTS.md" 2>/dev/null; then
@@ -1067,6 +1074,26 @@ install_skills_to() {
   done
 }
 
+# Resolve OTEL ingest endpoint + per-org ingestion key from the backend.
+# Sets $TANDEMU_OTLP_ENDPOINT and $TANDEMU_INGESTION_KEY. Both are empty if
+# the call fails — callers should treat empty as "skip OTEL config".
+fetch_setup_config() {
+  local cfg
+  cfg=$(curl -sf -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/setup/config" 2>/dev/null || true)
+  TANDEMU_OTLP_ENDPOINT=""
+  TANDEMU_INGESTION_KEY=""
+  if [ -n "$cfg" ]; then
+    TANDEMU_OTLP_ENDPOINT=$(echo "$cfg" | python3 -c "import json,sys
+d=json.load(sys.stdin)
+d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d
+print(d.get('otel',{}).get('endpoint',''))" 2>/dev/null) || TANDEMU_OTLP_ENDPOINT=""
+    TANDEMU_INGESTION_KEY=$(echo "$cfg" | python3 -c "import json,sys
+d=json.load(sys.stdin)
+d=d.get('data',d) if isinstance(d,dict) and 'data' in d else d
+print(d.get('otel',{}).get('ingestionKey',''))" 2>/dev/null) || TANDEMU_INGESTION_KEY=""
+  fi
+}
+
 # Resolve the combined Tandemu MCP URL from the backend (handles SaaS/self-host).
 # Sets $TANDEMU_MCP_URL. Falls back to ${API_URL}/api/memory/mcp on error.
 fetch_mcp_url() {
@@ -1206,6 +1233,64 @@ with open(cfg_file, "w") as f:
     f.write(text)
 PYEOF
   ok "MCP: enabled (→ ${TANDEMU_MCP_URL})"
+
+  # ── Native OTLP telemetry ──
+  # Codex CLI's native [otel] block (PR #2103) emits codex.tool_result,
+  # codex.api_request, codex.sse_event spans/logs. Same backend proxy
+  # Claude Code uses — auth via per-org ingestion_key, not user JWT.
+  step "Configuring native OTLP telemetry (Codex CLI)..."
+  fetch_setup_config
+  if [ -n "$TANDEMU_OTLP_ENDPOINT" ] && [ -n "$TANDEMU_INGESTION_KEY" ]; then
+    TANDEMU_OTLP_ENDPOINT="$TANDEMU_OTLP_ENDPOINT" \
+    TANDEMU_INGESTION_KEY="$TANDEMU_INGESTION_KEY" \
+    TANDEMU_ORG_ID="$ORG_ID" \
+    python3 << 'PYEOF'
+import os, re
+
+cfg_file = os.path.expanduser("~/.codex/config.toml")
+endpoint = os.environ["TANDEMU_OTLP_ENDPOINT"]
+key = os.environ["TANDEMU_INGESTION_KEY"]
+org_id = os.environ.get("TANDEMU_ORG_ID", "")
+
+# Per Codex docs: exporter is a single inline table with the otlp-http key.
+# Resource attributes propagate via OTEL_RESOURCE_ATTRIBUTES, but Codex's
+# own backend proxy stamps organization_id from the ingestion_key for
+# defense-in-depth, so we don't strictly need to send it from the client.
+block = (
+    "\n[otel]\n"
+    'environment = "prod"\n'
+    'log_user_prompt = false\n'
+    "exporter = { otlp-http = { "
+    f'endpoint = "{endpoint}/v1/logs", '
+    'protocol = "json", '
+    "headers = { "
+    f'"Authorization" = "Bearer {key}"'
+    " } } }\n"
+)
+
+text = ""
+if os.path.exists(cfg_file):
+    with open(cfg_file) as f:
+        text = f.read()
+
+# Strip any prior [otel] section so re-running stays idempotent. Match the
+# section header through the next [section] or EOF.
+text = re.sub(
+    r"\n?\[otel\][^\[]*",
+    "",
+    text,
+    flags=re.DOTALL,
+).rstrip()
+
+text = (text + "\n" + block) if text else block.lstrip()
+
+with open(cfg_file, "w") as f:
+    f.write(text)
+PYEOF
+    ok "OTLP: enabled (→ ${TANDEMU_OTLP_ENDPOINT})"
+  else
+    warn "Could not fetch OTLP endpoint/ingestion key — per-tool telemetry not configured"
+  fi
 }
 
 install_assets_codex() {
