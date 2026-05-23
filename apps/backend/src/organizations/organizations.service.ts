@@ -20,6 +20,7 @@ const DEFAULT_ORG_SETTINGS: Required<OrgSettings> = {
   currency: 'USD',
   draftRetentionDays: 30,
   monthlyAICostBudget: 0,
+  modelPriceOverrides: {},
 };
 
 @Injectable()
